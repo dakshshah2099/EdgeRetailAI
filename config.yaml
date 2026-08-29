@@ -1,0 +1,31 @@
+camera:
+  source: "rtsp://192.168.1.100:8080/h264_pcm.sdp"
+
+zones:
+  - zone_id: "zone_entrance"
+    zone_type: "entry_exit"
+    polygon:
+      - [0, 0]
+      - [200, 0]
+      - [200, 300]
+      - [0, 300]
+    label: "Main Entrance"
+  - zone_id: "zone_shelf_a"
+    zone_type: "shelf"
+    polygon:
+      - [300, 100]
+      - [600, 100]
+      - [600, 500]
+      - [300, 500]
+    label: "Snacks Shelf A"
+  - zone_id: "zone_checkout_1"
+    zone_type: "checkout"
+    polygon:
+      - [700, 200]
+      - [950, 200]
+      - [950, 600]
+      - [700, 600]
+    label: "Billing Counter 1"
+
+low_stock_confidence_threshold: 0.6
+queue_congestion_length: 4
