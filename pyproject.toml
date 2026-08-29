@@ -5,6 +5,8 @@ description = "Intelligent Retail Analytics System (SIH26179) - Edge-AI shopper 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=2.4.6",
+    "opencv-python-headless>=5.0.0.93",
     "pydantic>=2.0.0",
     "pyyaml>=6.0.0",
 ]
@@ -25,6 +27,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 include = [
     "schemas.py",
+    "camera",
 ]
 
 [tool.ruff]
