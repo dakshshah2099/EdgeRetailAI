@@ -103,6 +103,9 @@ def test_rtsp_source_unreachable_returns_none_and_reconnects() -> None:
         result = source.get_frame()
         assert result is None
         assert mock_cap_cls.call_count >= 1
+        mock_cap_cls.assert_called_with("rtsp://192.168.1.999:8080/nonexistent", cv2.CAP_FFMPEG)
+        mock_cap_fail.set.assert_any_call(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+        mock_cap_fail.set.assert_any_call(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
 
         result_2 = source.get_frame()
         assert result_2 is None

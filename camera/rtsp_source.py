@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class RTSPSource(CameraSource):
-    """RTSP camera stream capture source with exponential backoff reconnection."""
+    """RTSP camera stream capture source with exponential backoff reconnection and timeouts."""
 
     def __init__(
         self,
@@ -23,25 +23,29 @@ class RTSPSource(CameraSource):
         initial_backoff_sec: float = 1.0,
         max_backoff_sec: float = 10.0,
         backoff_factor: float = 2.0,
+        timeout_msec: int = 5000,
     ) -> None:
         self.source_url = source_url
         self.source_id = source_id
         self._initial_backoff_sec = initial_backoff_sec
         self._max_backoff_sec = max_backoff_sec
         self._backoff_factor = backoff_factor
+        self._timeout_msec = timeout_msec
 
         self._current_backoff = initial_backoff_sec
         self._cap: cv2.VideoCapture | None = None
         self._connect()
 
     def _connect(self) -> bool:
-        """Attempt connecting to the RTSP stream."""
+        """Attempt connecting to the RTSP stream with FFMPEG timeouts."""
         if self._cap is not None:
             self._cap.release()
             self._cap = None
 
         logger.info("Connecting to RTSP stream: %s", self.source_url)
-        cap = cv2.VideoCapture(self.source_url)
+        cap = cv2.VideoCapture(self.source_url, cv2.CAP_FFMPEG)
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self._timeout_msec)
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self._timeout_msec)
         if not cap.isOpened():
             logger.warning("Failed to open RTSP stream at %s", self.source_url)
             self._cap = cap
