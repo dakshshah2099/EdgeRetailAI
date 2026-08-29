@@ -1,0 +1,118 @@
+{
+  "description": "Synthetic multi-frame footfall track dataset with ground-truth entry/exit/in_zone events",
+  "zones": [
+    {
+      "zone_id": "zone_entrance",
+      "zone_type": "entry_exit",
+      "polygon": [[100, 100], [400, 100], [400, 400], [100, 400]],
+      "label": "Store Front Entrance"
+    },
+    {
+      "zone_id": "zone_display_aisle",
+      "zone_type": "product_display",
+      "polygon": [[500, 100], [800, 100], [800, 400], [500, 400]],
+      "label": "Snacks Promo Display"
+    }
+  ],
+  "expected_counts": {
+    "zone_entrance": {
+      "enter": 2,
+      "exit": 1
+    },
+    "zone_display_aisle": {
+      "in_zone": 3
+    }
+  },
+  "frames": [
+    {
+      "frame_index": 0,
+      "timestamp": "2026-08-29T10:00:00.000000",
+      "detections": [
+        {
+          "track_id": "1",
+          "bbox": [200, 20, 50, 50],
+          "confidence": 0.92,
+          "class_id": 0
+        },
+        {
+          "track_id": "2",
+          "bbox": [200, 10, 50, 50],
+          "confidence": 0.88,
+          "class_id": 0
+        },
+        {
+          "track_id": "3",
+          "bbox": [600, 150, 50, 50],
+          "confidence": 0.95,
+          "class_id": 0
+        }
+      ]
+    },
+    {
+      "frame_index": 1,
+      "timestamp": "2026-08-29T10:00:00.033333",
+      "detections": [
+        {
+          "track_id": "1",
+          "bbox": [200, 150, 50, 50],
+          "confidence": 0.93,
+          "class_id": 0
+        },
+        {
+          "track_id": "2",
+          "bbox": [200, 200, 50, 50],
+          "confidence": 0.89,
+          "class_id": 0
+        },
+        {
+          "track_id": "3",
+          "bbox": [600, 160, 50, 50],
+          "confidence": 0.94,
+          "class_id": 0
+        }
+      ]
+    },
+    {
+      "frame_index": 2,
+      "timestamp": "2026-08-29T10:00:00.066666",
+      "detections": [
+        {
+          "track_id": "1",
+          "bbox": [200, 200, 50, 50],
+          "confidence": 0.91,
+          "class_id": 0
+        },
+        {
+          "track_id": "2",
+          "bbox": [200, 220, 50, 50],
+          "confidence": 0.87,
+          "class_id": 0
+        },
+        {
+          "track_id": "3",
+          "bbox": [600, 170, 50, 50],
+          "confidence": 0.93,
+          "class_id": 0
+        }
+      ]
+    },
+    {
+      "frame_index": 3,
+      "timestamp": "2026-08-29T10:00:00.100000",
+      "detections": [
+        {
+          "track_id": "1",
+          "bbox": [200, 450, 50, 50],
+          "confidence": 0.90,
+          "class_id": 0
+        },
+        {
+          "track_id": "2",
+          "bbox": [200, 240, 50, 50],
+          "confidence": 0.86,
+          "class_id": 0
+        }
+      ]
+    }
+  ]
+}
