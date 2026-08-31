@@ -21,6 +21,15 @@ def create_app() -> FastAPI:
     application.include_router(alerts_router)
     application.include_router(heatmap_router)
 
+    @application.get("/", tags=["system"])
+    def root() -> dict[str, str]:
+        return {
+            "status": "ok",
+            "name": "Intelligent Retail Analytics API",
+            "docs": "/docs",
+            "health": "/health",
+        }
+
     @application.get("/health", tags=["system"])
     def health_check() -> dict[str, str]:
         return {"status": "ok"}

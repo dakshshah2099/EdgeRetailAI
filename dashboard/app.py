@@ -17,7 +17,7 @@ st.caption("Edge-AI Shopper Analytics, Inventory Monitoring & Queue Intelligence
 
 # Sidebar Settings
 st.sidebar.header("⚙️ Configuration")
-api_base_url = st.sidebar.text_input("API Base URL", value="http://localhost:8000")
+api_base_url = st.sidebar.text_input("API Base URL", value="http://127.0.0.1:8000")
 
 time_filter = st.sidebar.selectbox(
     "Time Range",
@@ -41,7 +41,9 @@ if st.sidebar.button("🔄 Refresh Data"):
 
 def fetch_api(endpoint: str, params: dict[str, Any] | None = None) -> Any:
     """Helper to fetch JSON data from backend API with error handling."""
-    url = f"{api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+    clean_base = api_base_url.strip().rstrip("/")
+    clean_ep = endpoint.strip().lstrip("/")
+    url = f"{clean_base}/{clean_ep}"
     try:
         resp = requests.get(url, params=params, timeout=5)
         resp.raise_for_status()
