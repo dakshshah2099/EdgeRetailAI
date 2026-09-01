@@ -229,40 +229,6 @@ class EventRepository:
         finally:
             conn.close()
 
-    def get_resolved_alerts(self, limit: int = 100) -> list[Alert]:
-        conn = get_connection(self.db_path)
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT alert_id, alert_type, severity, zone_id, message, created_at, resolved_at
-                FROM alerts
-                WHERE resolved_at IS NOT NULL
-                ORDER BY created_at DESC
-                LIMIT ?;
-                """,
-                (limit,),
-            )
-            rows = cursor.fetchall()
-            return [
-                Alert(
-                    alert_id=row["alert_id"],
-                    alert_type=row["alert_type"],
-                    severity=row["severity"],
-                    zone_id=row["zone_id"],
-                    message=row["message"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    resolved_at=(
-                        datetime.fromisoformat(row["resolved_at"])
-                        if row["resolved_at"] is not None
-                        else None
-                    ),
-                )
-                for row in rows
-            ]
-        finally:
-            conn.close()
-
     def get_all_alerts(self, limit: int = 100) -> list[Alert]:
         conn = get_connection(self.db_path)
         try:

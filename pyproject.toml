@@ -5,15 +5,11 @@ description = "Intelligent Retail Analytics System (SIH26179) - Edge-AI shopper 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.141.1",
-    "httpx>=0.28.1",
     "numpy>=2.4.6",
     "onnxruntime>=1.29.0",
     "opencv-python-headless>=5.0.0.93",
     "pydantic>=2.0.0",
     "pyyaml>=6.0.0",
-    "streamlit>=1.62.0",
-    "uvicorn>=0.52.4",
 ]
 
 [project.optional-dependencies]
