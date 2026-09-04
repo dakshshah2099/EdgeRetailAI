@@ -1,12 +1,13 @@
+"""Local SQLite event storage and offline synchronization buffer."""
+
 from storage.db import get_connection, init_db
 from storage.repository import EventRepository
-from storage.sync_buffer import AnyEvent, BufferFullError, SyncBuffer
+from storage.sync_buffer import BufferFullError, SyncBuffer
 
 __all__ = [
-    "AnyEvent",
-    "BufferFullError",
-    "EventRepository",
-    "SyncBuffer",
     "get_connection",
     "init_db",
+    "EventRepository",
+    "SyncBuffer",
+    "BufferFullError",
 ]
