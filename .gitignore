@@ -11,3 +11,11 @@ venv/
 .ruff_cache/
 
 *.log
+*.db
+*.db-wal
+*.db-shm
+.env
+
+node_modules/
+dist/
+.vite/
