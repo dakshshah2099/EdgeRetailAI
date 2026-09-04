@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,6 +162,58 @@ class ONNXBackend(InferenceBackend):
         out = outputs[0]
         # YOLO26 output shape: (1, 300, 6) or (1, N, 6)
         if out.ndim == 3 and out.shape[2] == 6:
-            return self._parse_yolo26_output(out, scale, pad, (w_orig, h_orig))
+            conf = float(os.environ.get("DETECTION_CONFIDENCE_THRESHOLD", self.conf_threshold))
+            return self._parse_yolo26_output_with_conf(out, scale, pad, (w_orig, h_orig), conf)
 
         return []
+
+    def _parse_yolo26_output_with_conf(
+        self,
+        output: npt.NDArray[np.float32],
+        scale: float,
+        pad: tuple[float, float],
+        img_shape: tuple[int, int],
+        conf_threshold: float,
+    ) -> list[RawDetection]:
+        """Parse YOLO26 output with custom or dynamic confidence threshold."""
+        w_orig, h_orig = img_shape
+        pad_x, pad_y = pad
+        detections: list[RawDetection] = []
+
+        raw_boxes = output[0]  # (N, 6): [x1, y1, x2, y2, score, class_id]
+        if raw_boxes.ndim != 2 or raw_boxes.shape[1] < 6:
+            return detections
+
+        mask = raw_boxes[:, 4] >= conf_threshold
+        filtered_boxes = raw_boxes[mask]
+
+        for row in filtered_boxes:
+            x1, y1, x2, y2, score, class_id = row[:6]
+
+            # Unpad and scale back to original resolution
+            orig_x1 = (float(x1) - pad_x) / scale
+            orig_y1 = (float(y1) - pad_y) / scale
+            orig_x2 = (float(x2) - pad_x) / scale
+            orig_y2 = (float(y2) - pad_y) / scale
+
+            # Clip to image boundaries
+            orig_x1 = max(0.0, min(float(w_orig), orig_x1))
+            orig_y1 = max(0.0, min(float(h_orig), orig_y1))
+            orig_x2 = max(0.0, min(float(w_orig), orig_x2))
+            orig_y2 = max(0.0, min(float(h_orig), orig_y2))
+
+            bx = int(round(orig_x1))
+            by = int(round(orig_y1))
+            bw = max(0, int(round(orig_x2 - orig_x1)))
+            bh = max(0, int(round(orig_y2 - orig_y1)))
+
+            detections.append(
+                RawDetection(
+                    class_id=int(round(float(class_id))),
+                    confidence=float(score),
+                    bbox=(bx, by, bw, bh),
+                )
+            )
+
+        return detections
+
