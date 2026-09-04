@@ -13,15 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 class USBSource(CameraSource):
-    """USB webcam / video file capture source."""
+    """USB webcam / video file capture source with optional continuous loop support."""
 
     def __init__(
         self,
         device_index: int | str = 0,
         source_id: str = "usb_cam",
+        loop: bool = False,
     ) -> None:
         self.device_index = device_index
         self.source_id = source_id
+        self.loop = loop
         self._cap: cv2.VideoCapture | None = None
         self._open_capture()
 
@@ -39,6 +41,11 @@ class USBSource(CameraSource):
             return None
 
         ret, frame = self._cap.read()
+        if (not ret or frame is None) and self.loop:
+            # Rewind video file to beginning
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, frame = self._cap.read()
+
         if not ret or frame is None:
             logger.warning("Failed to read frame from device %s", self.source_id)
             return None

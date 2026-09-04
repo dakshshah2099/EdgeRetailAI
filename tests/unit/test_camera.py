@@ -236,3 +236,22 @@ def test_no_pixel_persistence() -> None:
             assert attr not in cls.__dict__, (
                 f"Camera class '{cls.__name__}' defines forbidden attribute '{attr}'"
             )
+
+
+def test_format_authenticated_rtsp_url() -> None:
+    from camera.rtsp_source import format_authenticated_rtsp_url, mask_rtsp_credentials
+
+    # Inject user/pass
+    url = "rtsp://192.168.1.100:8080/live"
+    auth_url = format_authenticated_rtsp_url(url, "admin", "p@ss:w0rd")
+    assert auth_url == "rtsp://admin:p%40ss%3Aw0rd@192.168.1.100:8080/live"
+
+    # Already has user/pass
+    existing = "rtsp://user:pass@192.168.1.100/live"
+    assert format_authenticated_rtsp_url(existing, "other", "pass2") == existing
+
+    # Mask credentials
+    masked = mask_rtsp_credentials(auth_url)
+    assert "p@ss" not in masked
+    assert "admin:***@192.168.1.100:8080" in masked
+
