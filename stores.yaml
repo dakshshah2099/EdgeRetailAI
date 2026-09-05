@@ -1,0 +1,12 @@
+stores:
+  - store_id: "store_downtown"
+    name: "Downtown Flagship"
+    api_base_url: "http://127.0.0.1:8000"
+
+  - store_id: "store_suburban"
+    name: "Suburban Mall"
+    api_base_url: "http://127.0.0.1:8001"
+
+  - store_id: "store_airport"
+    name: "Terminal 2 Kiosk"
+    api_base_url: "http://127.0.0.1:8002"
