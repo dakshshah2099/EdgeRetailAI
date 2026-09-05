@@ -3,7 +3,6 @@ import logging
 import os
 import threading
 import time
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -24,7 +23,7 @@ from detection.inference_backend import ONNXBackend
 from detection.tracker import TrackedDetection, Tracker
 from inventory.shelf_classifier import EdgeDensityShelfClassifier, check_shelves
 from queue_intel.queue_monitor import QueueMonitor
-from schemas import DetectionEvent, QueueEvent, StockEvent, ZoneConfig
+from schemas import QueueEvent, StockEvent, ZoneConfig
 
 logger = logging.getLogger(__name__)
 
@@ -224,8 +223,7 @@ class StreamManager:
         self.latest_stock_events: dict[str, StockEvent] = {}
         self.latest_queue_events: dict[str, QueueEvent] = {}
         self.frame_count: int = 0
-
-        self._ensure_worker_started()
+        # Worker is started lazily on first access to get_latest_frame() or explicit start()
 
     def _ensure_worker_started(self) -> None:
         if self.worker_thread is None or not self.worker_thread.is_alive():
@@ -307,23 +305,7 @@ class StreamManager:
                     except Exception:
                         pass
 
-                    # 4. Save raw spatial presence events for Heatmap & Occupancy
-                    for det in tracked_dets:
-                        try:
-                            repo.save_detection_event(
-                                DetectionEvent(
-                                    event_id=f"det_{uuid.uuid4().hex[:12]}",
-                                    track_id=det.track_id,
-                                    timestamp=meta.timestamp,
-                                    bbox=det.bbox,
-                                    zone_id=None,
-                                    event_type="in_zone",
-                                )
-                            )
-                        except Exception as e:
-                            logger.error("Error saving detection event: %s", e)
-
-                    # 5. Process Footfall & Dwell Analytics
+                    # 4. Process Footfall & Dwell Analytics
                     if zones:
                         try:
                             footfall_events = self.footfall_tracker.update(
@@ -405,9 +387,14 @@ class StreamManager:
             # Run camera loop at ~30 FPS
             time.sleep(0.033)
 
+    def start(self) -> None:
+        """Explicitly start background processing worker thread."""
+        self._ensure_worker_started()
+
     def get_latest_frame(
         self,
     ) -> tuple[bool, npt.NDArray[np.uint8] | None, list[TrackedDetection], int, int]:
+        self._ensure_worker_started()
         with self.lock:
             return (
                 self.is_connected,

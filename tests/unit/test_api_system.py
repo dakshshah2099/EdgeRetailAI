@@ -35,9 +35,25 @@ def test_get_system_environment() -> None:
     assert isinstance(data["variables"], dict)
 
 
+def test_update_system_environment_when_debug_disabled_rejects_bypass() -> None:
+    # Ensure debug mode is disabled on server
+    write_env_file({"DEBUG_MODE": "false"})
+    try:
+        # Attacker attempts to bypass guard by sending DEBUG_MODE=true in payload
+        resp = client.put(
+            "/system/env",
+            json={"variables": {"DEBUG_MODE": "true", "CAMERA_SOURCE": "malicious_stream"}},
+        )
+        assert resp.status_code == 403
+        assert "Debug mode is disabled" in resp.json()["detail"]
+    finally:
+        # Restore debug mode to true
+        write_env_file({"DEBUG_MODE": "true"})
+
+
 def test_update_system_environment_when_debug_enabled() -> None:
-    # Ensure debug mode is enabled
-    client.put("/system/env", json={"variables": {"DEBUG_MODE": "true"}})
+    # Ensure debug mode is enabled on server
+    write_env_file({"DEBUG_MODE": "true"})
 
     # Update camera source and threshold
     payload = {"variables": {"CAMERA_SOURCE": "0", "QUEUE_CONGESTION_LENGTH": "5"}}
@@ -49,14 +65,34 @@ def test_update_system_environment_when_debug_enabled() -> None:
 
 
 def test_toggle_debug_endpoint() -> None:
-    initial = client.get("/system/env").json()["debug_mode"]
-    toggle_resp = client.post("/system/toggle-debug")
-    assert toggle_resp.status_code == 200
-    new_mode = toggle_resp.json()["debug_mode"]
-    assert new_mode == (not initial)
+    # 1. When debug mode is OFF, unauthorized toggle without token is rejected with 403
+    write_env_file({"DEBUG_MODE": "false"})
+    unauth_resp = client.post("/system/toggle-debug")
+    assert unauth_resp.status_code == 403
+    assert "Valid X-Debug-Token header required" in unauth_resp.json()["detail"]
 
-    # Revert back to true for testing
-    client.post("/system/toggle-debug")
+    # 2. Invalid token is also rejected with 403
+    bad_token_resp = client.post(
+        "/system/toggle-debug",
+        headers={"X-Debug-Token": "wrong-token"},
+    )
+    assert bad_token_resp.status_code == 403
+
+    # 3. Valid token enables debug mode
+    auth_resp = client.post(
+        "/system/toggle-debug",
+        headers={"X-Debug-Token": "retail-edge-debug-secret"},
+    )
+    assert auth_resp.status_code == 200
+    assert auth_resp.json()["debug_mode"] is True
+
+    # 4. Once debug mode is active, disabling it is permitted
+    disable_resp = client.post("/system/toggle-debug")
+    assert disable_resp.status_code == 200
+    assert disable_resp.json()["debug_mode"] is False
+
+    # Restore debug mode to true
+    write_env_file({"DEBUG_MODE": "true"})
 
 
 def test_get_and_update_zones() -> None:
@@ -66,7 +102,7 @@ def test_get_and_update_zones() -> None:
 
     try:
         # Ensure debug mode enabled
-        client.put("/system/env", json={"variables": {"DEBUG_MODE": "true"}})
+        write_env_file({"DEBUG_MODE": "true"})
 
         resp = client.get("/system/zones")
         assert resp.status_code == 200

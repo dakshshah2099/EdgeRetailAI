@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncGenerator
 
 import cv2
@@ -15,6 +16,8 @@ from api.stream_manager import (
     stream_manager,
 )
 from camera.rtsp_source import mask_rtsp_credentials
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/video", tags=["video"])
 
@@ -50,7 +53,8 @@ async def frame_streamer(
                 display_frame = fallback
                 if overlay_zones:
                     display_frame = draw_zones_overlay(display_frame)
-        except Exception:
+        except Exception as e:
+            logger.warning("Degraded video stream in frame_streamer: %s", e)
             display_frame = generate_fallback_frame(src)
 
         ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
