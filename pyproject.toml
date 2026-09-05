@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.141.1",
     "httpx>=0.28.1",
     "numpy>=2.4.6",
+    "onnx>=1.22.0",
     "onnxruntime>=1.29.0",
     "opencv-python-headless>=5.0.0.93",
     "pydantic>=2.0.0",
