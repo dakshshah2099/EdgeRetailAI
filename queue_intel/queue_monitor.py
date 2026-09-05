@@ -3,10 +3,8 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime
 
-import cv2
-import numpy as np
-
 from detection.tracker import TrackedDetection
+from detection.zone_membership import anchor_point, is_inside_zone
 from schemas import Frame, QueueEvent, ZoneConfig
 
 
@@ -58,16 +56,11 @@ class QueueMonitor:
         active_zones = [z for z in checkout_zones if z.zone_type == "checkout"]
 
         for zone in active_zones:
-            poly_np = np.array(zone.polygon, dtype=np.int32).reshape((-1, 1, 2))
             current_tracks_in_zone: list[TrackedDetection] = []
 
             for det in tracked_detections:
-                # Bottom-center anchor point representing person ground position
-                anchor_x = float(det.bbox[0] + det.bbox[2] / 2.0)
-                anchor_y = float(det.bbox[1] + det.bbox[3])
-                point = (anchor_x, anchor_y)
-
-                if cv2.pointPolygonTest(poly_np, point, False) >= 0:
+                point = anchor_point(det.bbox)
+                if is_inside_zone(point, zone):
                     current_tracks_in_zone.append(det)
 
             current_track_ids = {d.track_id for d in current_tracks_in_zone}

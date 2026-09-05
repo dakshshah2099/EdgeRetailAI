@@ -1,12 +1,12 @@
 import uuid
 
-import cv2
 import numpy as np
 import numpy.typing as npt
 
 from detection.detector import PersonDetector
 from detection.inference_backend import InferenceBackend
 from detection.tracker import TrackedDetection, Tracker
+from detection.zone_membership import anchor_point, is_inside_zone, zone_polygon_cache
 from schemas import DetectionEvent, Frame, ZoneConfig
 
 
@@ -41,22 +41,18 @@ class FootfallTracker:
                 del self._inside_zones[track_id]
 
         # Pre-convert zone polygons to cv2-compatible numpy arrays
-        zone_polygons = {
-            z.zone_id: (z, np.array(z.polygon, dtype=np.int32).reshape((-1, 1, 2)))
-            for z in zones
-        }
+        cached_polygons = zone_polygon_cache(zones)
 
         for det in tracked_detections:
-            # Bottom-center of bbox represents person ground/floor position
-            anchor_x = float(det.bbox[0] + det.bbox[2] / 2.0)
-            anchor_y = float(det.bbox[1] + det.bbox[3])
-            point = (anchor_x, anchor_y)
+            point = anchor_point(det.bbox)
 
             previously_inside = self._inside_zones.get(det.track_id, set())
             currently_inside: set[str] = set()
 
-            for zone_id, (zone, poly_np) in zone_polygons.items():
-                is_inside = cv2.pointPolygonTest(poly_np, point, False) >= 0
+            for zone in zones:
+                zone_id = zone.zone_id
+                poly_np = cached_polygons[zone_id]
+                is_inside = is_inside_zone(point, zone, poly_np=poly_np)
 
                 if zone.zone_type == "entry_exit":
                     if is_inside:
