@@ -15,6 +15,8 @@ venv/
 *.db-wal
 *.db-shm
 .env
+.env.*
+!.env*.example
 
 node_modules/
 dist/
