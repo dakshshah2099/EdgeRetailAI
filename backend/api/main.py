@@ -62,6 +62,11 @@ def create_app() -> FastAPI:
         application.mount(
             "/app", StaticFiles(directory=str(dist_dir), html=True), name="static_dashboard"
         )
+        assets_dir = dist_dir / "assets"
+        if assets_dir.is_dir():
+            application.mount(
+                "/assets", StaticFiles(directory=str(assets_dir)), name="static_assets"
+            )
 
     @application.get("/", tags=["system"])
     def root() -> Response:
