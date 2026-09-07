@@ -1,0 +1,21 @@
+﻿[Unit]
+Description=EdgeRetailAI Retail Analytics Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
+WorkingDirectory=${WORKDIR}
+Environment="PYTHONPATH=${WORKDIR}/backend"
+EnvironmentFile=-${WORKDIR}/.env.pi
+EnvironmentFile=-${WORKDIR}/.env
+ExecStart=${WORKDIR}/.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
