@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -8,14 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class Frame(BaseModel):
     """A single camera frame. NOTE: this model must NEVER be persisted to
-    disk/DB — it exists only in-memory for pipeline processing. Do not add
+    disk/DB -- it exists only in-memory for pipeline processing. Do not add
     this type as a field on any model in storage/ later."""
 
     source_id: str
     timestamp: datetime
     width: int = Field(gt=0)
     height: int = Field(gt=0)
-    # actual pixel data intentionally NOT a typed field here — pipeline
+    # actual pixel data intentionally NOT a typed field here -- pipeline
     # code passes raw ndarray alongside this metadata, never serializes it.
 
 
@@ -81,22 +81,28 @@ class Detection(BaseModel):
         return v
 
 
-class TrackInfo(BaseModel):
-    """Anonymous multi-class tracking state representation."""
+class ZoneTransition(BaseModel):
+    """Movement of a tracked entity between retail zones (cross-slice contract)."""
 
     model_config = ConfigDict(frozen=True)
     track_id: str
-    class_id: int = Field(ge=0)
-    class_name: str = "unknown"
-    bbox: tuple[int, int, int, int]  # x, y, w, h
+    from_zone_id: str
+    to_zone_id: str
+    timestamp: datetime
+
+
+class ShelfOccupancyResult(BaseModel):
+    """Result of a single shelf occupancy classification (cross-slice contract)."""
+
+    model_config = ConfigDict(frozen=True)
+    shelf_id: str
+    status: Literal["empty", "low", "ok"]
     confidence: float = Field(ge=0.0, le=1.0)
-    age: int = Field(ge=1)
-    last_seen: datetime
-    zone_id: str | None = None
+    occupancy: float = Field(ge=0.0, le=1.0)
 
 
 class InteractionEvent(BaseModel):
-    """Customer-product interaction event (approach, dwell, touch, pickup)."""
+    """Customer-product interaction event emitted at start and end of engagement."""
 
     model_config = ConfigDict(frozen=True)
     event_id: str
@@ -104,7 +110,9 @@ class InteractionEvent(BaseModel):
     zone_id: str
     start_ts: datetime
     end_ts: datetime
-    confidence: float = Field(ge=0.0, le=1.0)
+    event_phase: Literal["start", "end"] = "end"
+    detection_confidence: float = Field(ge=0.0, le=1.0)
+    interaction_confidence: float = Field(ge=0.0, le=1.0)
     interaction_type: Literal["approach", "touch", "pickup", "examine"] = "touch"
 
     @model_validator(mode="after")
@@ -112,6 +120,10 @@ class InteractionEvent(BaseModel):
         if self.end_ts < self.start_ts:
             raise ValueError("end_ts must be greater than or equal to start_ts")
         return self
+
+
+# Convenience alias so callers can be explicit about start vs. end semantics
+InteractionStartEvent = InteractionEvent
 
 
 class StockEvent(BaseModel):

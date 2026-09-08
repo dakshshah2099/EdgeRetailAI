@@ -1,17 +1,17 @@
-import uuid
+﻿import uuid
 from abc import ABC, abstractmethod
 from typing import Literal
 
 import cv2
 import numpy as np
 import numpy.typing as npt
-from core.schemas import Frame, StockEvent, ZoneConfig
+from core.schemas import Frame, ShelfOccupancyResult, StockEvent, ZoneConfig
 
 from analytics.roi import crop_to_zone
 
 
 class ShelfClassifier(ABC):
-    """Swap point, same philosophy as InferenceBackend in Slice 2 — the
+    """Swap point, same philosophy as InferenceBackend in Slice 2 -- the
     initial implementation can be simple (background subtraction / pixel
     density heuristic), a learned classifier can replace it later without
     touching callers.
@@ -84,14 +84,40 @@ class EdgeDensityShelfClassifier(ShelfClassifier):
         return "ok", float(confidence)
 
 
+def _count_detections_in_zone(
+    detections: list[tuple[int, int, int, int]],
+    zone: ZoneConfig,
+) -> int:
+    """Count how many detection centroids fall within zone polygon (spatial ROI filter).
+
+    Args:
+        detections: List of (x, y, w, h) bounding boxes.
+        zone: Zone whose polygon defines the spatial boundary.
+
+    Returns:
+        Count of detections whose centroid lies inside or on the polygon boundary.
+    """
+    if not detections:
+        return 0
+    poly = np.array(zone.polygon, dtype=np.int32).reshape((-1, 1, 2))
+    count = 0
+    for x, y, w, h in detections:
+        cx = float(x + w / 2.0)
+        cy = float(y + h / 2.0)
+        # pointPolygonTest >= 0 means inside or on boundary
+        if cv2.pointPolygonTest(poly, (cx, cy), False) >= 0:
+            count += 1
+    return count
+
+
 class ProductOccupancyShelfClassifier(ShelfClassifier):
     """Detection-based shelf classifier with temporal smoothing.
 
     Criteria:
-    - Counts detected products inside the configured shelf ROI polygon.
+    - Counts detected products whose centroids lie inside the configured shelf ROI polygon.
     - Computes occupancy = products_in_roi / capacity.
-    - Applies rolling window smoothing (median/mean) across frames to avoid single-frame flickering.
-    - Emits robust stock states (empty, low, ok) and confidence.
+    - Applies rolling window smoothing (median) across frames to avoid single-frame flickering.
+    - Emits robust ShelfOccupancyResult (empty, low, ok) with confidence.
     - Integrates with edge-density heuristic as fallback when no detections are present.
     """
 
@@ -110,12 +136,16 @@ class ProductOccupancyShelfClassifier(ShelfClassifier):
         self.fallback = fallback_classifier or EdgeDensityShelfClassifier()
         self._history: dict[str, list[float]] = {}
 
+    def reset(self) -> None:
+        """Reset rolling history (use between evaluation scenarios)."""
+        self._history.clear()
+
     def classify_occupancy(
         self,
         shelf_id: str,
         product_count: int,
         capacity: int | None = None,
-    ) -> tuple[Literal["empty", "low", "ok"], float, float]:
+    ) -> ShelfOccupancyResult:
         """Classify shelf based on product count inside ROI with temporal smoothing."""
         cap = capacity if capacity is not None and capacity > 0 else self.capacity
         raw_occupancy = min(1.0, max(0.0, float(product_count) / float(cap)))
@@ -134,10 +164,29 @@ class ProductOccupancyShelfClassifier(ShelfClassifier):
         stability_conf = max(0.5, min(1.0, 1.0 - variance * 2.0))
 
         if smoothed_occ <= self.empty_threshold:
-            return "empty", stability_conf, smoothed_occ
-        if smoothed_occ <= self.low_threshold:
-            return "low", stability_conf, smoothed_occ
-        return "ok", stability_conf, smoothed_occ
+            status: Literal["empty", "low", "ok"] = "empty"
+        elif smoothed_occ <= self.low_threshold:
+            status = "low"
+        else:
+            status = "ok"
+
+        return ShelfOccupancyResult(
+            shelf_id=shelf_id,
+            status=status,
+            confidence=stability_conf,
+            occupancy=smoothed_occ,
+        )
+
+    def classify_occupancy_from_detections(
+        self,
+        shelf_id: str,
+        detections: list[tuple[int, int, int, int]],
+        zone: ZoneConfig,
+        capacity: int | None = None,
+    ) -> ShelfOccupancyResult:
+        """Classify shelf by spatial ROI filtering of raw detection bboxes."""
+        count = _count_detections_in_zone(detections, zone)
+        return self.classify_occupancy(shelf_id, count, capacity)
 
     def classify(
         self, shelf_crop: npt.NDArray[np.uint8]
@@ -157,6 +206,8 @@ def check_shelves(
     """Top-level entry point: evaluate each shelf zone, classify, emit StockEvents.
 
     Supports both pixel-crop classification and product-occupancy detection counting.
+    When classifier is ProductOccupancyShelfClassifier and product_counts_by_shelf
+    is provided, uses detection-based occupancy. Otherwise falls back to pixel crop.
     """
     events: list[StockEvent] = []
 
@@ -171,7 +222,8 @@ def check_shelves(
             and zone.zone_id in product_counts_by_shelf
         ):
             count = product_counts_by_shelf[zone.zone_id]
-            status, confidence, occupancy = classifier.classify_occupancy(zone.zone_id, count)
+            result = classifier.classify_occupancy(zone.zone_id, count)
+            status, confidence, occupancy = result.status, result.confidence, result.occupancy
         else:
             crop = crop_to_zone(pixels, zone)
             status, confidence = classifier.classify(crop)

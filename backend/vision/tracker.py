@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
@@ -101,7 +101,7 @@ class _Track:
         self.age = 1
         self.time_since_update = 0
         self.min_hits = min_hits
-        self.is_activated = (min_hits <= 1)
+        self.is_activated = min_hits <= 1
 
     def predict(self) -> None:
         """Advance track state by one frame without detection."""
@@ -116,6 +116,25 @@ class _Track:
         self.time_since_update = 0
         if self.hits >= self.min_hits:
             self.is_activated = True
+
+
+def _gated_iou_cost(track: _Track, det: RawDetection) -> float:
+    """Return IoU-based cost gated by class: 1e6 if classes differ, else 1 - IoU."""
+    if track.class_id != det.class_id:
+        return 1e6
+    return 1.0 - _compute_iou(track.bbox, det.bbox)
+
+
+def _build_cost_matrix(
+    tracks: list[_Track],
+    detections: list[RawDetection],
+) -> npt.NDArray[np.float32]:
+    """Build cost matrix using class-gated IoU for a list of tracks vs detections."""
+    matrix = np.zeros((len(tracks), len(detections)), dtype=np.float32)
+    for i, track in enumerate(tracks):
+        for j, det in enumerate(detections):
+            matrix[i, j] = _gated_iou_cost(track, det)
+    return matrix
 
 
 class Tracker:
@@ -161,15 +180,7 @@ class Tracker:
         ]
 
         # Stage 1: Match active tracks with high-confidence detections
-        cost_matrix_high = np.zeros((len(self.tracks), len(dets_high)), dtype=np.float32)
-        for i, track in enumerate(self.tracks):
-            for j, det in enumerate(dets_high):
-                if track.class_id != det.class_id:
-                    cost_matrix_high[i, j] = 1e6
-                else:
-                    iou = _compute_iou(track.bbox, det.bbox)
-                    cost_matrix_high[i, j] = 1.0 - iou
-
+        cost_matrix_high = _build_cost_matrix(self.tracks, dets_high)
         matches_1, unmatched_tracks_1, unmatched_dets_high = _linear_assignment(
             cost_matrix_high, threshold=1.0 - self.iou_threshold
         )
@@ -181,19 +192,9 @@ class Tracker:
         # Stage 2: Match remaining tracks with low-confidence detections
         remaining_track_indices = unmatched_tracks_1
         if remaining_track_indices and dets_low:
-            cost_matrix_low = np.zeros(
-                (len(remaining_track_indices), len(dets_low)), dtype=np.float32
-            )
-            for i, track_idx in enumerate(remaining_track_indices):
-                track = self.tracks[track_idx]
-                for j, det in enumerate(dets_low):
-                    if track.class_id != det.class_id:
-                        cost_matrix_low[i, j] = 1e6
-                    else:
-                        iou = _compute_iou(track.bbox, det.bbox)
-                        cost_matrix_low[i, j] = 1.0 - iou
-
-            matches_2, unmatched_tracks_2_rel, _ = _linear_assignment(
+            remaining_tracks = [self.tracks[idx] for idx in remaining_track_indices]
+            cost_matrix_low = _build_cost_matrix(remaining_tracks, dets_low)
+            matches_2, _, _ = _linear_assignment(
                 cost_matrix_low, threshold=1.0 - self.iou_threshold
             )
 
@@ -217,10 +218,7 @@ class Tracker:
             self.tracks.append(new_track)
 
         # Remove dead tracks
-        self.tracks = [
-            t for t in self.tracks
-            if t.time_since_update <= self.max_age
-        ]
+        self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
 
         # Return currently active detections updated in this frame
         active_outputs: list[TrackedDetection] = []

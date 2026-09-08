@@ -9,8 +9,13 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^3.1.0",
-    "svelte": "^4.2.18",
-    "vite": "^5.3.4"
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.14"
+  },
+  "dependencies": {
+    "lucide-react": "^1.43.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.3"
   }
 }

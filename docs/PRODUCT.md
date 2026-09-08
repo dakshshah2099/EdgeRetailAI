@@ -6,6 +6,10 @@
 
 web
 
+## Stack
+
+React 19 + Vite (HTML5 History API routing, 2026 standards)
+
 ## Users
 
 - **Primary:** Retail store managers and branch operations supervisors managing on-floor staffing, queue bottlenecks, and inventory replenishment in real time.

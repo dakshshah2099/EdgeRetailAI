@@ -1,4 +1,4 @@
-"""Comprehensive tests for CV Improvement Criteria: multi-class detection,
+﻿"""Comprehensive tests for CV Improvement Criteria: multi-class detection,
 class-aware tracking, product interaction, shelf occupancy, zone transitions,
 and Gate 1-8 evaluation harness.
 """
@@ -18,7 +18,15 @@ from benchmarks.cv_eval import (
     MockPredictorBackend,
     build_open_retail_synthetic_suite,
 )
-from core.schemas import Detection, DetectionEvent, Frame, InteractionEvent, ZoneConfig
+from core.schemas import (
+    Detection,
+    DetectionEvent,
+    Frame,
+    InteractionEvent,
+    ShelfOccupancyResult,
+    ZoneConfig,
+    ZoneTransition,
+)
 from vision.detector import (
     OPEN_RETAIL_CLASS_MAP,
     PERSON_CLASS_ID,
@@ -105,6 +113,18 @@ def test_person_detector_backwards_compatibility() -> None:
     assert results[0].class_id == PERSON_CLASS_ID
 
 
+def test_detector_diagnostics_dropped_frame_count() -> None:
+    """dropped_frame_count increments when record_frame called with dropped=True."""
+    dets: list[RawDetection] = []
+    detector = YOLODetector(backend=MockBackend(dets))
+    dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    detector.detect(dummy_frame)
+    assert detector.diagnostics.frame_count == 1
+    assert detector.diagnostics.dropped_frame_count == 0
+    detector.diagnostics.record_frame(0.0, [], dropped=True)
+    assert detector.diagnostics.dropped_frame_count == 1
+
+
 # ============================================================================
 # Gate 4 & P1.1: Class-Aware Tracking
 # ============================================================================
@@ -144,7 +164,7 @@ def test_class_aware_tracking_prevents_cross_class_hijacking() -> None:
 
 
 def test_product_interaction_detection_lifecycle() -> None:
-    """Shopper dwelling near product shelf produces InteractionEvent with start/end."""
+    """Shopper dwelling near product shelf produces InteractionEvent with dual confidence."""
     shelf_zone = ZoneConfig(
         zone_id="shelf_01",
         zone_type="shelf",
@@ -169,18 +189,51 @@ def test_product_interaction_detection_lifecycle() -> None:
     for i in range(10):
         ts = start_ts + timedelta(seconds=i * 0.1)
         events = detector.update([person_near], [shelf_zone], ts)
-        assert len(events) == 0, "No event emitted while interaction is active"
+        # May emit a start event at confirmation, but never end events while active
+        end_events = [e for e in events if e.event_phase == "end"]
+        assert len(end_events) == 0, "No end event emitted while interaction is active"
 
     # Shopper leaves (next frame empty after grace period)
     exit_ts = start_ts + timedelta(seconds=2.0)
     events = detector.update([], [shelf_zone], exit_ts)
-    assert len(events) == 1
-    event = events[0]
+    end_events = [e for e in events if e.event_phase == "end"]
+    assert len(end_events) == 1
+    event = end_events[0]
     assert isinstance(event, InteractionEvent)
     assert event.track_id == "trk_shopper"
     assert event.zone_id == "shelf_01"
-    assert event.confidence >= 0.8
+    assert event.detection_confidence >= 0.8
+    assert event.interaction_confidence >= 0.5
     assert (event.end_ts - event.start_ts).total_seconds() >= 0.5
+
+
+def test_product_interaction_start_event_emitted() -> None:
+    """Confirmation of interaction emits a start event before the end event."""
+    shelf_zone = ZoneConfig(
+        zone_id="shelf_02",
+        zone_type="shelf",
+        polygon=[(100, 100), (200, 100), (200, 200), (100, 200)],
+        label="Shelf 2",
+    )
+    detector = ProductInteractionDetector(
+        proximity_margin_px=50.0,
+        min_duration_sec=0.5,
+        grace_period_sec=2.0,
+    )
+    start_ts = datetime(2026, 9, 8, 10, 0, 0, tzinfo=UTC)
+    person_near = TrackedDetection(
+        track_id="trk_a", bbox=(110, 210, 40, 100), confidence=0.9, class_id=0
+    )
+
+    start_events: list[InteractionEvent] = []
+    for i in range(8):
+        ts = start_ts + timedelta(seconds=i * 0.1)
+        for e in detector.update([person_near], [shelf_zone], ts):
+            if e.event_phase == "start":
+                start_events.append(e)
+
+    assert len(start_events) == 1, "Exactly one start event on confirmation"
+    assert start_events[0].track_id == "trk_a"
 
 
 def test_product_interaction_glance_debounced() -> None:
@@ -218,16 +271,15 @@ def test_product_occupancy_shelf_classifier() -> None:
     )
 
     # 4 products -> ok
-    s, c, occ = classifier.classify_occupancy("shelf_A", 4)
-    assert s == "ok"
-    assert pytest.approx(occ, 0.01) == 0.8
+    result = classifier.classify_occupancy("shelf_A", 4)
+    assert isinstance(result, ShelfOccupancyResult)
+    assert result.status == "ok"
+    assert pytest.approx(result.occupancy, abs=0.01) == 0.8
 
-    # 1 product -> low
-    s, c, occ = classifier.classify_occupancy("shelf_A", 1)
     # 0 products -> empty
-    s, c, occ = classifier.classify_occupancy("shelf_B", 0)
-    assert s == "empty"
-    assert pytest.approx(occ, 0.01) == 0.0
+    result2 = classifier.classify_occupancy("shelf_B", 0)
+    assert result2.status == "empty"
+    assert pytest.approx(result2.occupancy, abs=0.01) == 0.0
 
 
 def test_product_occupancy_temporal_smoothing() -> None:
@@ -240,9 +292,35 @@ def test_product_occupancy_temporal_smoothing() -> None:
         classifier.classify_occupancy("shelf_S", 5)
 
     # Glitch frame: detector momentarily misses items (0 items)
-    status, conf, occ = classifier.classify_occupancy("shelf_S", 0)
-    # Median of [5, 5, 5, 5, 0] is 5 -> status stays "ok"
-    assert status == "ok"
+    result = classifier.classify_occupancy("shelf_S", 0)
+    # Median of [1.0, 1.0, 1.0, 1.0, 0.0] is 1.0 -> status stays "ok"
+    assert result.status == "ok"
+
+
+def test_product_occupancy_classifier_reset() -> None:
+    """reset() clears history so next call starts fresh."""
+    classifier = ProductOccupancyShelfClassifier(capacity=5)
+    for _ in range(3):
+        classifier.classify_occupancy("shelf_R", 5)
+    classifier.reset()
+    result = classifier.classify_occupancy("shelf_R", 0)
+    assert result.status == "empty"
+
+
+def test_classify_occupancy_from_detections_polygon_filter() -> None:
+    """Products outside the shelf ROI polygon are not counted."""
+    zone = ZoneConfig(
+        zone_id="shelf_01",
+        zone_type="shelf",
+        polygon=[(100, 100), (200, 100), (200, 200), (100, 200)],
+        label="Test Shelf",
+    )
+    classifier = ProductOccupancyShelfClassifier(capacity=5, empty_threshold=0.05)
+    # 1 product inside zone centroid at (150, 150), 1 outside at (50, 50)
+    bboxes = [(130, 130, 40, 40), (30, 30, 40, 40)]
+    result = classifier.classify_occupancy_from_detections("shelf_01", bboxes, zone)
+    # Only 1 product inside -> occupancy 0.2 -> low
+    assert result.occupancy == pytest.approx(0.2, abs=0.01)
 
 
 def test_check_shelves_with_detection_occupancy() -> None:
@@ -275,7 +353,7 @@ def test_check_shelves_with_detection_occupancy() -> None:
 
 
 # ============================================================================
-# P1.2: Zone Transitions
+# P1.2: Zone Transitions (Pydantic contract)
 # ============================================================================
 
 
@@ -309,6 +387,7 @@ def test_zone_transition_tracker() -> None:
     ]
     transitions = tracker.update(e2)
     assert len(transitions) == 1
+    assert isinstance(transitions[0], ZoneTransition)
     assert transitions[0].from_zone_id == "entrance"
     assert transitions[0].to_zone_id == "shelf_snacks"
 
@@ -334,6 +413,17 @@ def test_zone_transition_tracker() -> None:
 # ============================================================================
 # Gates 1-8 Automated Verification Suite
 # ============================================================================
+
+
+def test_cv_evaluator_scene_count() -> None:
+    """build_open_retail_synthetic_suite must return exactly 10 scenes (A-J)."""
+    scenarios = build_open_retail_synthetic_suite()
+    scene_ids = {s.scene_id for s in scenarios}
+    assert len(scenarios) == 10
+    assert scene_ids == {
+        "Scene_A", "Scene_B", "Scene_C", "Scene_D", "Scene_E",
+        "Scene_F", "Scene_G", "Scene_H", "Scene_I", "Scene_J",
+    }
 
 
 def test_cv_evaluator_all_gates_pass() -> None:

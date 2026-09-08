@@ -1,4 +1,4 @@
-"""Computer vision evaluation protocol, open retail benchmark suite, and acceptance gates."""
+﻿"""Computer vision evaluation protocol, open retail benchmark suite, and acceptance gates."""
 
 import time
 from dataclasses import dataclass, field
@@ -188,7 +188,15 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
     """Generate fixed scenario suite (Scenes A-J) simulating retail benchmark scenes."""
     scenarios: list[EvaluationScenario] = []
 
-    # Scene A — empty store / low traffic
+    # Shared shelf zone used across multiple scenes
+    shelf_zone = ZoneConfig(
+        zone_id="shelf_snacks",
+        zone_type="shelf",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Snacks Shelf",
+    )
+
+    # Scene A -- empty store / low traffic
     frames_a: list[ScenarioFrame] = []
     for i in range(10):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -202,25 +210,15 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    # Scene B — normal traffic with 2 shoppers
+    # Scene B -- normal traffic with 2 shoppers
     frames_b: list[ScenarioFrame] = []
     for i in range(15):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
-        # Person 1 moving left to right at realistic walking pace
         p1_x = 50 + i * 5
-        # Person 2 walking in center
         p2_x = 400 - i * 4
         gts = [
-            GroundTruthBox(
-                class_id=PERSON_CLASS_ID,
-                bbox=(p1_x, 150, 60, 160),
-                track_id="trk_1",
-            ),
-            GroundTruthBox(
-                class_id=PERSON_CLASS_ID,
-                bbox=(p2_x, 180, 60, 150),
-                track_id="trk_2",
-            ),
+            GroundTruthBox(class_id=PERSON_CLASS_ID, bbox=(p1_x, 150, 60, 160), track_id="trk_1"),
+            GroundTruthBox(class_id=PERSON_CLASS_ID, bbox=(p2_x, 180, 60, 150), track_id="trk_2"),
         ]
         frames_b.append(ScenarioFrame(frame_index=i, image=img, gt_boxes=gts))
     scenarios.append(
@@ -232,26 +230,19 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    # Scene C — crowded crossing
+    # Scene C -- crowded crossing
     frames_c: list[ScenarioFrame] = []
     for i in range(15):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
-        # 3 shoppers moving in the scene
         gts = [
             GroundTruthBox(
-                class_id=PERSON_CLASS_ID,
-                bbox=(100 + i * 5, 150, 50, 150),
-                track_id="trk_c1",
+                class_id=PERSON_CLASS_ID, bbox=(100 + i * 5, 150, 50, 150), track_id="trk_c1"
             ),
             GroundTruthBox(
-                class_id=PERSON_CLASS_ID,
-                bbox=(400 - i * 5, 150, 50, 150),
-                track_id="trk_c2",
+                class_id=PERSON_CLASS_ID, bbox=(400 - i * 5, 150, 50, 150), track_id="trk_c2"
             ),
             GroundTruthBox(
-                class_id=PERSON_CLASS_ID,
-                bbox=(250, 140, 50, 150),
-                track_id="trk_c3",
+                class_id=PERSON_CLASS_ID, bbox=(250, 140, 50, 150), track_id="trk_c3"
             ),
         ]
         frames_c.append(ScenarioFrame(frame_index=i, image=img, gt_boxes=gts))
@@ -264,17 +255,10 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    # Scene D — shelf stocked
-    shelf_zone = ZoneConfig(
-        zone_id="shelf_snacks",
-        zone_type="shelf",
-        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
-        label="Snacks Shelf",
-    )
+    # Scene D -- shelf stocked
     frames_d: list[ScenarioFrame] = []
     for i in range(10):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
-        # 6 products on shelf
         products = [
             GroundTruthBox(
                 class_id=PRODUCT_CLASS_ID,
@@ -300,11 +284,10 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    # Scene E — shelf partially empty (low stock)
+    # Scene E -- shelf partially empty (low stock)
     frames_e: list[ScenarioFrame] = []
     for i in range(10):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
-        # 1 product on shelf
         products = [GroundTruthBox(class_id=PRODUCT_CLASS_ID, bbox=(120, 150, 40, 50))]
         frames_e.append(
             ScenarioFrame(
@@ -324,7 +307,7 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    # Scene F — shelf empty
+    # Scene F -- shelf empty
     frames_f: list[ScenarioFrame] = []
     for i in range(10):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -346,16 +329,31 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    # Scene H — product interaction & shopper engagement
+    # Scene G -- glare / overexposed lighting (§6 requirement)
+    frames_g: list[ScenarioFrame] = []
+    for i in range(10):
+        # Simulate glare: mostly white / overexposed image
+        img = np.full((480, 640, 3), 220, dtype=np.uint8)
+        gts = [
+            GroundTruthBox(class_id=PERSON_CLASS_ID, bbox=(200, 150, 60, 160), track_id="trk_g1")
+        ]
+        frames_g.append(ScenarioFrame(frame_index=i, image=img, gt_boxes=gts))
+    scenarios.append(
+        EvaluationScenario(
+            scene_id="Scene_G",
+            name="Glare / Overexposure",
+            description="High-brightness glare simulating storefront window reflection",
+            frames=frames_g,
+        )
+    )
+
+    # Scene H -- product interaction & shopper engagement
     frames_h: list[ScenarioFrame] = []
     for i in range(20):
         img = np.zeros((480, 640, 3), dtype=np.uint8)
-        # Shopper standing in front of shelf_snacks for 15 frames
         gts = [
             GroundTruthBox(
-                class_id=PERSON_CLASS_ID,
-                bbox=(120, 200, 60, 160),
-                track_id="shopper_1",
+                class_id=PERSON_CLASS_ID, bbox=(120, 200, 60, 160), track_id="shopper_1"
             ),
             GroundTruthBox(class_id=PRODUCT_CLASS_ID, bbox=(140, 150, 40, 50)),
         ]
@@ -377,7 +375,52 @@ def build_open_retail_synthetic_suite() -> list[EvaluationScenario]:
         )
     )
 
-    return scenarios
+    # Scene I -- queue at checkout (§6 requirement)
+    frames_i: list[ScenarioFrame] = []
+    for i in range(15):
+        img = np.zeros((480, 640, 3), dtype=np.uint8)
+        # 4 people queuing in a column
+        gts = [
+            GroundTruthBox(
+                class_id=PERSON_CLASS_ID,
+                bbox=(300, 80 + j * 90, 60, 80),
+                track_id=f"queue_{j}",
+            )
+            for j in range(4)
+        ]
+        frames_i.append(ScenarioFrame(frame_index=i, image=img, gt_boxes=gts))
+    scenarios.append(
+        EvaluationScenario(
+            scene_id="Scene_I",
+            name="Queue at Checkout",
+            description="Four shoppers queuing vertically; tests queue-length estimation",
+            frames=frames_i,
+        )
+    )
+
+    # Scene J -- motion blur (§6 requirement)
+    frames_j: list[ScenarioFrame] = []
+    for i in range(10):
+        # Simulate blur: uniform grey (low texture, as if motion-smeared)
+        img = np.full((480, 640, 3), 128, dtype=np.uint8)
+        gts = [
+            GroundTruthBox(
+                class_id=PERSON_CLASS_ID,
+                bbox=(50 + i * 15, 150, 60, 160),
+                track_id="blur_person",
+            )
+        ]
+        frames_j.append(ScenarioFrame(frame_index=i, image=img, gt_boxes=gts))
+    scenarios.append(
+        EvaluationScenario(
+            scene_id="Scene_J",
+            name="Motion Blur",
+            description="Fast-moving shopper causing motion blur; tests tracking robustness",
+            frames=frames_j,
+        )
+    )
+
+    return scenarios  # 10 scenes: A-J
 
 
 class MockPredictorBackend(InferenceBackend):
@@ -463,8 +506,8 @@ class CVEvaluator:
 
         for scenario in scenarios:
             tracker.reset()
-            shelf_classifier._history.clear()
-            interaction_detector._sessions.clear()
+            shelf_classifier.reset()
+            interaction_detector.reset()
             prev_track_matches.clear()
             for frame_idx, s_frame in enumerate(scenario.frames):
                 ts = start_ts + timedelta(seconds=frame_idx * 0.1)
@@ -497,18 +540,30 @@ class CVEvaluator:
                 # Interaction engine update
                 interaction_detector.update(tracked, scenario.zones, ts)
 
-                # Shelf evaluation
+                # Shelf evaluation: count products within shelf polygon ROI
                 if s_frame.expected_shelf_status:
                     for shelf_id, expected_status in s_frame.expected_shelf_status.items():
-                        # Count products in shelf
-                        products_in_shelf = [
-                            p for p in preds if p.class_id == PRODUCT_CLASS_ID
-                        ]
-                        status, conf, occ = shelf_classifier.classify_occupancy(
-                            shelf_id=shelf_id, product_count=len(products_in_shelf)
-                        )
+                        # Spatial ROI filter: only products whose centroids fall inside zone
+                        zone_map = {z.zone_id: z for z in scenario.zones}
+                        if shelf_id in zone_map:
+                            zone = zone_map[shelf_id]
+                            product_bboxes = [
+                                p.bbox for p in preds if p.class_id == PRODUCT_CLASS_ID
+                            ]
+                            result = shelf_classifier.classify_occupancy_from_detections(
+                                shelf_id=shelf_id,
+                                detections=product_bboxes,
+                                zone=zone,
+                            )
+                        else:
+                            product_count = sum(
+                                1 for p in preds if p.class_id == PRODUCT_CLASS_ID
+                            )
+                            result = shelf_classifier.classify_occupancy(
+                                shelf_id=shelf_id, product_count=product_count
+                            )
                         shelf_total += 1
-                        if status == expected_status:
+                        if result.status == expected_status:
                             shelf_correct += 1
 
         interaction_events = interaction_detector.flush()
@@ -520,12 +575,8 @@ class CVEvaluator:
         mean_lat = float(np.mean(sorted_lat))
         fps = 1000.0 / mean_lat if mean_lat > 0 else 0.0
 
-        person_m = evaluate_detections(
-            all_preds, all_gts, PERSON_CLASS_ID, "person"
-        )
-        product_m = evaluate_detections(
-            all_preds, all_gts, PRODUCT_CLASS_ID, "product"
-        )
+        person_m = evaluate_detections(all_preds, all_gts, PERSON_CLASS_ID, "person")
+        product_m = evaluate_detections(all_preds, all_gts, PRODUCT_CLASS_ID, "product")
         map50 = (person_m.precision + product_m.precision) / 2.0
         shelf_acc = (shelf_correct / shelf_total) if shelf_total > 0 else 1.0
         interaction_precision = 1.0 if interaction_events else 0.85
@@ -541,8 +592,8 @@ class CVEvaluator:
             AcceptanceGateResult(
                 gate_id="Gate_2",
                 gate_name="Evaluation Dataset Protocol",
-                passed=len(scenarios) >= 5,
-                summary="Held-out scenario suite covering diverse store traffic and shelves",
+                passed=len(scenarios) >= 10,
+                summary="Held-out 10-scene suite (A-J) covering diverse store conditions",
             ),
             AcceptanceGateResult(
                 gate_id="Gate_3",

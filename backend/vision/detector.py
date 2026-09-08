@@ -1,3 +1,4 @@
+﻿import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ import numpy.typing as npt
 from core.schemas import Detection
 
 from vision.inference_backend import InferenceBackend, RawDetection
+
+logger = logging.getLogger(__name__)
 
 # Standard COCO classes frequently encountered in retail scenes
 DEFAULT_COCO_RETAIL_CLASS_MAP: dict[int, str] = {
@@ -49,6 +52,15 @@ OPEN_RETAIL_CLASS_MAP: dict[int, str] = {
     3: "basket",
 }
 
+# Analytics role semantics: class_id -> role used by tracker/analytics modules
+# "person" drives dwell/interaction; "product" drives shelf occupancy; others are ignored
+OPEN_RETAIL_CLASS_ROLES: dict[int, str] = {
+    0: "person",
+    1: "product",
+    2: "product",  # cart treated as product carrier for occupancy
+    3: "product",
+}
+
 # COCO class 0 is 'person'
 PERSON_CLASS_ID = 0
 PRODUCT_CLASS_ID = 1
@@ -60,15 +72,26 @@ class DetectionDiagnostics:
     """Telemetry diagnostics for inference and detection quality."""
 
     frame_count: int = 0
+    dropped_frame_count: int = 0
     last_latency_ms: float = 0.0
     p50_latency_ms: float = 0.0
     p95_latency_ms: float = 0.0
     latencies_ms: list[float] = field(default_factory=list)
     counts_by_class: dict[int, int] = field(default_factory=lambda: defaultdict(int))
-    confidence_sum_by_class: dict[int, float] = field(default_factory=lambda: defaultdict(float))
+    confidence_sum_by_class: dict[int, float] = field(
+        default_factory=lambda: defaultdict(float)
+    )
 
-    def record_frame(self, latency_ms: float, detections: list[RawDetection]) -> None:
+    def record_frame(
+        self,
+        latency_ms: float,
+        detections: list[RawDetection],
+        dropped: bool = False,
+    ) -> None:
         self.frame_count += 1
+        if dropped:
+            self.dropped_frame_count += 1
+            return
         self.last_latency_ms = latency_ms
         self.latencies_ms.append(latency_ms)
         if len(self.latencies_ms) > 1000:
@@ -99,6 +122,7 @@ class YOLODetector:
         conf_thresholds: dict[int, float] | None = None,
         default_conf_threshold: float = 0.4,
         target_classes: set[int] | None = None,
+        class_roles: dict[int, str] | None = None,
     ) -> None:
         self.backend = backend
         self.class_map = (
@@ -107,7 +131,31 @@ class YOLODetector:
         self.conf_thresholds = conf_thresholds or {}
         self.default_conf_threshold = default_conf_threshold
         self.target_classes = target_classes
+        # class_roles maps class_id -> analytics role ("person", "product", etc.)
+        self.class_roles: dict[int, str] = class_roles or {}
         self.diagnostics = DetectionDiagnostics()
+        self._validate_backend()
+
+    def _validate_backend(self) -> None:
+        """Log output tensor metadata from backend for startup validation.
+
+        Uses duck-typing to check for ONNX session info without hard-importing
+        onnxruntime, keeping the InferenceBackend swap point intact.
+        """
+        session = getattr(self.backend, "_session", None)
+        if session is None:
+            return
+        outputs = getattr(session, "get_outputs", None)
+        if callable(outputs):
+            names = [o.name for o in outputs()]
+            shapes = [o.shape for o in outputs()]
+            logger.info(
+                "YOLODetector backend output tensors: %s shapes=%s",
+                names,
+                shapes,
+            )
+            if not names:
+                logger.warning("YOLODetector: backend returned no output tensors")
 
     def detect(self, frame: npt.NDArray[np.uint8]) -> list[RawDetection]:
         """Run inference and return filtered multi-class detections."""

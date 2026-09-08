@@ -1,0 +1,412 @@
+EdgeRetailAI — Computer Vision Improvement Criteria
+SIH 26179 | YOLO26n | Edge-AI Retail Analytics POC
+Assessment basis: the uploaded EdgeRetailAI repository, with emphasis on the current vision, inference, tracking, zone analytics, shelf classification, and Raspberry Pi deployment path.
+1. Executive Summary
+The software foundation is sufficiently mature for a POC: the repository has an ONNX Runtime inference seam, camera/inference decoupling, anonymous tracking, zone analytics, shelf classification, alerts, APIs, tests, and both FP32 and INT8 YOLO26n ONNX models. The main weakness is not the surrounding application architecture; it is the semantic quality of the computer-vision layer.
+The current detector wrapper filters YOLO output to COCO class 0 (person). Consequently, the system is presently much closer to a shopper/footfall analytics system than a complete retail-vision system. Product detection, product interaction, shelf occupancy, stock estimation, and robust multi-class tracking should therefore be the primary CV work.
+2. Current CV State — Repository Assessment
+Area
+Current implementation
+Assessment
+Priority
+YOLO26n inference
+ONNX Runtime; static NCHW validation; letterboxing; confidence filtering; output parsing.
+Good foundation. Validate model I/O and numerical correctness with recorded images.
+P0
+Model variants
+FP32 and INT8 YOLO26n ONNX models are present.
+Useful for edge deployment; must benchmark accuracy and latency rather than assuming INT8 is better.
+P1
+Detection wrapper
+PersonDetector keeps only class_id == 0.
+Major bottleneck. Prevents multi-class retail analytics.
+P0
+Tracking
+Custom IoU/greedy association with two confidence stages.
+Adequate POC baseline, but vulnerable to occlusion and identity switches.
+P1
+Footfall
+Entry/exit zones with edge-triggered events.
+Good baseline; depends heavily on stable person tracks.
+P1
+Dwell
+Tracks time inside product_display zones.
+Good baseline; needs temporal robustness to missed detections.
+P1
+Queue
+Counts people in checkout zones; estimates wait from empirical/fallback service time.
+Good POC logic; improve queue ordering and time estimation later.
+P2
+Shelf state
+Canny edge-density heuristic.
+Weakest CV component; should become detection/occupancy based.
+P0
+Retail semantics
+No strong product identity/interaction pipeline.
+Major missing capability.
+P0
+Evaluation
+Unit tests exist, but no clear CV accuracy benchmark protocol.
+Add dataset-level metrics and scenario tests.
+P0
+3. Target CV Architecture
+The target should separate perception from analytics. YOLO26n should answer 'what is visible and where?', tracking should answer 'which observation belongs to the same anonymous object?', and analytics should answer 'what retail event does this imply?'
+Camera → frame capture → latest-frame buffer
+Latest frame → YOLO26n detector
+Detections → class filtering + confidence policy
+Person/product/cart detections → class-aware tracking
+Tracks → zone membership + temporal state
+Person + product/shelf spatial relationships → interaction events
+Shelf/product observations → occupancy and stock state
+Events → FastAPI/database/dashboard/alerts
+4. Improvement Criteria
+4.1 Detection Quality — P0
+Objective: make the model reliable enough that downstream analytics are based on trustworthy detections.
+Criterion
+Target
+How to measure
+Pass condition
+Person precision
+≥ 95% in controlled demo scenes
+Per-class precision on held-out validation/test set
+≥ target
+Person recall
+≥ 90%
+Per-class recall
+≥ target
+Product precision
+≥ 90%
+Per-class precision
+≥ target
+Product recall
+≥ 85% initially; ≥ 90% preferred
+Per-class recall
+≥ target
+mAP50
+≥ 0.90 preferred for core classes
+Dataset evaluation
+Core classes meet target
+Small-object performance
+Minimize missed shelf products
+AP/recall by object-size bucket
+No catastrophic small-object drop
+Confidence calibration
+Stable threshold across scenes
+Precision/recall vs threshold sweep
+Select threshold using validation data
+False positives
+< 5% for critical event classes
+False positives per minute / scene
+Below threshold
+Important: these are engineering targets, not claims about current performance. Measure them on a held-out dataset that is representative of the actual SIH camera position.
+4.2 Dataset Quality — P0
+Criterion
+Required practice
+Class definition
+Define exact classes and annotation rules before labeling.
+Camera realism
+Include the actual camera height, angle, field of view, lighting, and shelf geometry.
+Occlusion
+Include shoppers blocking products, partial people, overlapping products, and carts.
+Lighting
+Daylight, artificial light, shadows, glare, dim scenes, and exposure changes.
+Crowding
+Sparse, normal, and crowded shopper scenes.
+Negative samples
+Include frames with no target object and visually similar non-target objects.
+Split discipline
+Split by video/session, not random adjacent frames, to avoid leakage.
+Class balance
+Avoid allowing a dominant person class to hide poor product performance.
+Annotation QA
+Review a sample of every class and every difficult scene before training.
+4.3 YOLO26n Model Strategy — P0
+Start with the nano model because the project is intended for edge deployment. Do not increase model size until the dataset, labels, evaluation protocol, and pipeline are demonstrably correct.
+Stage
+Acceptance criterion
+Baseline
+Run the existing YOLO26n model and record latency, detections, confidence distribution, and failure cases.
+Custom training
+Train on retail-specific classes using a clean train/validation/test split.
+Threshold tuning
+Choose confidence threshold from validation results, not by visual preference alone.
+Export
+Export the selected model to ONNX and verify output equivalence against the training/runtime path.
+INT8
+Compare FP32 vs INT8 accuracy and latency on the same test set and Pi hardware.
+Regression
+Every model replacement must pass a fixed evaluation suite before deployment.
+4.4 Detection Pipeline Implementation — P0
+Replace the current person-only detector abstraction with a generic detector that preserves class_id, confidence, and bounding box. Person-specific filtering should happen in the analytics component or via an explicit class filter.
+Current issue
+Improvement
+PersonDetector discards non-person detections.
+Introduce a generic YOLODetector returning all configured classes.
+Class semantics are implicit.
+Add a model/class configuration mapping: class_id → semantic name → tracker/analytics role.
+Confidence is globally handled.
+Allow class-specific thresholds when product and person distributions differ.
+No explicit detection diagnostics.
+Log per-frame count, confidence statistics, inference latency, and dropped-frame count.
+Parser assumes one output shape.
+Validate output metadata and add explicit startup/runtime checks for expected YOLO26 output.
+4.5 Tracking — P1
+The existing tracker is acceptable as a baseline, but it should be evaluated rather than treated as production-grade ByteTrack.
+Criterion
+Target / test
+ID switches
+Measure on crowded and crossing-person sequences; target continuous reduction.
+Track persistence
+Short detector misses should not immediately create a new ID.
+Class consistency
+A track must not silently change semantic class.
+Occlusion recovery
+Test a person/product disappearing behind another object and reappearing.
+Crowd handling
+Test 5–15 people crossing within the same scene.
+Tracker latency
+< 5 ms/frame preferred on Pi for this lightweight layer.
+If the custom tracker fails these tests, replace it with a proven tracker implementation rather than continually adding heuristics. The tracker should remain independent from the YOLO backend.
+4.6 Product Interaction — P0
+This is one of the highest-value additions for the SIH demonstration. A shopper being inside a product zone is not equivalent to interacting with a product.
+Signal
+Implementation criterion
+Proximity
+Person anchor point or hand/body proxy must be within a configurable distance of product ROI.
+Temporal persistence
+Interaction must persist for N frames / configurable seconds to suppress single-frame noise.
+Entry/exit
+Generate one interaction start and one interaction end event per session.
+Zone context
+Associate interaction with shelf/product zone.
+Confidence
+Store detection confidence and interaction confidence separately.
+Occlusion handling
+Do not end an interaction immediately because of one missed detection.
+4.7 Shelf / Inventory Vision — P0
+The current Canny edge-density shelf classifier should be treated as a fallback/demo heuristic. It should not be the primary inventory intelligence method.
+Capability
+Target implementation
+Acceptance criterion
+Shelf occupancy
+Count product detections within shelf polygon/ROI.
+Occupancy trend agrees with manually labeled state.
+Empty shelf
+No/very few product detections for a sustained interval.
+Low false-empty rate.
+Low stock
+Normalized product count/coverage below calibrated threshold.
+Stable across lighting changes.
+Stocked
+Coverage/count above calibrated threshold.
+High agreement with labeled scenes.
+Temporal smoothing
+Use rolling median/EMA or state machine.
+No status flicker from single bad frames.
+Shelf ROI
+Configured polygon rather than arbitrary full-frame crop.
+Only intended shelf contributes to stock state.
+Confidence
+Combine detection confidence and temporal consistency.
+Confidence reflects evidence quality.
+4.8 Zone Analytics — P1
+Metric
+Improvement criterion
+Footfall
+Count unique anonymous tracks crossing a defined entrance boundary, not every frame.
+Dwell
+Use persistent zone membership and tolerate brief missed detections.
+Zone transitions
+Record ordered transitions such as entrance → snacks → checkout.
+Heatmap
+Use track anchor points with temporal aggregation and configurable spatial resolution.
+Product zones
+Allow one shelf/product zone to contain multiple product ROIs.
+Calibration
+Zone coordinates must be tied to the actual camera resolution and documented.
+4.9 Queue Intelligence — P2
+Keep the current queue-length approach for the POC, then improve it after detection/tracking are reliable.
+Improvement
+Criterion
+Queue ordering
+Estimate queue position using entry time and spatial ordering inside checkout zone.
+Wait estimate
+Use completed service durations with robust statistics; avoid one abnormal session dominating the mean.
+Congestion
+Use configurable thresholds plus sustained-duration logic.
+Missed detection tolerance
+Avoid queue-length oscillation caused by a single missed person.
+5. Edge Deployment Criteria — Raspberry Pi 4B
+Metric
+POC target
+Preferred target
+Measurement
+Inference FPS
+≥ 3 FPS
+5 FPS
+End-to-end YOLO inference only
+Pipeline FPS
+Camera-native capture; inference throttled
+Stable latest-frame pipeline
+Long-running test
+Inference latency
+≤ 330 ms
+≤ 200 ms
+Median + P95
+CPU
+< 90% sustained
+< 80% sustained
+5–10 minute run
+RAM
+< 80% system memory
+< 70%
+During continuous inference
+Dropped/stale frames
+No unbounded queue
+Latest-frame only
+Frame age metric
+Thermal stability
+No thermal throttling during demo
+Stable clock/temperature
+15–30 minute test
+INT8 regression
+Accuracy loss acceptable
+Minimal accuracy loss with clear speed gain
+Same test set
+Do not optimize only for peak FPS. A retail POC is better served by stable latency, bounded memory, low frame age, and predictable behavior over a 15–30 minute demonstration.
+6. Evaluation Protocol
+Create a fixed evaluation set before making major CV changes.
+Scene A — empty store / low traffic
+Scene B — normal traffic
+Scene C — crowded crossing
+Scene D — shelf stocked
+Scene E — shelf partially empty
+Scene F — shelf empty
+Scene G — glare / lighting change
+Scene H — product occlusion by shopper
+Scene I — checkout queue
+Scene J — camera movement or temporary blur (if relevant)
+For each scenario, save the input video, expected events/labels, model version, configuration, hardware, and measured metrics. This makes every future model change objectively comparable.
+7. Minimum Metrics Dashboard for CV Development
+Metric
+Why it matters
+Inference FPS
+Edge feasibility
+P50/P95 inference latency
+Stability and worst-case responsiveness
+Detection count by class
+Detect class collapse or unexpected behavior
+Mean confidence by class
+Identify threshold/model problems
+Person precision/recall
+Footfall reliability
+Product precision/recall
+Inventory reliability
+ID switches
+Tracking reliability
+Track fragmentation
+Continuity of shopper/product identity
+False interaction events/hour
+Business-event reliability
+False low-stock alerts/hour
+Inventory alert reliability
+Frame age
+Real-time responsiveness
+CPU/RAM/temperature
+Edge operational stability
+8. Acceptance Gates
+Gate
+Definition of done
+Gate 1 — Detector
+Generic YOLO detector works for all configured classes and passes parser/output tests.
+Gate 2 — Dataset
+Held-out dataset exists with documented class definitions and no obvious train/test leakage.
+Gate 3 — Model
+Custom YOLO26n reaches agreed precision/recall targets on held-out data.
+Gate 4 — Tracking
+Stable IDs in normal and moderately crowded scenes; ID-switch rate is measured.
+Gate 5 — Retail events
+Product interaction events are generated with start/end semantics and temporal debouncing.
+Gate 6 — Inventory
+Shelf state is derived primarily from product/shelf evidence rather than edge density.
+Gate 7 — Edge
+15–30 minute Pi test completes without memory growth, runaway queues, or thermal failure.
+Gate 8 — Demo
+Recorded test scenarios produce repeatable results without manually resetting analytics state.
+9. Recommended Implementation Order
+Step
+Work
+Deliverable
+P0.1
+Generalize detector
+Replace PersonDetector-only behavior with a configurable multi-class detector.
+P0.2
+Validate ONNX
+Verify input preprocessing, output shape, coordinate de-letterboxing, class IDs, and confidence values.
+P0.3
+Build retail dataset
+Collect and annotate actual camera-view images/videos.
+P0.4
+Train YOLO26n
+Fine-tune using the retail class set; retain a clean held-out test set.
+P0.5
+Detection benchmark
+Generate precision/recall/mAP, confusion/failure cases, and threshold curves.
+P0.6
+Product interaction
+Implement person-product spatial + temporal event logic.
+P0.7
+Shelf occupancy
+Replace/augment Canny heuristic with product detection + ROI occupancy + temporal smoothing.
+P1.1
+Class-aware tracking
+Ensure independent/stable tracking for persons and other persistent objects.
+P1.2
+Zone robustness
+Add missed-frame tolerance, transition logic, and camera-resolution calibration.
+P1.3
+Edge benchmark
+Compare FP32/INT8, input sizes, CPU threads, and sustained thermals on Pi.
+P2
+Queue refinement
+Improve service-time estimation and queue ordering only after detection/tracking are stable.
+10. What Should NOT Be Changed Yet
+Do not rewrite the FastAPI/Svelte architecture merely because the CV layer is weak.
+Do not move to a larger YOLO model before proving that YOLO26n + better data is insufficient.
+Do not spend significant time on dashboard polish before CV event accuracy is measurable.
+Do not treat the existing custom IoU tracker as a final production tracker; measure it first.
+Do not use Canny edge density as the primary evidence for inventory claims if product detection is available.
+11. Suggested SIH Demo Success Criteria
+Demo capability
+Visible proof
+Customer counting
+Person boxes + stable anonymous IDs + entrance count.
+Dwell analysis
+Customer remains in product zone and dwell timer updates correctly.
+Product interaction
+Customer approaches/interacts with product zone and event is generated once.
+Shelf monitoring
+Shelf state changes when products are removed/restocked.
+Queue analytics
+Checkout zone displays current queue and estimated waiting time.
+Alerts
+Low-stock/queue alert appears only after sustained evidence.
+Edge operation
+System runs locally on Raspberry Pi with measurable latency/FPS.
+Resilience
+Temporary detection misses do not cause analytics to reset or explode.
+12. Final Priority Assessment
+The single highest-value change is to stop treating YOLO26n as a person-only detector. The second is to train and evaluate a retail-specific YOLO26n model. The third is to turn detections into temporal retail events—especially product interaction and shelf occupancy. Once those are reliable, tracking, queue estimation, and edge optimization can be tuned around measured behavior.
+In practical SIH terms: prioritize CV correctness and demonstrable business events over adding more software modules. A smaller number of highly reliable analytics is more convincing than a dashboard containing many metrics whose underlying detections are weak.
+Appendix A — Proposed CV Data Contract
+Use a generic detection object throughout the vision pipeline:
+Detection: 
+class_id, class_name, confidence, bbox(x,y,w,h), timestamp
+Track: 
+track_id, class_id, bbox, confidence, age, last_seen, zone_id
+InteractionEvent: 
+track_id, product/shelf zone, start_ts, end_ts, confidence
+StockEvent: 
+shelf_id, status, occupancy, confidence, timestamp
+Appendix B — Versioning
+Every benchmark result should record: git commit, model filename/hash, model precision (FP32/INT8), image size, confidence thresholds, tracker settings, camera resolution/FPS, Pi hardware/software environment, and dataset version.

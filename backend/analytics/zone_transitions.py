@@ -1,20 +1,8 @@
-"""Zone transition analytics tracking customer progression through retail zones."""
+﻿"""Zone transition analytics tracking customer progression through retail zones."""
 
 from collections import defaultdict
-from dataclasses import dataclass
-from datetime import datetime
 
-from core.schemas import DetectionEvent
-
-
-@dataclass
-class ZoneTransition:
-    """A movement of a tracked entity from one zone to another."""
-
-    track_id: str
-    from_zone_id: str
-    to_zone_id: str
-    timestamp: datetime
+from core.schemas import DetectionEvent, ZoneTransition
 
 
 class ZoneTransitionTracker:
