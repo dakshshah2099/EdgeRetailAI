@@ -61,6 +61,59 @@ class DwellEvent(BaseModel):
         return self
 
 
+class Detection(BaseModel):
+    """Generic vision detection object for multi-class detection pipeline."""
+
+    model_config = ConfigDict(frozen=True)
+    class_id: int = Field(ge=0)
+    class_name: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    bbox: tuple[int, int, int, int]  # x, y, w, h
+    timestamp: datetime
+
+    @field_validator("bbox")
+    @classmethod
+    def validate_bbox(cls, v: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+        if len(v) != 4:
+            raise ValueError("bbox must be a 4-tuple (x, y, w, h)")
+        if v[2] < 0 or v[3] < 0:
+            raise ValueError("bbox width and height must be non-negative")
+        return v
+
+
+class TrackInfo(BaseModel):
+    """Anonymous multi-class tracking state representation."""
+
+    model_config = ConfigDict(frozen=True)
+    track_id: str
+    class_id: int = Field(ge=0)
+    class_name: str = "unknown"
+    bbox: tuple[int, int, int, int]  # x, y, w, h
+    confidence: float = Field(ge=0.0, le=1.0)
+    age: int = Field(ge=1)
+    last_seen: datetime
+    zone_id: str | None = None
+
+
+class InteractionEvent(BaseModel):
+    """Customer-product interaction event (approach, dwell, touch, pickup)."""
+
+    model_config = ConfigDict(frozen=True)
+    event_id: str
+    track_id: str
+    zone_id: str
+    start_ts: datetime
+    end_ts: datetime
+    confidence: float = Field(ge=0.0, le=1.0)
+    interaction_type: Literal["approach", "touch", "pickup", "examine"] = "touch"
+
+    @model_validator(mode="after")
+    def validate_timestamps(self) -> "InteractionEvent":
+        if self.end_ts < self.start_ts:
+            raise ValueError("end_ts must be greater than or equal to start_ts")
+        return self
+
+
 class StockEvent(BaseModel):
     model_config = ConfigDict(frozen=True)
     event_id: str
@@ -68,6 +121,7 @@ class StockEvent(BaseModel):
     timestamp: datetime
     status: Literal["empty", "low", "ok"]
     confidence: float = Field(ge=0.0, le=1.0)
+    occupancy: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class QueueEvent(BaseModel):

@@ -84,16 +84,79 @@ class EdgeDensityShelfClassifier(ShelfClassifier):
         return "ok", float(confidence)
 
 
+class ProductOccupancyShelfClassifier(ShelfClassifier):
+    """Detection-based shelf classifier with temporal smoothing.
+
+    Criteria:
+    - Counts detected products inside the configured shelf ROI polygon.
+    - Computes occupancy = products_in_roi / capacity.
+    - Applies rolling window smoothing (median/mean) across frames to avoid single-frame flickering.
+    - Emits robust stock states (empty, low, ok) and confidence.
+    - Integrates with edge-density heuristic as fallback when no detections are present.
+    """
+
+    def __init__(
+        self,
+        capacity: int = 5,
+        empty_threshold: float = 0.05,
+        low_threshold: float = 0.35,
+        smoothing_window: int = 5,
+        fallback_classifier: ShelfClassifier | None = None,
+    ) -> None:
+        self.capacity = max(1, capacity)
+        self.empty_threshold = empty_threshold
+        self.low_threshold = low_threshold
+        self.smoothing_window = max(1, smoothing_window)
+        self.fallback = fallback_classifier or EdgeDensityShelfClassifier()
+        self._history: dict[str, list[float]] = {}
+
+    def classify_occupancy(
+        self,
+        shelf_id: str,
+        product_count: int,
+        capacity: int | None = None,
+    ) -> tuple[Literal["empty", "low", "ok"], float, float]:
+        """Classify shelf based on product count inside ROI with temporal smoothing."""
+        cap = capacity if capacity is not None and capacity > 0 else self.capacity
+        raw_occupancy = min(1.0, max(0.0, float(product_count) / float(cap)))
+
+        if shelf_id not in self._history:
+            self._history[shelf_id] = []
+        self._history[shelf_id].append(raw_occupancy)
+        if len(self._history[shelf_id]) > self.smoothing_window:
+            self._history[shelf_id] = self._history[shelf_id][-self.smoothing_window :]
+
+        smoothed_occ = float(np.median(self._history[shelf_id]))
+
+        # Confidence: higher when temporal variance is low
+        history_len = len(self._history[shelf_id])
+        variance = float(np.var(self._history[shelf_id])) if history_len > 1 else 0.0
+        stability_conf = max(0.5, min(1.0, 1.0 - variance * 2.0))
+
+        if smoothed_occ <= self.empty_threshold:
+            return "empty", stability_conf, smoothed_occ
+        if smoothed_occ <= self.low_threshold:
+            return "low", stability_conf, smoothed_occ
+        return "ok", stability_conf, smoothed_occ
+
+    def classify(
+        self, shelf_crop: npt.NDArray[np.uint8]
+    ) -> tuple[Literal["empty", "low", "ok"], float]:
+        """Fallback implementation using image crop."""
+        return self.fallback.classify(shelf_crop)
+
+
 def check_shelves(
     frame: Frame,
     pixels: npt.NDArray[np.uint8],
     classifier: ShelfClassifier,
     shelf_zones: list[ZoneConfig],
     threshold: float = 0.5,
+    product_counts_by_shelf: dict[str, int] | None = None,
 ) -> list[StockEvent]:
-    """Top-level entry point: crop each shelf zone, classify, emit StockEvents.
+    """Top-level entry point: evaluate each shelf zone, classify, emit StockEvents.
 
-    threshold represents AppConfig.low_stock_confidence_threshold from Slice 0.
+    Supports both pixel-crop classification and product-occupancy detection counting.
     """
     events: list[StockEvent] = []
 
@@ -101,8 +164,17 @@ def check_shelves(
         if zone.zone_type != "shelf":
             continue
 
-        crop = crop_to_zone(pixels, zone)
-        status, confidence = classifier.classify(crop)
+        occupancy: float | None = None
+        if (
+            isinstance(classifier, ProductOccupancyShelfClassifier)
+            and product_counts_by_shelf is not None
+            and zone.zone_id in product_counts_by_shelf
+        ):
+            count = product_counts_by_shelf[zone.zone_id]
+            status, confidence, occupancy = classifier.classify_occupancy(zone.zone_id, count)
+        else:
+            crop = crop_to_zone(pixels, zone)
+            status, confidence = classifier.classify(crop)
 
         events.append(
             StockEvent(
@@ -111,6 +183,7 @@ def check_shelves(
                 timestamp=frame.timestamp,
                 status=status,
                 confidence=confidence,
+                occupancy=occupancy,
             )
         )
 

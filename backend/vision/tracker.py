@@ -164,8 +164,11 @@ class Tracker:
         cost_matrix_high = np.zeros((len(self.tracks), len(dets_high)), dtype=np.float32)
         for i, track in enumerate(self.tracks):
             for j, det in enumerate(dets_high):
-                iou = _compute_iou(track.bbox, det.bbox)
-                cost_matrix_high[i, j] = 1.0 - iou
+                if track.class_id != det.class_id:
+                    cost_matrix_high[i, j] = 1e6
+                else:
+                    iou = _compute_iou(track.bbox, det.bbox)
+                    cost_matrix_high[i, j] = 1.0 - iou
 
         matches_1, unmatched_tracks_1, unmatched_dets_high = _linear_assignment(
             cost_matrix_high, threshold=1.0 - self.iou_threshold
@@ -184,8 +187,11 @@ class Tracker:
             for i, track_idx in enumerate(remaining_track_indices):
                 track = self.tracks[track_idx]
                 for j, det in enumerate(dets_low):
-                    iou = _compute_iou(track.bbox, det.bbox)
-                    cost_matrix_low[i, j] = 1.0 - iou
+                    if track.class_id != det.class_id:
+                        cost_matrix_low[i, j] = 1e6
+                    else:
+                        iou = _compute_iou(track.bbox, det.bbox)
+                        cost_matrix_low[i, j] = 1.0 - iou
 
             matches_2, unmatched_tracks_2_rel, _ = _linear_assignment(
                 cost_matrix_low, threshold=1.0 - self.iou_threshold

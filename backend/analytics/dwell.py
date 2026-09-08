@@ -19,8 +19,13 @@ class DwellTracker:
     for tracks still present).
     """
 
-    def __init__(self, min_duration_sec: float = 0.0) -> None:
+    def __init__(
+        self,
+        min_duration_sec: float = 0.0,
+        missed_tolerance_sec: float = 0.0,
+    ) -> None:
         self.min_duration_sec = min_duration_sec
+        self.missed_tolerance_sec = missed_tolerance_sec
         # Mapping of (track_id, zone_id) -> _ActiveDwell
         self._active_dwells: dict[tuple[str, str], _ActiveDwell] = {}
 
@@ -33,8 +38,11 @@ class DwellTracker:
         for any track that has exited a zone.
         """
         current_in_zone_keys: set[tuple[str, str]] = set()
+        current_frame_ts: datetime | None = None
 
         for event in events:
+            if current_frame_ts is None or event.timestamp > current_frame_ts:
+                current_frame_ts = event.timestamp
             if event.event_type == "in_zone" and event.zone_id is not None:
                 key = (event.track_id, event.zone_id)
                 current_in_zone_keys.add(key)
@@ -51,7 +59,16 @@ class DwellTracker:
         emitted_events: list[DwellEvent] = []
 
         # Find any active dwells no longer present in this frame
-        exited_keys = [key for key in self._active_dwells if key not in current_in_zone_keys]
+        missing_keys = [key for key in self._active_dwells if key not in current_in_zone_keys]
+        exited_keys: list[tuple[str, str]] = []
+
+        for key in missing_keys:
+            session = self._active_dwells[key]
+            if self.missed_tolerance_sec > 0.0 and current_frame_ts is not None:
+                elapsed = (current_frame_ts - session.last_ts).total_seconds()
+                if elapsed < self.missed_tolerance_sec:
+                    continue
+            exited_keys.append(key)
 
         for key in exited_keys:
             session = self._active_dwells.pop(key)
