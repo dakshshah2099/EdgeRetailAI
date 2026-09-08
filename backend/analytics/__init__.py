@@ -1,4 +1,6 @@
-"""Retail analytics module: footfall, dwell, queue, shelf, and heatmap."""
+﻿"""Retail analytics module: footfall, dwell, queue, shelf, and heatmap."""
+
+from core.schemas import ZoneTransition
 
 from analytics.dwell import DwellTracker
 from analytics.footfall import FootfallTracker, process_frame
@@ -13,7 +15,7 @@ from analytics.shelf_classifier import (
     check_shelves,
 )
 from analytics.zone_membership import anchor_point, is_inside_zone, zone_polygon_cache
-from analytics.zone_transitions import ZoneTransition, ZoneTransitionTracker
+from analytics.zone_transitions import ZoneTransitionTracker
 
 __all__ = [
     "DwellTracker",
@@ -33,3 +35,4 @@ __all__ = [
     "process_frame",
     "zone_polygon_cache",
 ]
+

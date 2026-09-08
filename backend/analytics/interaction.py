@@ -5,6 +5,7 @@ between shoppers and shelf products.
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 import cv2
 import numpy as np
@@ -95,15 +96,19 @@ class ProductInteractionDetector:
     def _build_event(
         self,
         sess: _InteractionSession,
-        phase: str,
+        phase: Literal["start", "end"],
         now_ts: datetime,
     ) -> InteractionEvent:
         duration = (sess.last_seen_ts - sess.start_ts).total_seconds()
-        det_conf = float(np.mean(sess.detection_confidences)) if sess.detection_confidences else 0.8
+        det_conf = (
+            float(np.mean(sess.detection_confidences)) if sess.detection_confidences else 0.8
+        )
         prox_conf = (
             float(np.mean(sess.proximity_confidences)) if sess.proximity_confidences else 0.8
         )
-        i_type = "examine" if duration > self.examine_threshold_sec else "touch"
+        i_type: Literal["approach", "touch", "pickup", "examine"] = (
+            "examine" if duration > self.examine_threshold_sec else "touch"
+        )
         end_ts = sess.last_seen_ts if phase == "end" else now_ts
         return InteractionEvent(
             event_id=f"interact_{uuid.uuid4().hex[:12]}",
@@ -111,7 +116,7 @@ class ProductInteractionDetector:
             zone_id=sess.zone_id,
             start_ts=sess.start_ts,
             end_ts=end_ts,
-            event_phase=phase,  # type: ignore[arg-type]  # Literal validated by Pydantic
+            event_phase=phase,
             detection_confidence=max(0.0, min(1.0, det_conf)),
             interaction_confidence=max(0.0, min(1.0, prox_conf)),
             interaction_type=i_type,
@@ -192,4 +197,3 @@ class ProductInteractionDetector:
                 emitted.append(self._build_event(sess, "end", sess.last_seen_ts))
         self._sessions.clear()
         return emitted
-
