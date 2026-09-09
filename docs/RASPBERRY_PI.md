@@ -1,4 +1,4 @@
-﻿# Raspberry Pi 4B Deployment Guide (SIH 26179 Hardware POC)
+# Raspberry Pi 4B Deployment Guide (SIH 26179 Hardware POC)
 
 This guide documents the setup, execution, systemd daemonization, and performance benchmarking of the **EdgeRetailAI** retail analytics pipeline on a **Raspberry Pi 4B (ARM64)** running **Raspberry Pi OS (64-bit Bookworm / Debian 12)**.
 
@@ -66,12 +66,13 @@ Key environment variables:
 | Variable | Default | Purpose |
 |:---|:---:|:---|
 | `CAMERA_SOURCE` | `0` | Camera input (`0` for USB `/dev/video0`, or RTSP URL) |
-| `YOLO_MODEL` | `backend/models/yolo26n.onnx` | ONNX model file |
+| `YOLO_MODEL` | `models/yolo26n.onnx` | ONNX model file |
 | `YOLO_INPUT_SIZE` | `640` | Input dimension (validated against ONNX graph) |
 | `YOLO_INFERENCE_FPS` | `5` | Maximum inference rate (decoupled from capture) |
 | `YOLO_INTRA_OP_THREADS`| `3` | ONNX thread pool (leaves 1 core for capture/FastAPI) |
 | `SHELF_ANALYSIS_INTERVAL`| `1.0` | Seconds between shelf occupancy checks |
-| `DATABASE_PATH` | `backend/retail.db` | Local SQLite database path |
+| `DATABASE_PATH` | `retail.db` | Local SQLite database path |
+| `CONFIG_PATH` | `config.yaml` | Zone and camera configuration YAML path |
 | `PORT` | `8000` | FastAPI server port |
 
 ---
@@ -80,8 +81,8 @@ Key environment variables:
 
 ### Direct Execution
 ```bash
-source .venv/bin/activate
-export PYTHONPATH="$PWD/backend"
+source backend/.venv/bin/activate
+cd backend
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 - Dashboard UI: `http://<pi-ip>:8000/app/` (or `http://<pi-ip>:8000/` which redirects automatically)

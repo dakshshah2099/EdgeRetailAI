@@ -91,10 +91,10 @@ if [ ! -f "$WORKDIR/.env.pi" ]; then
     fi
 fi
 
-if [ ! -f "$WORKDIR/backend/.env" ]; then
+if [ ! -f "$WORKDIR/backend/.env" ] && [ ! -L "$WORKDIR/backend/.env" ]; then
     if [ -f "$WORKDIR/.env.pi" ]; then
-        echo "Linking/copying .env.pi to backend/.env..."
-        cp "$WORKDIR/.env.pi" "$WORKDIR/backend/.env"
+        echo "Linking .env.pi to backend/.env..."
+        ln -sf "$WORKDIR/.env.pi" "$WORKDIR/backend/.env" 2>/dev/null || cp "$WORKDIR/.env.pi" "$WORKDIR/backend/.env"
     fi
 fi
 
