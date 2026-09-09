@@ -1,11 +1,13 @@
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+
 from api.dependencies import get_repository
 from api.main import app
 from core.schemas import Alert
-from fastapi.testclient import TestClient
 from storage.repository import EventRepository
 
 
@@ -16,7 +18,7 @@ def test_repo(tmp_path: Path) -> EventRepository:
 
 
 @pytest.fixture
-def client(test_repo: EventRepository) -> TestClient:
+def client(test_repo: EventRepository) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_repository] = lambda: test_repo
     with TestClient(app) as test_client:
         yield test_client

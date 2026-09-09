@@ -1,9 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
+
 from alerts.alert_engine import AlertEngine
 from core.schemas import Alert, QueueEvent, StockEvent
-from pydantic import ValidationError
 
 
 @pytest.fixture
@@ -24,7 +25,7 @@ def make_stock_event(
         event_id=f"stock_{shelf_id}_{status}",
         shelf_id=shelf_id,
         timestamp=ts or datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC),
-        status=status,  # type: ignore[arg-type]
+        status=status,  # type: ignore[arg-type]  # test invalid type input intentionally
         confidence=confidence,
     )
 

@@ -9,11 +9,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 import numpy.typing as npt
+
 from alerts.alert_engine import AlertEngine
 from analytics.dwell import DwellTracker
 from analytics.footfall import FootfallTracker
 from analytics.queue_monitor import QueueMonitor
 from analytics.shelf_classifier import EdgeDensityShelfClassifier, check_shelves
+from api.dependencies import get_app_config, get_repository
+from api.env_manager import read_env_file
 from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
 from vision.camera_base import CameraSource
 from vision.detector import PersonDetector
@@ -21,9 +24,6 @@ from vision.inference_backend import ONNXBackend
 from vision.rtsp_source import RTSPSource, format_authenticated_rtsp_url, mask_rtsp_credentials
 from vision.tracker import TrackedDetection, Tracker
 from vision.usb_source import USBSource
-
-from api.dependencies import get_app_config, get_repository
-from api.env_manager import read_env_file
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,12 @@ class StreamManager:
         # Edge AI Pipeline Components
         self.detector: PersonDetector | None = None
         self.tracker: Tracker = Tracker()
-        self.footfall_tracker: FootfallTracker = FootfallTracker()
+        footfall_mode = os.environ.get("FOOTFALL_TRACKER_MODE", "directional")
+        self.footfall_tracker: FootfallTracker = (
+            FootfallTracker(mode="directional")
+            if footfall_mode == "directional"
+            else FootfallTracker(mode="edge")
+        )
         self.dwell_tracker: DwellTracker = DwellTracker()
         self.queue_monitor: QueueMonitor = QueueMonitor()
         self.shelf_classifier: EdgeDensityShelfClassifier = EdgeDensityShelfClassifier()

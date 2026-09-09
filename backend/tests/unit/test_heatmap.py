@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from analytics.heatmap import HeatmapAccumulator
 from vision.tracker import TrackedDetection
 

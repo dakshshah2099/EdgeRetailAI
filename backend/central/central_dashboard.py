@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
+from api.schemas_api import CentralFootfallSummary, CentralStoreStatus, CentralSummaryResponse
 from central.aggregator import CrossStoreSummary, aggregate_stores
 from central.store_registry import StoreConfig, load_store_registry
 
@@ -106,46 +106,43 @@ def create_central_app(config_path: str | Path = "stores.yaml") -> FastAPI:
     def health_check() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/stores", tags=["central"])
-    def get_stores() -> list[dict[str, str]]:
-        return [
-            {"store_id": s.store_id, "name": s.name, "api_base_url": s.api_base_url}
-            for s in get_registry()
-        ]
+    @app.get("/api/stores", response_model=list[StoreConfig], tags=["central"])
+    def get_stores() -> list[StoreConfig]:
+        return get_registry()
 
-    @app.get("/api/summary", tags=["central"])
-    def get_cross_store_summary() -> dict[str, Any]:
+    @app.get("/api/summary", response_model=CentralSummaryResponse, tags=["central"])
+    def get_cross_store_summary() -> CentralSummaryResponse:
         registry = get_registry()
         summary: CrossStoreSummary = aggregate_stores(registry)
 
-        stores_data = []
+        stores_data: list[CentralStoreStatus] = []
         for s in summary.stores:
             stores_data.append(
-                {
-                    "store_id": s.store_id,
-                    "reachable": s.reachable,
-                    "error": s.error,
-                    "footfall": (
-                        {
-                            "total_enters": s.footfall_summary.total_enters,
-                            "total_exits": s.footfall_summary.total_exits,
-                            "net_occupancy": s.footfall_summary.net_occupancy,
-                        }
+                CentralStoreStatus(
+                    store_id=s.store_id,
+                    reachable=s.reachable,
+                    error=s.error,
+                    footfall=(
+                        CentralFootfallSummary(
+                            total_enters=s.footfall_summary.total_enters,
+                            total_exits=s.footfall_summary.total_exits,
+                            net_occupancy=s.footfall_summary.net_occupancy,
+                        )
                         if s.footfall_summary
                         else None
                     ),
-                    "open_alert_count": s.open_alert_count,
-                    "queue_events_count": len(s.queue_events) if s.queue_events else 0,
-                    "stock_events_count": len(s.stock_events) if s.stock_events else 0,
-                }
+                    open_alert_count=s.open_alert_count,
+                    queue_events_count=len(s.queue_events) if s.queue_events else 0,
+                    stock_events_count=len(s.stock_events) if s.stock_events else 0,
+                )
             )
 
-        return {
-            "generated_at": summary.generated_at.isoformat(),
-            "total_reachable": summary.total_reachable,
-            "total_unreachable": summary.total_unreachable,
-            "stores": stores_data,
-        }
+        return CentralSummaryResponse(
+            generated_at=summary.generated_at.isoformat(),
+            total_reachable=summary.total_reachable,
+            total_unreachable=summary.total_unreachable,
+            stores=stores_data,
+        )
 
     @app.get("/", response_class=HTMLResponse, tags=["dashboard"])
     def dashboard_ui() -> str:

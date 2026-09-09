@@ -16,6 +16,7 @@ if _backend_root not in sys.path:
     sys.path.insert(0, _backend_root)
 
 import numpy as np  # noqa: E402
+
 from vision.inference_backend import ONNXBackend  # noqa: E402
 from vision.tracker import Tracker  # noqa: E402
 

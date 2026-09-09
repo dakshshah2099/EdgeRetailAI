@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
+
 from analytics.queue_monitor import QueueMonitor
 from core.schemas import Frame, QueueEvent, ZoneConfig
 from vision.tracker import TrackedDetection

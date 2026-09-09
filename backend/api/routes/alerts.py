@@ -1,10 +1,10 @@
 from typing import Annotated, Literal
 
-from core.schemas import Alert
 from fastapi import APIRouter, Depends, Query
-from storage.repository import EventRepository
 
 from api.dependencies import get_repository
+from core.schemas import Alert
+from storage.repository import EventRepository
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 

@@ -3,10 +3,9 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime
 
+from analytics.zone_membership import anchor_point, is_inside_zone
 from core.schemas import Frame, QueueEvent, ZoneConfig
 from vision.tracker import TrackedDetection
-
-from analytics.zone_membership import anchor_point, is_inside_zone
 
 
 @dataclass

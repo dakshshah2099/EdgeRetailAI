@@ -1,16 +1,16 @@
 from datetime import datetime
 from typing import Annotated
 
-from analytics.heatmap import HeatmapAccumulator
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from storage.repository import EventRepository
 
+from analytics.heatmap import HeatmapAccumulator
 from api.dependencies import (
     get_default_frame_dimensions,
     get_repository,
     is_timestamp_ge,
 )
 from api.schemas_api import HeatmapResponse
+from storage.repository import EventRepository
 
 router = APIRouter(prefix="/heatmap", tags=["heatmap"])
 

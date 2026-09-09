@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 import pytest
+
 from core.schemas import Frame
 from vision.camera_base import CameraSource
 from vision.rtsp_source import RTSPSource

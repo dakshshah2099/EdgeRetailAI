@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from analytics.roi import crop_to_zone
 from core.schemas import ZoneConfig
 

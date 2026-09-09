@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 import pytest
+
 from benchmarks.jetson_specs import ALL_JETSON_SPECS
 from benchmarks.quantize import quantize_model
 from benchmarks.report import generate_report

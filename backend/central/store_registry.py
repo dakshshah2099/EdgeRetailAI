@@ -1,15 +1,11 @@
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from core.schemas import StoreConfig
 
-@dataclass(frozen=True)
-class StoreConfig:
-    store_id: str
-    name: str
-    api_base_url: str  # e.g. "http://192.168.1.50:8000" — each store's own Slice 8 FastAPI instance
+__all__ = ["StoreConfig", "load_store_registry"]
 
 
 def load_store_registry(path: str | Path) -> list[StoreConfig]:

@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 from typing import Any
 
-import core.schemas as schemas
 import pytest
+from pydantic import BaseModel, ValidationError
+
+import core.schemas as schemas
 from core.schemas import (
     Alert,
     AppConfig,
@@ -14,7 +16,6 @@ from core.schemas import (
     StockEvent,
     ZoneConfig,
 )
-from pydantic import BaseModel, ValidationError
 
 
 def test_frame_roundtrip() -> None:

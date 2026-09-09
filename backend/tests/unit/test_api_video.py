@@ -1,7 +1,8 @@
 import pytest
+from fastapi.testclient import TestClient
+
 from api.main import app
 from api.routes.video import frame_streamer
-from fastapi.testclient import TestClient
 
 client = TestClient(app)
 

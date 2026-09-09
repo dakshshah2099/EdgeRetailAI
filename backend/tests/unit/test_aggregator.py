@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+
 from central.aggregator import (
     CrossStoreSummary,
     aggregate_stores,
@@ -223,8 +224,9 @@ def test_aggregate_stores_empty_registry() -> None:
 
 
 def test_central_dashboard_app(tmp_path: Path) -> None:
-    from central.central_dashboard import create_central_app
     from fastapi.testclient import TestClient
+
+    from central.central_dashboard import create_central_app
 
     cfg_file = tmp_path / "stores.yaml"
     cfg_file.write_text(

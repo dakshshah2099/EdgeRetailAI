@@ -5,9 +5,9 @@ from typing import Literal
 import cv2
 import numpy as np
 import numpy.typing as npt
-from core.schemas import Frame, StockEvent, ZoneConfig
 
 from analytics.roi import crop_to_zone
+from core.schemas import Frame, StockEvent, ZoneConfig
 
 
 class ShelfClassifier(ABC):

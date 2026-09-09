@@ -2,7 +2,6 @@ from datetime import datetime
 from pathlib import Path
 
 from core.schemas import Alert, DetectionEvent, DwellEvent, QueueEvent, StockEvent
-
 from storage.db import get_connection, init_db
 
 

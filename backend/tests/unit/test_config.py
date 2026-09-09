@@ -1,8 +1,9 @@
 from pathlib import Path
 
 import pytest
-from core.schemas import AppConfig, load_config
 from pydantic import ValidationError
+
+from core.schemas import AppConfig, load_config
 
 
 def test_load_valid_config(tmp_path: Path) -> None:

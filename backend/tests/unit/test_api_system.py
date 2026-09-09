@@ -1,8 +1,9 @@
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from api.env_manager import read_env_file, write_env_file
 from api.main import app
-from fastapi.testclient import TestClient
 
 client = TestClient(app)
 

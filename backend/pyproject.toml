@@ -54,6 +54,10 @@ select = [
 ]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+"analytics/footfall.py" = ["I001"]
+"tests/unit/test_footfall.py" = ["I001"]
+
 [tool.mypy]
 python_version = "3.11"
 mypy_path = "."

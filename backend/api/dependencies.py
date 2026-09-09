@@ -2,10 +2,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from api.env_manager import read_env_file
 from core.schemas import AppConfig, load_config
 from storage.repository import EventRepository
-
-from api.env_manager import read_env_file
 
 
 def get_db_path() -> Path:

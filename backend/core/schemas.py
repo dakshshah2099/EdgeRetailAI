@@ -100,6 +100,13 @@ class CameraConfig(BaseModel):
     source: str
 
 
+class StoreConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    store_id: str
+    name: str
+    api_base_url: str
+
+
 class AppConfig(BaseModel):
     camera: CameraConfig
     zones: list[ZoneConfig] = Field(default_factory=list)

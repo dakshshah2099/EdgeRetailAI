@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import numpy.typing as npt
+
 from core.schemas import ZoneConfig
 
 

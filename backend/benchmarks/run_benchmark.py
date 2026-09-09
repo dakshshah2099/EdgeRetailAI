@@ -14,6 +14,7 @@ if _backend_root not in sys.path:
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 import numpy.typing as npt  # noqa: E402
+
 from vision.inference_backend import InferenceBackend  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -129,11 +130,10 @@ def run_fps_benchmark(
 
 def main() -> None:
     """Run real FP32 and INT8 benchmarks and produce BENCHMARK_REPORT.md."""
-    from vision.inference_backend import ONNXBackend
-
     from benchmarks.jetson_specs import ALL_HARDWARE_SPECS
     from benchmarks.quantize import quantize_model
     from benchmarks.report import generate_report
+    from vision.inference_backend import ONNXBackend
 
     fp32_model = Path("models/yolo26n.onnx")
     int8_model = Path("models/yolo26n_int8.onnx")

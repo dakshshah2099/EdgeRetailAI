@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import pytest
+
 from vision.detector import PERSON_CLASS_ID, PersonDetector
 from vision.inference_backend import ONNXBackend, RawDetection
 

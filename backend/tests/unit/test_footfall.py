@@ -217,3 +217,322 @@ def test_process_frame_integration() -> None:
     ev_def2 = process_frame(f2, dummy_pixels, backend, tracker, [zone])
     assert len(ev_def2) == 1
     assert ev_def2[0].event_type == "enter"
+
+
+def test_directional_enter_into_store() -> None:
+    """A person walking into the store across an entry_exit zone triggers 'enter'
+
+    and does NOT trigger 'exit' when stepping off the polygon into the store interior.
+    """
+    tracker = FootfallTracker(mode="directional")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Frame 1: Exterior (anchor y=50)
+    det_f1 = [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)]
+    ev1 = tracker.update(frame_meta, det_f1, zones)
+    assert len(ev1) == 0
+
+    # Frame 2: Stepping into zone (anchor y=150)
+    det_f2 = [TrackedDetection(track_id="trk_1", bbox=(180, 110, 40, 40), confidence=0.9)]
+    ev2 = tracker.update(frame_meta, det_f2, zones)
+    assert len(ev2) == 0
+
+    # Frame 3: Inside zone center (anchor y=200)
+    det_f3 = [TrackedDetection(track_id="trk_1", bbox=(180, 160, 40, 40), confidence=0.9)]
+    ev3 = tracker.update(frame_meta, det_f3, zones)
+    assert len(ev3) == 0
+
+    # Frame 4: Exiting zone into store interior (anchor y=350)
+    det_f4 = [TrackedDetection(track_id="trk_1", bbox=(180, 310, 40, 40), confidence=0.9)]
+    ev4 = tracker.update(frame_meta, det_f4, zones)
+    assert len(ev4) == 1
+    assert ev4[0].event_type == "enter"
+    assert ev4[0].zone_id == "entrance_1"
+    assert ev4[0].track_id == "trk_1"
+
+    # Frame 5: Further into store interior (anchor y=400)
+    det_f5 = [TrackedDetection(track_id="trk_1", bbox=(180, 360, 40, 40), confidence=0.9)]
+    ev5 = tracker.update(frame_meta, det_f5, zones)
+    assert len(ev5) == 0
+
+    # Overall count: 1 enter, 0 exits -> net_occupancy = 1
+    all_events = ev1 + ev2 + ev3 + ev4 + ev5
+    enters = sum(1 for e in all_events if e.event_type == "enter")
+    exits = sum(1 for e in all_events if e.event_type == "exit")
+    assert enters == 1
+    assert exits == 0
+    assert max(0, enters - exits) == 1
+
+
+def test_directional_exit_from_store() -> None:
+    """A person walking out of the store across an entry_exit zone triggers 'exit'
+
+    and does NOT trigger 'enter'.
+    """
+    tracker = FootfallTracker(directional=True)
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Frame 1: Inside store interior (anchor y=350)
+    det_f1 = [TrackedDetection(track_id="trk_1", bbox=(180, 310, 40, 40), confidence=0.9)]
+    ev1 = tracker.update(frame_meta, det_f1, zones)
+    assert len(ev1) == 0
+
+    # Frame 2: Entering zone from inside (anchor y=250)
+    det_f2 = [TrackedDetection(track_id="trk_1", bbox=(180, 210, 40, 40), confidence=0.9)]
+    ev2 = tracker.update(frame_meta, det_f2, zones)
+    assert len(ev2) == 0
+
+    # Frame 3: Exiting zone towards exterior (anchor y=50)
+    det_f3 = [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)]
+    ev3 = tracker.update(frame_meta, det_f3, zones)
+    assert len(ev3) == 1
+    assert ev3[0].event_type == "exit"
+    assert ev3[0].zone_id == "entrance_1"
+    assert ev3[0].track_id == "trk_1"
+
+    # Frame 4: Outside on sidewalk (anchor y=30)
+    det_f4 = [TrackedDetection(track_id="trk_1", bbox=(180, 0, 40, 40), confidence=0.9)]
+    ev4 = tracker.update(frame_meta, det_f4, zones)
+    assert len(ev4) == 0
+
+    all_events = ev1 + ev2 + ev3 + ev4
+    enters = sum(1 for e in all_events if e.event_type == "enter")
+    exits = sum(1 for e in all_events if e.event_type == "exit")
+    assert enters == 0
+    assert exits == 1
+
+
+def test_directional_net_occupancy_lifecycle() -> None:
+    """A person enters the store and later exits.
+
+    Net occupancy is 1 while inside, 0 after leaving.
+    """
+    tracker = FootfallTracker(mode="directional")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Inward journey: y=50 -> y=150 -> y=350
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)],
+        zones,
+    )
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 110, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev_in = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 310, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_in) == 1
+    assert ev_in[0].event_type == "enter"
+
+    # Outward journey: y=350 -> y=250 -> y=50
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 210, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev_out = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_out) == 1
+    assert ev_out[0].event_type == "exit"
+
+
+def test_directional_turnaround_no_crossing() -> None:
+    """A person stepping into the threshold zone and backing out to the exterior
+
+    does not generate an enter or exit event.
+    """
+    tracker = FootfallTracker(mode="directional")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Start exterior (y=50), step into entrance (y=120), turn around and step back outside (y=50)
+    ev1 = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev2 = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 80, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev3 = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)],
+        zones,
+    )
+
+    assert len(ev1 + ev2 + ev3) == 0
+
+
+def test_directional_horizontal_movement() -> None:
+    """Directional tracking works with custom entry_direction ('left_to_right')."""
+    tracker = FootfallTracker(mode="directional", entry_direction="left_to_right")
+    zone = ZoneConfig(
+        zone_id="turnstile",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Turnstile",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Person 1: moves left to right (x=50 -> x=150 -> x=350) -> enters store
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(30, 180, 40, 40), confidence=0.9)],
+        zones,
+    )
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(130, 180, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev1 = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(330, 180, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev1) == 1
+    assert ev1[0].event_type == "enter"
+
+    # Person 2: moves right to left (x=350 -> x=150 -> x=50) -> exits store
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_2", bbox=(330, 180, 40, 40), confidence=0.9)],
+        zones,
+    )
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_2", bbox=(130, 180, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev2 = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_2", bbox=(30, 180, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev2) == 1
+    assert ev2[0].event_type == "exit"
+
+
+def test_line_crossing_mode() -> None:
+    """Virtual tripwire line crossing emits enter on forward crossing, exit on reverse."""
+    tracker = FootfallTracker(mode="line_crossing", entry_direction="top_to_bottom")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Inward crossing across midline y=200: (y=150 -> y=250)
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 110, 40, 40), confidence=0.9)],
+        zones,
+    )
+    ev_cross_in = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 210, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_cross_in) == 1
+    assert ev_cross_in[0].event_type == "enter"
+
+    # Staying inside: no duplicate
+    ev_stay = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 230, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_stay) == 0
+
+    # Outward crossing: (y=250 -> y=150)
+    ev_cross_out = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 110, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_cross_out) == 1
+    assert ev_cross_out[0].event_type == "exit"
+
+
+def test_directional_emit_on_zone_enter() -> None:
+    """Test emit_on='zone_enter' emits immediately upon entering from exterior."""
+    tracker = FootfallTracker(mode="directional", emit_on="zone_enter")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Outside: y=50
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 10, 40, 40), confidence=0.9)],
+        zones,
+    )
+    # Entering zone: y=150 -> emits 'enter' immediately
+    ev_enter = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 110, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_enter) == 1
+    assert ev_enter[0].event_type == "enter"
+
+    # Exiting into store: y=350 -> does NOT emit 'exit'
+    ev_exit = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_1", bbox=(180, 310, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_exit) == 0

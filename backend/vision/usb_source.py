@@ -5,8 +5,8 @@ from typing import cast
 import cv2
 import numpy as np
 import numpy.typing as npt
-from core.schemas import Frame
 
+from core.schemas import Frame
 from vision.camera_base import CameraSource
 
 logger = logging.getLogger(__name__)

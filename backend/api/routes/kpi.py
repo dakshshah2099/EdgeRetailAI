@@ -1,12 +1,12 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from core.schemas import QueueEvent, StockEvent
 from fastapi import APIRouter, Depends, Query
-from storage.repository import EventRepository
 
 from api.dependencies import get_repository, is_timestamp_ge
 from api.schemas_api import FootfallBucket, FootfallSummary
+from core.schemas import QueueEvent, StockEvent
+from storage.repository import EventRepository
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 

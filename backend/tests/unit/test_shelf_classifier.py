@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import pytest
+
 from analytics.shelf_classifier import (
     EdgeDensityShelfClassifier,
     ShelfClassifier,

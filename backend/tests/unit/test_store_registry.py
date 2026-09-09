@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from central.store_registry import StoreConfig, load_store_registry
 
 

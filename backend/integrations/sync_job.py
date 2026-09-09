@@ -5,9 +5,8 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from core.schemas import Alert
-from storage.repository import EventRepository
-
 from integrations.pos_connector import POSConnector, POSSalesRecord, POSStockUpdate
+from storage.repository import EventRepository
 
 logger = logging.getLogger(__name__)
 

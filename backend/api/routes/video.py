@@ -6,7 +6,6 @@ import cv2
 from fastapi import APIRouter, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
-from vision.rtsp_source import mask_rtsp_credentials
 
 from api.dependencies import get_app_config
 from api.stream_manager import (
@@ -16,6 +15,7 @@ from api.stream_manager import (
     resolve_camera_source,
     stream_manager,
 )
+from vision.rtsp_source import mask_rtsp_credentials
 
 logger = logging.getLogger(__name__)
 

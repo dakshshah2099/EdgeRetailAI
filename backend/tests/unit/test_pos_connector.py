@@ -2,6 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 import pytest
+
 from integrations.pos_connector import (
     MockPOSConnector,
     POSConnector,

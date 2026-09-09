@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+
 from analytics.dwell import DwellTracker
 from analytics.footfall import FootfallTracker
 from core.schemas import DetectionEvent, Frame, ZoneConfig

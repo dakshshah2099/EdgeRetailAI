@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
-from api.schemas_api import FootfallSummary
-from core.schemas import QueueEvent, StockEvent
 
+from api.schemas_api import FootfallSummary
 from central.store_registry import StoreConfig
+from core.schemas import QueueEvent, StockEvent
 
 logger = logging.getLogger(__name__)
 

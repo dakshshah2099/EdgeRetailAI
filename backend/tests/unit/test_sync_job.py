@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
 from core.schemas import Alert
 from integrations.pos_connector import (
     MockPOSConnector,
