@@ -222,8 +222,16 @@ class StreamManager:
         self.detector: PersonDetector | None = None
         self.tracker: Tracker = Tracker()
         footfall_mode = os.environ.get("FOOTFALL_TRACKER_MODE", "directional")
+        footfall_emit_on = os.environ.get("FOOTFALL_EMIT_ON", "zone_enter")
         self.footfall_tracker: FootfallTracker = (
-            FootfallTracker(mode="directional")
+            FootfallTracker(
+                mode="directional",
+                emit_on=(
+                    "zone_enter"
+                    if footfall_emit_on == "zone_enter"
+                    else "zone_exit"
+                ),
+            )
             if footfall_mode == "directional"
             else FootfallTracker(mode="edge")
         )

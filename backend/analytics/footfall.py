@@ -184,29 +184,51 @@ class FootfallTracker:
                                     entry_rec
                                 )
 
-                                if self.emit_on == "zone_enter":
-                                    entry_dir = self._get_zone_direction(zone)
-                                    c = _polygon_centroid(zone.polygon)
-                                    start_pt = entry_rec["outside_point"]
-                                    v = (point[0] - start_pt[0], point[1] - start_pt[1])
-                                    dot = v[0] * entry_dir[0] + v[1] * entry_dir[1]
-                                    start_side = (start_pt[0] - c[0]) * entry_dir[0] + (
-                                        start_pt[1] - c[1]
-                                    ) * entry_dir[1]
-                                    if dot >= 0 and start_side <= 0:
-                                        events.append(
-                                            DetectionEvent(
-                                                event_id=f"evt_{uuid.uuid4().hex[:12]}",
-                                                track_id=det.track_id,
-                                                timestamp=frame.timestamp,
-                                                bbox=det.bbox,
-                                                zone_id=zone_id,
-                                                event_type="enter",
-                                            )
+                            if self.emit_on == "zone_enter":
+                                already_emitted = self._entry_emitted.get(det.track_id, {}).get(
+                                    zone_id
+                                )
+                                if already_emitted is None:
+                                    entry_info = self._track_entry_info.get(
+                                        det.track_id, {}
+                                    ).get(zone_id)
+                                    if entry_info is not None:
+                                        entry_dir = self._get_zone_direction(zone)
+                                        c = _polygon_centroid(zone.polygon)
+                                        start_pt = entry_info["outside_point"]
+                                        orig_pt = entry_info["entry_point"]
+
+                                        v = (point[0] - start_pt[0], point[1] - start_pt[1])
+                                        dot = v[0] * entry_dir[0] + v[1] * entry_dir[1]
+                                        start_side = (start_pt[0] - c[0]) * entry_dir[0] + (
+                                            start_pt[1] - c[1]
+                                        ) * entry_dir[1]
+                                        curr_side = (point[0] - c[0]) * entry_dir[0] + (
+                                            point[1] - c[1]
+                                        ) * entry_dir[1]
+                                        disp_from_entry = (
+                                            (point[0] - orig_pt[0]) * entry_dir[0]
+                                            + (point[1] - orig_pt[1]) * entry_dir[1]
                                         )
-                                        self._entry_emitted.setdefault(det.track_id, {})[
-                                            zone_id
-                                        ] = "enter"
+
+                                        if (
+                                            (dot >= 0 and start_side <= 0)
+                                            or (start_pt == point and curr_side <= 0)
+                                            or (disp_from_entry > 0)
+                                        ):
+                                            events.append(
+                                                DetectionEvent(
+                                                    event_id=f"evt_{uuid.uuid4().hex[:12]}",
+                                                    track_id=det.track_id,
+                                                    timestamp=frame.timestamp,
+                                                    bbox=det.bbox,
+                                                    zone_id=zone_id,
+                                                    event_type="enter",
+                                                )
+                                            )
+                                            self._entry_emitted.setdefault(det.track_id, {})[
+                                                zone_id
+                                            ] = "enter"
 
                         elif zone_id in previously_inside:
                             entry_info = self._track_entry_info.get(det.track_id, {}).pop(
@@ -259,22 +281,31 @@ class FootfallTracker:
                                             event_type="exit",
                                         )
                                     )
-                            elif (
-                                self.emit_on == "zone_enter"
-                                and already_emitted != "enter"
-                                and dot < 0
-                                and end_side <= 0
-                            ):
-                                    events.append(
-                                        DetectionEvent(
-                                            event_id=f"evt_{uuid.uuid4().hex[:12]}",
-                                            track_id=det.track_id,
-                                            timestamp=frame.timestamp,
-                                            bbox=det.bbox,
-                                            zone_id=zone_id,
-                                            event_type="exit",
+                            elif self.emit_on == "zone_enter":
+                                if already_emitted == "enter":
+                                    if dot < 0 and end_side <= 0:
+                                        events.append(
+                                            DetectionEvent(
+                                                event_id=f"evt_{uuid.uuid4().hex[:12]}",
+                                                track_id=det.track_id,
+                                                timestamp=frame.timestamp,
+                                                bbox=det.bbox,
+                                                zone_id=zone_id,
+                                                event_type="exit",
+                                            )
                                         )
-                                    )
+                                else:
+                                    if dot < 0 and (start_side >= 0 or end_side <= 0):
+                                        events.append(
+                                            DetectionEvent(
+                                                event_id=f"evt_{uuid.uuid4().hex[:12]}",
+                                                track_id=det.track_id,
+                                                timestamp=frame.timestamp,
+                                                bbox=det.bbox,
+                                                zone_id=zone_id,
+                                                event_type="exit",
+                                            )
+                                        )
 
                     elif self.mode == "line_crossing":
                         if is_inside:
@@ -320,7 +351,7 @@ class FootfallTracker:
                                 )
                                 self._track_line_side.setdefault(det.track_id, {})[zone_id] = -1
 
-                elif zone.zone_type == "product_display" and is_inside:
+                elif zone.zone_type in ("product_display", "shelf") and is_inside:
                     currently_inside.add(zone_id)
                     events.append(
                         DetectionEvent(

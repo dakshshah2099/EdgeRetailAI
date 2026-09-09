@@ -536,3 +536,98 @@ def test_directional_emit_on_zone_enter() -> None:
         zones,
     )
     assert len(ev_exit) == 0
+
+
+def test_shelf_zone_emits_in_zone() -> None:
+    """A zone configured with zone_type='shelf' emits 'in_zone' events for dwell tracking."""
+    tracker = FootfallTracker()
+    shelf_zone = ZoneConfig(
+        zone_id="shelf_dairy",
+        zone_type="shelf",
+        polygon=[(400, 100), (600, 100), (600, 300), (400, 300)],
+        label="Dairy Shelf",
+    )
+    zones = [shelf_zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Person inside shelf zone (bottom center: 500, 200)
+    det = [TrackedDetection(track_id="trk_shelf", bbox=(480, 160, 40, 40), confidence=0.9)]
+    events = tracker.update(frame_meta, det, zones)
+
+    assert len(events) == 1
+    assert events[0].event_type == "in_zone"
+    assert events[0].zone_id == "shelf_dairy"
+    assert events[0].track_id == "trk_shelf"
+
+
+def test_directional_emit_on_zone_enter_first_detection_inside() -> None:
+    """A track whose very first detection is already inside the zone emits 'enter' immediately."""
+    tracker = FootfallTracker(mode="directional", emit_on="zone_enter")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # First frame: Track appears directly inside zone on exterior half
+    # (anchor y=150, centroid y=200)
+    det_f1 = [TrackedDetection(track_id="trk_first_in", bbox=(180, 110, 40, 40), confidence=0.9)]
+    ev1 = tracker.update(frame_meta, det_f1, zones)
+    assert len(ev1) == 1
+    assert ev1[0].event_type == "enter"
+    assert ev1[0].zone_id == "entrance_1"
+
+    # Subsequent frame: still inside -> no duplicate enter
+    det_f2 = [TrackedDetection(track_id="trk_first_in", bbox=(180, 140, 40, 40), confidence=0.9)]
+    ev2 = tracker.update(frame_meta, det_f2, zones)
+    assert len(ev2) == 0
+
+    # Stepping into store interior: y=350 -> does not emit exit
+    det_f3 = [TrackedDetection(track_id="trk_first_in", bbox=(180, 310, 40, 40), confidence=0.9)]
+    ev3 = tracker.update(frame_meta, det_f3, zones)
+    assert len(ev3) == 0
+
+
+def test_directional_emit_on_zone_enter_outward_exit() -> None:
+    """A track walking from store interior towards exterior emits 'exit' upon crossing out."""
+    tracker = FootfallTracker(mode="directional", emit_on="zone_enter")
+    zone = ZoneConfig(
+        zone_id="entrance_1",
+        zone_type="entry_exit",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Main Entrance",
+    )
+    zones = [zone]
+    now = datetime(2026, 8, 29, 10, 0, 0)
+    frame_meta = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
+
+    # Frame 1: Person inside store interior (anchor y=350)
+    tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_out", bbox=(180, 310, 40, 40), confidence=0.9)],
+        zones,
+    )
+
+    # Frame 2: Entering zone from interior (anchor y=250) -> does NOT emit enter
+    ev_in_zone = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_out", bbox=(180, 210, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_in_zone) == 0
+
+    # Frame 3: Exiting zone towards exterior (anchor y=50) -> emits exit
+    ev_exit = tracker.update(
+        frame_meta,
+        [TrackedDetection(track_id="trk_out", bbox=(180, 10, 40, 40), confidence=0.9)],
+        zones,
+    )
+    assert len(ev_exit) == 1
+    assert ev_exit[0].event_type == "exit"
+    assert ev_exit[0].zone_id == "entrance_1"
+
