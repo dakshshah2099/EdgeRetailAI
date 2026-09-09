@@ -96,9 +96,11 @@ def test_toggle_debug_endpoint() -> None:
 
 
 def test_get_and_update_zones() -> None:
-    # Backup original config.yaml
-    cfg_file = Path("config.yaml")
+    from api.dependencies import get_config_path
+
+    cfg_file = get_config_path()
     orig_content = cfg_file.read_text(encoding="utf-8") if cfg_file.is_file() else ""
+    created_new = not cfg_file.is_file()
 
     try:
         # Ensure debug mode enabled
@@ -123,9 +125,11 @@ def test_get_and_update_zones() -> None:
         assert len(put_resp.json()) == 1
         assert put_resp.json()[0]["zone_id"] == "test_entrance"
     finally:
-        # Restore original config.yaml
+        # Restore original config
         if orig_content:
             cfg_file.write_text(orig_content, encoding="utf-8")
+        elif created_new and cfg_file.is_file():
+            cfg_file.unlink()
 
 
 def test_root_endpoint_redirects_or_returns_json() -> None:

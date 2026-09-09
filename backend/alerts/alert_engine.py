@@ -77,15 +77,20 @@ class AlertEngine:
         return alert
 
     def process_queue_event(self, event: QueueEvent) -> Alert | None:
-        """Returns a new Alert if queue_length >= queue_congestion_length
-        and no congestion alert is currently open for this counter_id, or
-        escalates an existing warning alert to critical if queue length
-        surpasses the critical margin."""
-        if event.queue_length < self.queue_congestion_length:
-            return None
-
+        """Returns a new Alert if queue_length >= queue_congestion_length or if
+        congestion is predicted (predicted_queue_length >= queue_congestion_length)
+        and no congestion alert is currently open for this counter_id.
+        Escalates predicted warnings to actual congestion, or warning to critical."""
         critical_threshold = math.ceil(self.queue_congestion_length * self.queue_critical_margin)
+        is_actual_breach = event.queue_length >= self.queue_congestion_length
         is_critical = event.queue_length >= critical_threshold
+        is_predicted_breach = (
+            event.predicted_queue_length is not None
+            and event.predicted_queue_length >= self.queue_congestion_length
+        )
+
+        if not is_actual_breach and not is_predicted_breach:
+            return None
 
         if event.counter_id in self._open_queue_alerts:
             open_alert = self._open_queue_alerts[event.counter_id]
@@ -105,14 +110,43 @@ class AlertEngine:
                 )
                 self._open_queue_alerts[event.counter_id] = escalated
                 return escalated
+
+            # Escalate predictive warning -> active actual congestion alert
+            if is_actual_breach and "predicted to congest" in open_alert.message:
+                actual_severity: Literal["warning", "critical"] = (
+                    "critical" if is_critical else "warning"
+                )
+                updated = Alert(
+                    alert_id=open_alert.alert_id,
+                    alert_type=open_alert.alert_type,
+                    severity=actual_severity,
+                    zone_id=open_alert.zone_id,
+                    message=(
+                        f"Checkout counter {event.counter_id} has {event.queue_length} people"
+                        " waiting — consider opening another counter"
+                    ),
+                    created_at=open_alert.created_at,
+                    resolved_at=None,
+                )
+                self._open_queue_alerts[event.counter_id] = updated
+                return updated
+
             # Already open and not escalating: debounce
             return None
 
-        severity: Literal["warning", "critical"] = "critical" if is_critical else "warning"
-        message = (
-            f"Checkout counter {event.counter_id} has {event.queue_length} people waiting"
-            " — consider opening another counter"
-        )
+        if is_actual_breach:
+            severity: Literal["warning", "critical"] = "critical" if is_critical else "warning"
+            message = (
+                f"Checkout counter {event.counter_id} has {event.queue_length} people waiting"
+                " — consider opening another counter"
+            )
+        else:
+            severity = "warning"
+            pred_count = event.predicted_queue_length
+            message = (
+                f"Checkout counter {event.counter_id} predicted to congest"
+                f" (~{pred_count} people in ~3m) — recommend opening another counter"
+            )
 
         alert = Alert(
             alert_id=f"alert_{uuid.uuid4().hex[:12]}",
@@ -165,7 +199,11 @@ class AlertEngine:
         for counter_id in list(self._open_queue_alerts.keys()):
             if counter_id in latest_queue_events:
                 queue_ev = latest_queue_events[counter_id]
-                if queue_ev.queue_length < self.queue_congestion_length:
+                is_cleared = queue_ev.queue_length < self.queue_congestion_length and (
+                    queue_ev.predicted_queue_length is None
+                    or queue_ev.predicted_queue_length < self.queue_congestion_length
+                )
+                if is_cleared:
                     open_alert = self._open_queue_alerts.pop(counter_id)
                     resolved_alert = Alert(
                         alert_id=open_alert.alert_id,

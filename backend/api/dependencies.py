@@ -11,7 +11,20 @@ def get_db_path() -> Path:
     """Return configured or default database path for the repository."""
     env_vars = read_env_file()
     db_str = env_vars.get("DATABASE_PATH") or os.environ.get("DATABASE_PATH", "retail.db")
-    return Path(db_str)
+    p = Path(db_str)
+    if not p.is_file() and (Path("backend") / db_str).is_file():
+        return Path("backend") / db_str
+    return p
+
+
+def get_config_path() -> Path:
+    """Return configured config.yaml path, checking backend/ if executed from repo root."""
+    env_vars = read_env_file()
+    cfg_str = env_vars.get("CONFIG_PATH") or os.environ.get("CONFIG_PATH", "config.yaml")
+    p = Path(cfg_str)
+    if not p.is_file() and (Path("backend") / cfg_str).is_file():
+        return Path("backend") / cfg_str
+    return p
 
 
 def get_repository() -> EventRepository:
@@ -21,12 +34,7 @@ def get_repository() -> EventRepository:
 
 def get_app_config(config_path: str | Path | None = None) -> AppConfig | None:
     """Load and return application configuration if present."""
-    if config_path is None:
-        env_vars = read_env_file()
-        cfg_str = env_vars.get("CONFIG_PATH") or os.environ.get("CONFIG_PATH", "config.yaml")
-        config_path = Path(cfg_str)
-
-    path = Path(config_path)
+    path = get_config_path() if config_path is None else Path(config_path)
     if path.is_file():
         try:
             return load_config(path)

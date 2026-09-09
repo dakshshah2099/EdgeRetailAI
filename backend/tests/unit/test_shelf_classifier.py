@@ -189,3 +189,57 @@ def test_classifier_zero_size_crop() -> None:
     status, conf = classifier.classify(empty_crop)
     assert status == "empty"
     assert conf == 0.0
+
+
+def test_hybrid_shelf_classifier_fixtures() -> None:
+    """HybridShelfClassifier correctly classifies empty, low, and stocked shelf fixtures."""
+    from analytics.shelf_classifier import HybridShelfClassifier
+
+    classifier = HybridShelfClassifier()
+
+    empty_img = np.asarray(cv2.imread(str(SHELF_EMPTY_PATH)), dtype=np.uint8)
+    low_img = np.asarray(cv2.imread(str(SHELF_LOW_PATH)), dtype=np.uint8)
+    stocked_img = np.asarray(cv2.imread(str(SHELF_STOCKED_PATH)), dtype=np.uint8)
+
+    st_empty, conf_empty = classifier.classify(empty_img)
+    assert st_empty == "empty"
+    assert conf_empty >= 0.5
+
+    st_low, conf_low = classifier.classify(low_img)
+    assert st_low == "low"
+    assert conf_low >= 0.5
+
+    st_stocked, conf_stocked = classifier.classify(stocked_img)
+    assert st_stocked == "ok"
+    assert conf_stocked >= 0.5
+
+
+def test_temporal_shelf_smoother_occlusion_hold() -> None:
+    """Smoother holds previous stock status when a shopper occludes the shelf."""
+    from analytics.shelf_classifier import TemporalShelfSmoother
+    from vision.tracker import TrackedDetection
+
+    smoother = TemporalShelfSmoother(alpha=0.5)
+    shelf = ZoneConfig(
+        zone_id="shelf_1",
+        zone_type="shelf",
+        polygon=[(100, 100), (300, 100), (300, 300), (100, 300)],
+        label="Shelf 1",
+    )
+
+    # 1. Clear frame: Shelf is OK
+    st1, cf1 = smoother.update("shelf_1", "ok", 0.9, is_occluded=False)
+    assert st1 == "ok"
+
+    # 2. Shopper steps in front of shelf
+    person = [TrackedDetection(track_id="p1", bbox=(180, 150, 40, 60), confidence=0.9)]
+    is_occ = smoother.is_occluded(shelf, person)
+    assert is_occ is True
+
+    # Under occlusion, image crop looks empty, but smoother must hold 'ok'
+    st2, cf2 = smoother.update("shelf_1", "empty", 0.8, is_occluded=is_occ)
+    assert st2 == "ok"
+
+    # 3. Shopper moves away
+    st3, cf3 = smoother.update("shelf_1", "ok", 0.9, is_occluded=False)
+    assert st3 == "ok"

@@ -38,7 +38,9 @@ queue_congestion_length: 4
 
 def test_load_repo_default_config() -> None:
     repo_config_path = Path("config.yaml")
-    if repo_config_path.exists():
+    if not repo_config_path.is_file():
+        repo_config_path = Path("backend/config.yaml")
+    if repo_config_path.is_file():
         cfg = load_config(str(repo_config_path))
         assert isinstance(cfg, AppConfig)
         assert cfg.camera.source.startswith("rtsp://")

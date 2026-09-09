@@ -259,3 +259,36 @@ def test_anchor_point_calculation(checkout_zone: ZoneConfig) -> None:
 
     events = monitor.update(frame, [track_inside, track_outside], [checkout_zone])
     assert events[0].queue_length == 1
+
+
+def test_queue_congestion_prediction_and_hourly_baseline(checkout_zone: ZoneConfig) -> None:
+    """QueueMonitor forecasts queue surge based on arrival velocity and blends with baseline."""
+    # Baseline provider returning 5 for hour 10
+    monitor = QueueMonitor(
+        service_rate_estimate_sec=60.0,
+        rate_window_sec=60.0,
+        forecast_horizon_sec=180.0,
+        hourly_baseline_provider=lambda cid, hr: 5.0 if hr == 10 else None,
+    )
+
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 0, 10, tzinfo=UTC)
+
+    # Frame 0: 1 person
+    ev0 = monitor.update(make_frame(t0), [make_track("1", (150, 150, 40, 50))], [checkout_zone])
+    assert ev0[0].predicted_queue_length is not None
+    assert ev0[0].predicted_wait_sec is not None
+
+    # Frame 1: 2 new arrivals in rapid succession (tracks 2 and 3)
+    tracks_t1 = [
+        make_track("1", (150, 150, 40, 50)),
+        make_track("2", (160, 150, 40, 50)),
+        make_track("3", (170, 150, 40, 50)),
+    ]
+    ev1 = monitor.update(make_frame(t1), tracks_t1, [checkout_zone])
+    assert ev1[0].queue_length == 3
+    # Arrival rate > departure rate, plus hourly baseline of 5 -> predicted_queue_length >= 4
+    assert ev1[0].predicted_queue_length is not None
+    assert ev1[0].predicted_queue_length >= 4
+    assert ev1[0].predicted_wait_sec is not None
+    assert ev1[0].predicted_wait_sec > 0.0

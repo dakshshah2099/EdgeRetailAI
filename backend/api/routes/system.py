@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Any
 
 import yaml
@@ -103,7 +102,9 @@ def update_system_zones(req: UpdateZonesRequest) -> list[ZoneConfig]:
             detail="Debug mode is disabled. Cannot modify zone layout.",
         )
 
-    cfg_path = Path("config.yaml")
+    from api.dependencies import get_config_path
+
+    cfg_path = get_config_path()
     raw_cfg: dict[str, Any] = {}
     if cfg_path.is_file():
         with cfg_path.open("r", encoding="utf-8") as f:

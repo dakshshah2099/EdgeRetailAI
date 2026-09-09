@@ -77,6 +77,8 @@ class QueueEvent(BaseModel):
     timestamp: datetime
     queue_length: int = Field(ge=0)
     avg_wait_est_sec: float | None = Field(default=None, ge=0.0)
+    predicted_queue_length: int | None = Field(default=None, ge=0)
+    predicted_wait_sec: float | None = Field(default=None, ge=0.0)
 
 
 class Alert(BaseModel):

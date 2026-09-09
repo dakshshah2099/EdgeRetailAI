@@ -23,11 +23,14 @@
     {:else}
       {#each queueEvents as item (item.counter_id)}
         {@const isCongested = item.queue_length >= congestionThreshold}
-        <div class="counter-card" class:congested={isCongested}>
+        {@const isPredCongested = !isCongested && item.predicted_queue_length != null && item.predicted_queue_length >= congestionThreshold}
+        <div class="counter-card" class:congested={isCongested} class:warning-pred={isPredCongested}>
           <div class="counter-top">
             <span class="counter-id">Counter: <strong>{item.counter_id}</strong></span>
             {#if isCongested}
               <span class="badge badge-danger">Congested</span>
+            {:else if isPredCongested}
+              <span class="badge badge-warning">Surge Predicted</span>
             {:else}
               <span class="badge badge-normal">Optimal</span>
             {/if}
@@ -46,6 +49,13 @@
               </span>
             </div>
           </div>
+
+          {#if item.predicted_queue_length != null}
+            <div class="forecast-banner">
+              <span class="forecast-label">Forecast (3m):</span>
+              <span class="forecast-value">~{item.predicted_queue_length} persons ({Math.round(item.predicted_wait_sec ?? 0)}s)</span>
+            </div>
+          {/if}
 
           <!-- Queue progress visualization dots -->
           <div class="queue-visual">
@@ -143,6 +153,11 @@
     background: #fff8f8;
   }
 
+  .counter-card.warning-pred {
+    border-color: #fde047;
+    background: #fefce8;
+  }
+
   .counter-top {
     display: flex;
     justify-content: space-between;
@@ -176,6 +191,33 @@
     background: var(--accent-red-light);
     color: var(--accent-red);
     border: 1px solid #fca5a5;
+  }
+
+  .badge-warning {
+    background: #fef9c3;
+    color: #854d0e;
+    border: 1px solid #fde047;
+  }
+
+  .forecast-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.73rem;
+  }
+
+  .forecast-label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .forecast-value {
+    color: #0f766e;
+    font-weight: 600;
+    font-family: var(--font-mono);
   }
 
   .counter-stats {

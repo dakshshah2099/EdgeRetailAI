@@ -365,3 +365,42 @@ def test_frozen_alert_immutability(alert_engine: AlertEngine) -> None:
 
     with pytest.raises(ValidationError):
         alert.resolved_at = t0 + timedelta(seconds=60)
+
+
+def test_predictive_queue_congestion_alert_and_escalation(alert_engine: AlertEngine) -> None:
+    """AlertEngine emits warning on predicted congestion, then escalates on actual breach."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 1, 0, tzinfo=UTC)
+
+    # 1. Physical queue is 2 (< congestion threshold 4), but predicted queue is 5 (>= 4)
+    pred_event = QueueEvent(
+        event_id="q_p1",
+        counter_id="counter_c",
+        timestamp=t0,
+        queue_length=2,
+        avg_wait_est_sec=60.0,
+        predicted_queue_length=5,
+        predicted_wait_sec=150.0,
+    )
+    alert1 = alert_engine.process_queue_event(pred_event)
+    assert alert1 is not None
+    assert alert1.severity == "warning"
+    assert "predicted to congest" in alert1.message
+
+    # 2. Debounce: another predictive event does not duplicate
+    assert alert_engine.process_queue_event(pred_event) is None
+
+    # 3. Physical queue reaches 4: escalates to actual queue alert
+    actual_event = QueueEvent(
+        event_id="q_p2",
+        counter_id="counter_c",
+        timestamp=t1,
+        queue_length=4,
+        avg_wait_est_sec=120.0,
+        predicted_queue_length=5,
+        predicted_wait_sec=150.0,
+    )
+    alert2 = alert_engine.process_queue_event(actual_event)
+    assert alert2 is not None
+    assert "has 4 people waiting" in alert2.message
+    assert alert2.alert_id == alert1.alert_id  # In-place escalation

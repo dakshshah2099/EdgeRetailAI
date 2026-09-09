@@ -14,7 +14,12 @@ from alerts.alert_engine import AlertEngine
 from analytics.dwell import DwellTracker
 from analytics.footfall import FootfallTracker
 from analytics.queue_monitor import QueueMonitor
-from analytics.shelf_classifier import EdgeDensityShelfClassifier, check_shelves
+from analytics.shelf_classifier import (
+    HybridShelfClassifier,
+    ShelfClassifier,
+    TemporalShelfSmoother,
+    check_shelves,
+)
 from api.dependencies import get_app_config, get_repository
 from api.env_manager import read_env_file
 from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
@@ -223,8 +228,13 @@ class StreamManager:
             else FootfallTracker(mode="edge")
         )
         self.dwell_tracker: DwellTracker = DwellTracker()
-        self.queue_monitor: QueueMonitor = QueueMonitor()
-        self.shelf_classifier: EdgeDensityShelfClassifier = EdgeDensityShelfClassifier()
+        self.queue_monitor: QueueMonitor = QueueMonitor(
+            hourly_baseline_provider=lambda cid, hr: get_repository().get_hourly_queue_baseline(
+                cid, hr
+            )
+        )
+        self.shelf_classifier: ShelfClassifier = HybridShelfClassifier()
+        self.shelf_smoother: TemporalShelfSmoother = TemporalShelfSmoother()
         self.alert_engine: AlertEngine = AlertEngine(
             low_stock_threshold=0.60,
             queue_congestion_length=4,
@@ -445,6 +455,8 @@ class StreamManager:
                                 pixels=curr_frame,
                                 classifier=self.shelf_classifier,
                                 shelf_zones=shelf_zones,
+                                tracked_detections=tracked_dets,
+                                smoother=self.shelf_smoother,
                             )
                             for s_ev in stock_events:
                                 repo.save_stock_event(s_ev)

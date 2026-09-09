@@ -46,7 +46,9 @@ _SCHEMA_STATEMENTS = [
         counter_id TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         queue_length INTEGER NOT NULL,
-        avg_wait_est_sec REAL
+        avg_wait_est_sec REAL,
+        predicted_queue_length INTEGER,
+        predicted_wait_sec REAL
     );
     """,
     "CREATE INDEX IF NOT EXISTS idx_queue_events_counter ON queue_events(counter_id);",
@@ -89,5 +91,12 @@ def init_db(db_path: str | Path) -> None:
         with conn:
             for statement in _SCHEMA_STATEMENTS:
                 conn.execute(statement)
+
+            # Idempotent column migrations for existing databases
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(queue_events);").fetchall()]
+            if "predicted_queue_length" not in cols:
+                conn.execute("ALTER TABLE queue_events ADD COLUMN predicted_queue_length INTEGER;")
+            if "predicted_wait_sec" not in cols:
+                conn.execute("ALTER TABLE queue_events ADD COLUMN predicted_wait_sec REAL;")
     finally:
         conn.close()

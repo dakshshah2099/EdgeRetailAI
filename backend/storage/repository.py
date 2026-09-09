@@ -92,8 +92,9 @@ class EventRepository:
                 conn.execute(
                     """
                     INSERT INTO queue_events (
-                        event_id, counter_id, timestamp, queue_length, avg_wait_est_sec
-                    ) VALUES (?, ?, ?, ?, ?);
+                        event_id, counter_id, timestamp, queue_length, avg_wait_est_sec,
+                        predicted_queue_length, predicted_wait_sec
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
                     """,
                     (
                         event.event_id,
@@ -101,6 +102,8 @@ class EventRepository:
                         event.timestamp.isoformat(),
                         event.queue_length,
                         event.avg_wait_est_sec,
+                        event.predicted_queue_length,
+                        event.predicted_wait_sec,
                     ),
                 )
         finally:
@@ -424,7 +427,8 @@ class EventRepository:
             if counter_id is not None:
                 cursor.execute(
                     """
-                    SELECT event_id, counter_id, timestamp, queue_length, avg_wait_est_sec
+                    SELECT event_id, counter_id, timestamp, queue_length, avg_wait_est_sec,
+                           predicted_queue_length, predicted_wait_sec
                     FROM queue_events
                     WHERE counter_id = ?
                     ORDER BY timestamp DESC
@@ -435,7 +439,8 @@ class EventRepository:
             else:
                 cursor.execute(
                     """
-                    SELECT event_id, counter_id, timestamp, queue_length, avg_wait_est_sec
+                    SELECT event_id, counter_id, timestamp, queue_length, avg_wait_est_sec,
+                           predicted_queue_length, predicted_wait_sec
                     FROM queue_events
                     ORDER BY timestamp DESC
                     LIMIT ?;
@@ -454,8 +459,42 @@ class EventRepository:
                         if row["avg_wait_est_sec"] is not None
                         else None
                     ),
+                    predicted_queue_length=(
+                        int(row["predicted_queue_length"])
+                        if "predicted_queue_length" in row
+                        and row["predicted_queue_length"] is not None
+                        else None
+                    ),
+                    predicted_wait_sec=(
+                        float(row["predicted_wait_sec"])
+                        if "predicted_wait_sec" in row
+                        and row["predicted_wait_sec"] is not None
+                        else None
+                    ),
                 )
                 for row in rows
             ]
+        finally:
+            conn.close()
+
+    def get_hourly_queue_baseline(self, counter_id: str, hour_of_day: int) -> float | None:
+        """Calculate historical average queue length for this counter and hour of day."""
+        conn = get_connection(self.db_path)
+        try:
+            cursor = conn.cursor()
+            # strftime('%H', timestamp) matches the 2-digit hour 00-23
+            hour_str = f"{hour_of_day:02d}"
+            cursor.execute(
+                """
+                SELECT AVG(queue_length) as avg_q
+                FROM queue_events
+                WHERE counter_id = ? AND strftime('%H', timestamp) = ?;
+                """,
+                (counter_id, hour_str),
+            )
+            row = cursor.fetchone()
+            if row and row["avg_q"] is not None:
+                return float(row["avg_q"])
+            return None
         finally:
             conn.close()
