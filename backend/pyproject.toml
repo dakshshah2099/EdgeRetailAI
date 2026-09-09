@@ -83,4 +83,8 @@ warn_unused_ignores = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["."]
+markers = [
+    "e2e: End-to-end integration and system tests",
+    "unit: Isolated unit tests",
+]
 
