@@ -48,7 +48,7 @@ if command -v apt-get &>/dev/null; then
 fi
 
 # Setup Python virtual environment
-VENV_DIR="$WORKDIR/.venv"
+VENV_DIR="$WORKDIR/backend/.venv"
 if [ ! -d "$VENV_DIR" ]; then
     echo "Creating Python virtual environment in $VENV_DIR..."
     python3 -m venv "$VENV_DIR"
@@ -56,7 +56,7 @@ fi
 
 echo "Installing Python dependencies..."
 "$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install -e "$WORKDIR" || "$VENV_DIR/bin/pip" install fastapi uvicorn[standard] pydantic pyyaml numpy onnx onnxruntime opencv-python-headless httpx
+"$VENV_DIR/bin/pip" install -e "$WORKDIR/backend" || "$VENV_DIR/bin/pip" install fastapi uvicorn[standard] pydantic pyyaml numpy onnx onnxruntime opencv-python-headless httpx
 
 # Build Svelte dashboard if frontend exists
 if [ -d "$WORKDIR/frontend" ]; then
@@ -91,10 +91,10 @@ if [ ! -f "$WORKDIR/.env.pi" ]; then
     fi
 fi
 
-if [ ! -f "$WORKDIR/.env" ]; then
+if [ ! -f "$WORKDIR/backend/.env" ]; then
     if [ -f "$WORKDIR/.env.pi" ]; then
-        echo "Linking/copying .env.pi to .env..."
-        cp "$WORKDIR/.env.pi" "$WORKDIR/.env"
+        echo "Linking/copying .env.pi to backend/.env..."
+        cp "$WORKDIR/.env.pi" "$WORKDIR/backend/.env"
     fi
 fi
 
