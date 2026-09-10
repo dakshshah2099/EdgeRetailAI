@@ -35,7 +35,7 @@ def get_system_environment() -> SystemEnvResponse:
 
 @router.put("/env", response_model=SystemEnvResponse)
 def update_system_environment(req: UpdateEnvRequest) -> SystemEnvResponse:
-    """Update system .env variables when in debug mode."""
+    """Update system .env variables when permitted."""
     if not is_debug_mode():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

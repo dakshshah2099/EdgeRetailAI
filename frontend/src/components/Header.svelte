@@ -6,9 +6,9 @@
   export let refreshInterval = 3;
   export let selectedTimeRange = 'all';
   export let selectedZone = '';
-  export let debugMode = false;
+  export let activeTab = 'camera';
   export let onRefresh = () => {};
-  export let onToggleDebug = () => {};
+  export let onOpenSettings = () => {};
 
   function formatTime(date) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -28,9 +28,6 @@
       <div class="title-row">
         <h1>Intelligent Retail Analytics</h1>
         <span class="badge edge-badge">Edge AI • SIH26179</span>
-        {#if debugMode}
-          <span class="badge debug-badge">Debug Active</span>
-        {/if}
       </div>
       <p class="subtitle">On-device customer traffic, checkout queues & shelf inventory intelligence</p>
     </div>
@@ -66,15 +63,16 @@
 
     <button 
       type="button"
-      class="debug-toggle-btn" 
-      class:active={debugMode} 
-      on:click={onToggleDebug}
-      title="Toggle Debug & .env Editor"
+      class="settings-btn" 
+      class:active={activeTab === 'settings'} 
+      on:click={onOpenSettings}
+      title="System Settings & Configuration"
     >
       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
-      <span>{debugMode ? 'Debug ON' : 'Debug'}</span>
+      <span>Settings</span>
     </button>
 
     <div class="refresh-controls">
@@ -159,12 +157,6 @@
     border: 1px solid #a7f3d0;
   }
 
-  .debug-badge {
-    background: var(--accent-purple-light);
-    color: var(--accent-purple);
-    border: 1px solid #ddd6fe;
-  }
-
   .subtitle {
     font-size: 0.78rem;
     color: var(--text-muted);
@@ -245,7 +237,7 @@
     margin-left: 0.2rem;
   }
 
-  .debug-toggle-btn {
+  .settings-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -259,15 +251,15 @@
     transition: all 0.15s ease;
   }
 
-  .debug-toggle-btn:hover {
+  .settings-btn:hover {
     color: var(--text-primary);
     border-color: #cbd5e1;
   }
 
-  .debug-toggle-btn.active {
-    background: var(--accent-purple-light);
-    color: var(--accent-purple);
-    border-color: #ddd6fe;
+  .settings-btn.active {
+    background: var(--accent-blue-light);
+    color: var(--accent-blue);
+    border-color: #bfdbfe;
   }
 
   .refresh-controls {

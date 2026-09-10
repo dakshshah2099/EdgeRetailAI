@@ -263,13 +263,27 @@ class StreamManager:
 
     def _capture_loop(self) -> None:
         """Native-rate camera capture loop continuously updating the reference slot."""
+        last_check_time = 0.0
+        formatted_src = ""
+
         while not self._shutdown_event.is_set():
             try:
-                target_src = resolve_camera_source()
-                env_vars = read_env_file()
-                rtsp_user = env_vars.get("RTSP_USERNAME") or os.environ.get("RTSP_USERNAME")
-                rtsp_pass = env_vars.get("RTSP_PASSWORD") or os.environ.get("RTSP_PASSWORD")
-                formatted_src = format_authenticated_rtsp_url(target_src, rtsp_user, rtsp_pass)
+                now = time.monotonic()
+                if now - last_check_time > 1.5 or not formatted_src:
+                    target_src = resolve_camera_source()
+                    env_vars = read_env_file()
+                    rtsp_user = (
+                        env_vars["RTSP_USERNAME"]
+                        if "RTSP_USERNAME" in env_vars
+                        else os.environ.get("RTSP_USERNAME")
+                    )
+                    rtsp_pass = (
+                        env_vars["RTSP_PASSWORD"]
+                        if "RTSP_PASSWORD" in env_vars
+                        else os.environ.get("RTSP_PASSWORD")
+                    )
+                    formatted_src = format_authenticated_rtsp_url(target_src, rtsp_user, rtsp_pass)
+                    last_check_time = now
 
                 # Initialize or swap camera if source changed
                 if self.camera is None or self.active_src != formatted_src:
@@ -286,7 +300,10 @@ class StreamManager:
                     ):
                         self.camera = RTSPSource(
                             source_url=formatted_src,
-                            timeout_msec=2000,
+                            timeout_msec=2500,
+                            initial_backoff_sec=2.0,
+                            max_backoff_sec=15.0,
+                            backoff_factor=2.0,
                             non_blocking=True,
                         )
                     elif formatted_src.isdigit():
@@ -309,42 +326,71 @@ class StreamManager:
                     with self._slot_lock:
                         if time.monotonic() - self.last_frame_time > 4.0:
                             self.is_connected = False
-                    time.sleep(0.01)
+                    # Throttle sleep when stream is offline/backing off to eliminate CPU/lock burden
+                    time.sleep(0.15)
             except Exception as e:
                 logger.error("Capture loop error: %s", e)
                 with self._slot_lock:
                     self.is_connected = False
-                time.sleep(0.05)
+                time.sleep(0.2)
 
     def _inference_loop(self) -> None:
-        """Throttled inference and retail analytics loop."""
         last_processed_seq = -1
         last_shelf_time = 0.0
+        last_cfg_time = 0.0
+        cached_cfg = get_app_config()
+        repo = get_repository()
+        env_vars = read_env_file()
+        target_interval = 0.2
+        shelf_interval = 1.0
 
         while not self._shutdown_event.is_set():
             try:
-                env_vars = read_env_file()
-                target_fps = float(
-                    env_vars.get("YOLO_INFERENCE_FPS")
-                    or os.environ.get("YOLO_INFERENCE_FPS", "5.0")
-                )
-                target_interval = 1.0 / max(0.1, target_fps)
-                shelf_interval = float(
-                    env_vars.get("SHELF_ANALYSIS_INTERVAL")
-                    or os.environ.get("SHELF_ANALYSIS_INTERVAL", "1.0")
-                )
+                now = time.monotonic()
+                if now - last_cfg_time > 1.0:
+                    cached_cfg = get_app_config()
+                    env_vars = read_env_file()
+                    target_fps = float(
+                        env_vars.get("YOLO_INFERENCE_FPS")
+                        or os.environ.get("YOLO_INFERENCE_FPS", "5.0")
+                    )
+                    target_interval = 1.0 / max(0.1, target_fps)
+                    shelf_interval = float(
+                        env_vars.get("SHELF_ANALYSIS_INTERVAL")
+                        or os.environ.get("SHELF_ANALYSIS_INTERVAL", "1.0")
+                    )
+                    last_cfg_time = now
 
                 # 1. Initialize YOLO detector once
                 if self.detector is None:
-                    model_env = (
-                        env_vars.get("YOLO_MODEL")
-                        or os.environ.get("YOLO_MODEL")
-                    )
-                    model_path = Path(model_env) if model_env else (
-                        Path(__file__).resolve().parent.parent / "models" / "yolo26n.onnx"
-                    )
+                    model_env = env_vars.get("YOLO_MODEL") or os.environ.get("YOLO_MODEL")
+                    if model_env:
+                        cand_path = Path(model_env)
+                        if not cand_path.is_file():
+                            cand_path = Path(__file__).resolve().parent.parent / model_env
+                        model_path = cand_path
+                    else:
+                        model_path = (
+                            Path(__file__).resolve().parent.parent / "models" / "yolo26n.onnx"
+                        )
+
+                    # Fallbacks: try INT8 first, then FP32, then relative models/
                     if not model_path.is_file():
-                        model_path = Path("models/yolo26n.onnx")
+                        models_dir = Path(__file__).resolve().parent.parent / "models"
+                        for fb in [
+                            models_dir / "yolo26n_int8.onnx",
+                            models_dir / "yolo26n.onnx",
+                            Path("models/yolo26n_int8.onnx"),
+                            Path("models/yolo26n.onnx"),
+                        ]:
+                            if fb.is_file():
+                                logger.warning(
+                                    "Configured YOLO model %s not found; falling back to %s",
+                                    model_env,
+                                    fb,
+                                )
+                                model_path = fb
+                                break
 
                     if model_path.is_file():
                         input_size = int(
@@ -387,7 +433,7 @@ class StreamManager:
                         last_processed_seq = self._frame_seq
 
                 if curr_frame is None or curr_meta is None:
-                    time.sleep(0.01)
+                    time.sleep(0.08)
                     continue
 
                 inf_start = time.monotonic()
@@ -405,9 +451,12 @@ class StreamManager:
                     self.latest_tracked = tracked_dets
 
                 # 4. Fetch zones and thresholds
-                repo = get_repository()
-                cfg = get_app_config()
-                raw_zones = cfg.zones if cfg and cfg.zones else []
+                now = time.monotonic()
+                if now - last_cfg_time >= 1.0:
+                    last_cfg_time = now
+                    cached_cfg = get_app_config()
+
+                raw_zones = cached_cfg.zones if cached_cfg and cached_cfg.zones else []
                 zones = scale_zones_to_frame(raw_zones, curr_meta.width, curr_meta.height)
 
                 if "LOW_STOCK_CONFIDENCE_THRESHOLD" in env_vars:

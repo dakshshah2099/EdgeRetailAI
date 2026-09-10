@@ -3,11 +3,16 @@
   import { fetchSystemZones, updateSystemZones } from '../lib/api.js';
 
   export let isConnected = true;
-  export let debugMode = false;
 
   let overlayZones = true;
   let overlayDetections = true;
-  let targetFps = 15;
+  let targetFps = typeof window !== 'undefined'
+    ? parseInt(localStorage.getItem('preferred_stream_fps') || '15', 10) || 15
+    : 15;
+
+  $: if (typeof window !== 'undefined' && targetFps) {
+    localStorage.setItem('preferred_stream_fps', targetFps.toString());
+  }
   let streamTimestamp = Date.now();
   let isStreamLoading = true;
   let isStreamError = false;
@@ -178,9 +183,7 @@
         <span class="status-badge" class:online={isConnected && !isStreamError}>
           {isConnected && !isStreamError ? 'LIVE' : 'STANDBY'}
         </span>
-        {#if debugMode}
-          <span class="debug-badge">YOLO26n Active</span>
-        {/if}
+        <span class="model-badge">YOLO26n Active</span>
       </div>
       <p class="section-desc">Real-time inference feed with YOLO person bounding boxes and ROI calibration.</p>
     </div>
@@ -196,29 +199,35 @@
         <span>YOLO Boxes</span>
       </label>
 
-      {#if debugMode}
-        {#if !isEditingZones}
-          <button type="button" class="btn btn-secondary edit-btn" on:click={startZoneEdit}>
-            ✏️ Calibrate Zones
-          </button>
-        {:else}
-          <button type="button" class="btn btn-secondary" on:click={cancelZoneEdit}>
-            Cancel
-          </button>
-          <button type="button" class="btn btn-primary" on:click={saveZones} disabled={isSavingZones}>
-            {isSavingZones ? 'Saving...' : '💾 Save Zones'}
-          </button>
-        {/if}
+      {#if !isEditingZones}
+        <button type="button" class="btn btn-secondary edit-btn" on:click={startZoneEdit}>
+          ✏️ Calibrate Zones
+        </button>
+      {:else}
+        <button type="button" class="btn btn-secondary" on:click={addZone} title="Add New Detection Zone">
+          + New Zone
+        </button>
+        <button type="button" class="btn btn-secondary" on:click={cancelZoneEdit}>
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" on:click={saveZones} disabled={isSavingZones}>
+          {isSavingZones ? 'Saving...' : '💾 Save Zones'}
+        </button>
       {/if}
 
       <div class="fps-group">
-        <label for="fps-select">FPS:</label>
-        <select id="fps-select" bind:value={targetFps} on:change={refreshStream}>
-          <option value={10}>10 FPS</option>
-          <option value={15}>15 FPS</option>
-          <option value={20}>20 FPS</option>
-          <option value={30}>30 FPS</option>
-        </select>
+        <label for="fps-input">FPS:</label>
+        <input 
+          id="fps-input"
+          type="number" 
+          min="1" 
+          max="60" 
+          step="1"
+          class="fps-input"
+          bind:value={targetFps} 
+          on:change={refreshStream}
+          placeholder="15"
+        />
       </div>
 
       <button type="button" class="btn-icon" on:click={takeSnapshot} title="Capture JPEG Snapshot">
@@ -329,45 +338,63 @@
     </div>
   </div>
 
-  {#if isEditingZones && zones[selectedZoneIdx]}
+  {#if isEditingZones}
     <div class="zone-editor-bar">
-      <div class="editor-field">
-        <label for="zone-label-input">Label:</label>
-        <input 
-          id="zone-label-input"
-          type="text" 
-          bind:value={zones[selectedZoneIdx].label} 
-          class="field-input"
-        />
-      </div>
+      {#if zones.length > 0 && zones[selectedZoneIdx]}
+        <div class="editor-field">
+          <label for="zone-select">Zone:</label>
+          <select id="zone-select" bind:value={selectedZoneIdx} class="field-select">
+            {#each zones as z, i}
+              <option value={i}>{z.label || `Zone ${i + 1}`} ({z.zone_type})</option>
+            {/each}
+          </select>
+        </div>
 
-      <div class="editor-field">
-        <label for="zone-type-select">Type:</label>
-        <select id="zone-type-select" bind:value={zones[selectedZoneIdx].zone_type} class="field-select">
-          <option value="entry_exit">Entry / Exit</option>
-          <option value="shelf">Product Shelf</option>
-          <option value="checkout">Checkout Queue</option>
-          <option value="product_display">Product Display</option>
-        </select>
-      </div>
+        <div class="editor-field">
+          <label for="zone-label-input">Label:</label>
+          <input 
+            id="zone-label-input"
+            type="text" 
+            bind:value={zones[selectedZoneIdx].label} 
+            class="field-input"
+          />
+        </div>
 
-      <div class="editor-field">
-        <label for="zone-id-input">ID:</label>
-        <input 
-          id="zone-id-input"
-          type="text" 
-          bind:value={zones[selectedZoneIdx].zone_id} 
-          class="field-input field-sm"
-        />
-      </div>
+        <div class="editor-field">
+          <label for="zone-type-select">Type:</label>
+          <select id="zone-type-select" bind:value={zones[selectedZoneIdx].zone_type} class="field-select">
+            <option value="entry_exit">Entry / Exit</option>
+            <option value="shelf">Product Shelf</option>
+            <option value="checkout">Checkout Queue</option>
+            <option value="product_display">Product Display</option>
+          </select>
+        </div>
 
-      <button type="button" class="btn btn-secondary" on:click={addZone}>
-        + Add New Zone
-      </button>
+        <div class="editor-field">
+          <label for="zone-id-input">ID:</label>
+          <input 
+            id="zone-id-input"
+            type="text" 
+            bind:value={zones[selectedZoneIdx].zone_id} 
+            class="field-input field-sm"
+          />
+        </div>
 
-      <button type="button" class="btn btn-danger" on:click={() => removeZone(selectedZoneIdx)}>
-        Delete Zone
-      </button>
+        <button type="button" class="btn btn-secondary" on:click={addZone}>
+          + Add New Zone
+        </button>
+
+        <button type="button" class="btn btn-danger" on:click={() => removeZone(selectedZoneIdx)}>
+          Delete Zone
+        </button>
+      {:else}
+        <div class="empty-zones-bar">
+          <span class="empty-zones-msg">No ROI zones configured. Click to create a detection zone:</span>
+          <button type="button" class="btn btn-primary" on:click={addZone}>
+            + Add New Zone
+          </button>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -466,7 +493,7 @@
     border-color: #a7f3d0;
   }
 
-  .debug-badge {
+  .model-badge {
     font-size: 0.65rem;
     font-family: var(--font-mono);
     font-weight: 700;
@@ -555,13 +582,22 @@
     font-weight: 500;
   }
 
-  .fps-group select {
-    background: transparent;
-    border: none;
-    outline: none;
+  .fps-input {
+    width: 44px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 0.15rem 0.35rem;
     font-size: 0.78rem;
     color: var(--text-primary);
-    font-weight: 500;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    text-align: center;
+  }
+
+  .fps-input:focus {
+    border-color: var(--border-focus);
+    outline: none;
   }
 
   .btn-icon {
@@ -752,6 +788,21 @@
   .field-sm {
     width: 110px;
     font-family: var(--font-mono);
+  }
+
+  .empty-zones-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 1rem;
+    padding: 0.25rem 0;
+  }
+
+  .empty-zones-msg {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 500;
   }
 
   .feed-footer {

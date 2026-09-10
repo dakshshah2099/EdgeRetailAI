@@ -76,11 +76,21 @@ if [ -d "$WORKDIR/frontend" ]; then
     fi
 fi
 
-# Model check
-MODEL_PATH="$WORKDIR/backend/models/yolo26n.onnx"
-if [ ! -f "$MODEL_PATH" ]; then
-    echo "WARNING: Model not found at $MODEL_PATH."
-    echo "Ensure yolo26n.onnx is placed in $WORKDIR/backend/models/ before starting."
+# Model check and INT8 quantization
+FP32_MODEL="$WORKDIR/backend/models/yolo26n.onnx"
+INT8_MODEL="$WORKDIR/backend/models/yolo26n_int8.onnx"
+
+if [ ! -f "$FP32_MODEL" ] && [ ! -f "$INT8_MODEL" ]; then
+    echo "WARNING: Neither FP32 nor INT8 YOLO model found in $WORKDIR/backend/models/."
+    echo "Ensure yolo26n.onnx or yolo26n_int8.onnx is placed in $WORKDIR/backend/models/ before starting."
+elif [ ! -f "$INT8_MODEL" ] && [ -f "$FP32_MODEL" ]; then
+    echo "Generating INT8 quantized model for Raspberry Pi hardware acceleration..."
+    "$VENV_DIR/bin/python" -c "
+import sys
+sys.path.insert(0, '$WORKDIR/backend')
+from benchmarks.quantize import quantize_model
+quantize_model('$FP32_MODEL', '$INT8_MODEL')
+" || echo "WARNING: INT8 quantization failed. System will fall back to FP32 model."
 fi
 
 # Environment configuration

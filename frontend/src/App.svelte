@@ -16,7 +16,6 @@
     fetchAlerts,
     fetchHeatmap,
     fetchSystemEnv,
-    toggleDebugMode,
     checkHealth,
   } from './lib/api.js';
 
@@ -28,8 +27,7 @@
   let refreshIntervalSec = 3;
   let refreshTimer = null;
 
-  // Debug & System Env
-  let debugMode = false;
+  // Settings & System Env
   let envVariables = {};
 
   // Filters
@@ -46,7 +44,7 @@
   let heatmapData = null;
 
   // Active Main Tab
-  let activeTab = 'camera'; // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'debug'
+  let activeTab = 'camera'; // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'settings'
 
   function getSinceISO(range) {
     const now = new Date();
@@ -82,7 +80,6 @@
       if (alerts.status === 'fulfilled') alertsData = alerts.value;
       if (heatmap.status === 'fulfilled') heatmapData = heatmap.value;
       if (sysEnv.status === 'fulfilled') {
-        debugMode = sysEnv.value.debug_mode;
         envVariables = sysEnv.value.variables;
       }
 
@@ -95,23 +92,11 @@
     }
   }
 
-  async function handleToggleDebug() {
-    try {
-      const res = await toggleDebugMode();
-      debugMode = res.debug_mode;
-      envVariables = res.variables;
-      if (debugMode) {
-        activeTab = 'debug';
-      } else if (activeTab === 'debug') {
-        activeTab = 'camera';
-      }
-    } catch (err) {
-      console.error('Failed to toggle debug mode:', err);
-    }
+  function handleOpenSettings() {
+    activeTab = activeTab === 'settings' ? 'camera' : 'settings';
   }
 
   function handleEnvSaved(res) {
-    debugMode = res.debug_mode;
     envVariables = res.variables;
     loadAllData();
   }
@@ -149,13 +134,13 @@
   {isConnected}
   {lastUpdated}
   {isRefreshing}
-  {debugMode}
+  {activeTab}
   bind:autoRefresh
   bind:refreshInterval={refreshIntervalSec}
   bind:selectedTimeRange
   bind:selectedZone
   onRefresh={loadAllData}
-  onToggleDebug={handleToggleDebug}
+  onOpenSettings={handleOpenSettings}
 />
 
 <main class="dashboard-main">
@@ -227,18 +212,16 @@
     <button class="view-tab" class:active={activeTab === 'alerts'} on:click={() => activeTab = 'alerts'}>
       Alert Log ({alertsData.length})
     </button>
-    {#if debugMode}
-      <button class="view-tab debug-tab" class:active={activeTab === 'debug'} on:click={() => activeTab = 'debug'}>
-        System .env Debug
-      </button>
-    {/if}
+    <button class="view-tab settings-tab" class:active={activeTab === 'settings'} on:click={() => activeTab = 'settings'}>
+      Settings
+    </button>
   </div>
 
   <!-- Primary Analytics Content Area -->
   <section class="content-view">
     {#if activeTab === 'camera'}
       <div class="grid-2col">
-        <LiveCameraFeed {isConnected} {debugMode} />
+        <LiveCameraFeed {isConnected} />
         <AlertsFeed 
           alerts={alertsData} 
           activeFilter={alertFilter} 
@@ -270,9 +253,8 @@
         activeFilter={alertFilter} 
         onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
       />
-    {:else if activeTab === 'debug'}
+    {:else if activeTab === 'settings'}
       <DebugControlPanel 
-        {debugMode} 
         {envVariables} 
         onSave={handleEnvSaved} 
       />
@@ -329,17 +311,8 @@
     font-weight: 600;
   }
 
-  .view-tab.debug-tab {
-    color: var(--accent-purple);
-    border: 1px dashed #ddd6fe;
+  .view-tab.settings-tab {
     margin-left: auto;
-    background: var(--accent-purple-light);
-  }
-
-  .view-tab.debug-tab.active {
-    background: var(--accent-purple);
-    color: #ffffff;
-    border-color: var(--accent-purple);
   }
 
   .content-view {

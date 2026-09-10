@@ -21,7 +21,11 @@ def format_authenticated_rtsp_url(
     username: str | None = None,
     password: str | None = None,
 ) -> str:
-    """Inject URL-encoded username and password into an RTSP URL if not already present."""
+    """Inject URL-encoded username and password into an RTSP URL if not already present.
+
+    If password is empty or not provided, the URL is returned unmodified to allow
+    connecting to unauthenticated RTSP streams without injecting unwanted credentials.
+    """
     if not (url.startswith("rtsp://") or url.startswith("rtsps://") or url.startswith("http://")):
         return url
 
@@ -30,12 +34,15 @@ def format_authenticated_rtsp_url(
     if parsed.username or parsed.password:
         return url
 
-    if not username and not password:
+    user_clean = (username or "").strip()
+    pass_clean = (password or "").strip()
+    # If either credential is empty, do not inject auth (preserves unauthenticated streams)
+    if not user_clean or not pass_clean:
         return url
 
-    user_enc = urllib.parse.quote(username or "", safe="")
-    pass_enc = urllib.parse.quote(password or "", safe="")
-    auth_str = f"{user_enc}:{pass_enc}@" if password is not None else f"{user_enc}@"
+    user_enc = urllib.parse.quote(user_clean, safe="")
+    pass_enc = urllib.parse.quote(pass_clean, safe="")
+    auth_str = f"{user_enc}:{pass_enc}@"
 
     new_netloc = f"{auth_str}{parsed.netloc}"
     return urllib.parse.urlunsplit(parsed._replace(netloc=new_netloc))
@@ -47,7 +54,7 @@ def mask_rtsp_credentials(url: str) -> str:
         return url
     try:
         parsed = urllib.parse.urlsplit(url)
-        if parsed.username and parsed.password:
+        if parsed.username and parsed.password is not None:
             masked_netloc = f"{parsed.username}:***@{parsed.hostname}"
             if parsed.port:
                 masked_netloc += f":{parsed.port}"
@@ -95,13 +102,26 @@ class RTSPSource(CameraSource):
             self._cap = None
 
         timeout_us = int(self._timeout_msec * 1000)
-        # Set ffmpeg socket and connection timeouts in microseconds for OpenCV
+        transport = os.environ.get("RTSP_TRANSPORT", "tcp").lower()
+        if transport not in ("tcp", "udp"):
+            transport = "tcp"
+        # Set ffmpeg socket and connection timeouts in microseconds for OpenCV,
+        # with nobuffer and low delay
         os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-            f"rtsp_transport;tcp;udp|stimeout;{timeout_us}|rw_timeout;{timeout_us}|max_delay;500000"
+            f"rtsp_transport;{transport}|timeout;{timeout_us}|stimeout;{timeout_us}|"
+            f"rw_timeout;{timeout_us}|max_delay;500000|fflags;nobuffer|flags;low_delay|"
+            "probesize;1000000|analyzeduration;1000000"
         )
 
         logger.info("Connecting to RTSP stream: %s", mask_rtsp_credentials(self.source_url))
-        cap = cv2.VideoCapture(self.source_url, cv2.CAP_FFMPEG)
+        params = [
+            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+            self._timeout_msec,
+            cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+            self._timeout_msec,
+        ]
+        cap = cv2.VideoCapture(self.source_url, cv2.CAP_FFMPEG, params)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self._timeout_msec)
         cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self._timeout_msec)
         if not cap.isOpened():
@@ -160,7 +180,7 @@ class RTSPSource(CameraSource):
             return None
 
         ret, frame = self._cap.read()
-        if not ret or frame is None:
+        if not ret or frame is None or frame.size == 0:
             self._handle_disconnect_and_backoff()
             return None
 

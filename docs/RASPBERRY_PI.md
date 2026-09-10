@@ -66,7 +66,7 @@ Key environment variables:
 | Variable | Default | Purpose |
 |:---|:---:|:---|
 | `CAMERA_SOURCE` | `0` | Camera input (`0` for USB `/dev/video0`, or RTSP URL) |
-| `YOLO_MODEL` | `models/yolo26n.onnx` | ONNX model file |
+| `YOLO_MODEL` | `models/yolo26n_int8.onnx` | ONNX model file (INT8 dynamic quantization) |
 | `YOLO_INPUT_SIZE` | `640` | Input dimension (validated against ONNX graph) |
 | `YOLO_INFERENCE_FPS` | `5` | Maximum inference rate (decoupled from capture) |
 | `YOLO_INTRA_OP_THREADS`| `3` | ONNX thread pool (leaves 1 core for capture/FastAPI) |

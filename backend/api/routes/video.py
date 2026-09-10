@@ -38,6 +38,8 @@ async def frame_streamer(
     """Asynchronous generator yielding multipart/x-mixed-replace JPEG frames purely from memory."""
     delay = 1.0 / max(1, min(target_fps, 30))
     src = resolve_camera_source()
+    last_fallback_time = 0.0
+    cached_fallback_bytes: bytes = b""
 
     while True:
         try:
@@ -48,18 +50,25 @@ async def frame_streamer(
                     display_frame = draw_zones_overlay(display_frame)
                 if overlay_detections:
                     display_frame = draw_tracked_overlay(display_frame, tracked)
+                ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                frame_bytes = jpeg.tobytes() if ret else b""
             else:
-                fallback = generate_fallback_frame(src, width=w, height=h)
-                display_frame = fallback
-                if overlay_zones:
-                    display_frame = draw_zones_overlay(display_frame)
+                now = asyncio.get_event_loop().time()
+                # Cache synthetic standby frame for 1s to prevent repeated OpenCV encodings
+                if not cached_fallback_bytes or now - last_fallback_time > 1.0:
+                    src = resolve_camera_source()
+                    fallback = generate_fallback_frame(src, width=w, height=h)
+                    if overlay_zones:
+                        fallback = draw_zones_overlay(fallback)
+                    ret, jpeg = cv2.imencode(".jpg", fallback, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                    cached_fallback_bytes = jpeg.tobytes() if ret else b""
+                    last_fallback_time = now
+                frame_bytes = cached_fallback_bytes
         except Exception as e:
             logger.warning("Degraded video stream in frame_streamer: %s", e)
-            display_frame = generate_fallback_frame(src)
+            frame_bytes = cached_fallback_bytes
 
-        ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-        if ret:
-            frame_bytes = jpeg.tobytes()
+        if frame_bytes:
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n"

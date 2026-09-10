@@ -1,7 +1,6 @@
 <script>
-  import { updateSystemEnv, toggleDebugMode } from '../lib/api.js';
+  import { updateSystemEnv } from '../lib/api.js';
 
-  export let debugMode = false;
   export let envVariables = {};
   export let onSave = () => {};
 
@@ -44,28 +43,9 @@
     isError = false;
     try {
       const res = await updateSystemEnv(editVars);
-      statusMessage = 'Environment variables saved and synced to .env successfully.';
+      statusMessage = 'Settings saved and synced to .env successfully.';
       isError = false;
       isDirty = false;
-      onSave(res);
-    } catch (err) {
-      statusMessage = `Error: ${err.message}`;
-      isError = true;
-    } finally {
-      isSaving = false;
-    }
-  }
-
-  async function handleToggleDebug() {
-    isSaving = true;
-    statusMessage = '';
-    try {
-      const res = await toggleDebugMode();
-      debugMode = res.debug_mode;
-      editVars = { ...res.variables };
-      isDirty = false;
-      statusMessage = `Debug Mode switched ${debugMode ? 'ON' : 'OFF'}`;
-      isError = false;
       onSave(res);
     } catch (err) {
       statusMessage = `Error: ${err.message}`;
@@ -92,19 +72,16 @@
   }
 </script>
 
-<div class="debug-panel">
+<div class="settings-panel">
   <div class="panel-header">
     <div class="header-left">
       <div class="title-row">
-        <h3>System Environment & Debug Console</h3>
-        <span class="status-badge" class:active={debugMode}>
-          {debugMode ? 'Debug Active' : 'Debug Inactive'}
-        </span>
+        <h3>System Settings</h3>
         {#if isDirty}
           <span class="unsaved-badge">Unsaved changes</span>
         {/if}
       </div>
-      <p class="subtitle">Direct real-time control over YOLO26 detection thresholds, RTSP authentication, and <code>.env</code> variables.</p>
+      <p class="subtitle">Direct real-time control over YOLO detection thresholds, RTSP authentication, and system environment variables.</p>
     </div>
 
     <div class="header-actions">
@@ -113,10 +90,7 @@
           Discard
         </button>
       {/if}
-      <button class="btn btn-secondary" class:active-toggle={debugMode} on:click={handleToggleDebug} disabled={isSaving}>
-        {debugMode ? 'Disable Debug Mode' : 'Enable Debug Mode'}
-      </button>
-      <button class="btn btn-primary" on:click={handleSave} disabled={isSaving || !debugMode}>
+      <button class="btn btn-primary" on:click={handleSave} disabled={isSaving}>
         {isSaving ? 'Saving...' : 'Save to .env'}
       </button>
     </div>
@@ -128,15 +102,9 @@
     </div>
   {/if}
 
-  {#if !debugMode}
-    <div class="disabled-notice">
-      <h4>Debug Mode is Disabled</h4>
-      <p>Click "Enable Debug Mode" to modify runtime environment variables, authentication, and detection thresholds.</p>
-    </div>
-  {:else}
-    <!-- Quick Threshold Tuning Sliders -->
-    <div class="tuning-section">
-      <h4 class="tuning-title">🎯 Detection & Analytics Hyperparameters</h4>
+  <!-- Quick Threshold Tuning Sliders -->
+  <div class="tuning-section">
+    <h4 class="tuning-title">🎯 Detection & Analytics Hyperparameters</h4>
       <div class="sliders-grid">
         <div class="slider-card">
           <div class="slider-header">
@@ -226,7 +194,7 @@
           </div>
         </div>
       </div>
-      <p class="auth-hint">Credentials are automatically encoded and injected into <code>CAMERA_SOURCE</code> during connection.</p>
+      <p class="auth-hint">Leave blank for streams without password. Credentials are automatically encoded and injected into <code>CAMERA_SOURCE</code> during connection only when password is provided.</p>
     </div>
 
     <!-- Camera Preset Shortcuts -->
@@ -318,14 +286,13 @@
           <button type="button" class="btn btn-secondary add-btn" on:click={addVariable} disabled={!newKey.trim()}>
             Add
           </button>
-        </div>
       </div>
     </div>
-  {/if}
+  </div>
 </div>
 
 <style>
-  .debug-panel {
+  .settings-panel {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
@@ -364,22 +331,6 @@
     color: var(--text-primary);
   }
 
-  .status-badge {
-    font-size: 0.7rem;
-    font-family: var(--font-mono);
-    font-weight: 600;
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--radius-sm);
-    background: #f1f5f9;
-    color: var(--text-muted);
-    border: 1px solid var(--border-color);
-  }
-
-  .status-badge.active {
-    background: var(--accent-purple-light);
-    color: var(--accent-purple);
-    border-color: #ddd6fe;
-  }
 
   .unsaved-badge {
     font-size: 0.7rem;
@@ -397,14 +348,6 @@
     color: var(--text-muted);
   }
 
-  .subtitle code {
-    font-family: var(--font-mono);
-    background: #f1f5f9;
-    padding: 0.1rem 0.35rem;
-    border-radius: 3px;
-    color: var(--text-secondary);
-    border: 1px solid #e2e8f0;
-  }
 
   .header-actions {
     display: flex;
@@ -444,12 +387,6 @@
     color: var(--text-primary);
   }
 
-  .btn-secondary.active-toggle {
-    background: var(--accent-purple-light);
-    color: var(--accent-purple);
-    border-color: #ddd6fe;
-  }
-
   .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -471,30 +408,6 @@
     background: var(--accent-red-light);
     border: 1px solid #fecaca;
     color: var(--accent-red);
-  }
-
-  .disabled-notice {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem 1rem;
-    background: #f8fafc;
-    border: 1px dashed var(--border-color);
-    border-radius: var(--radius-md);
-    gap: 0.5rem;
-    text-align: center;
-  }
-
-  .disabled-notice h4 {
-    color: var(--text-primary);
-    font-size: 1rem;
-    font-weight: 600;
-  }
-
-  .disabled-notice p {
-    font-size: 0.85rem;
-    color: var(--text-muted);
   }
 
   .tuning-section, .auth-section {

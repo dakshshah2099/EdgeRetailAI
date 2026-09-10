@@ -87,3 +87,15 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+if __name__ == "__main__":
+    import os
+
+    import uvicorn
+
+    from api.env_manager import read_env_file
+
+    env = read_env_file()
+    srv_host = env.get("HOST") or env.get("API_HOST") or os.environ.get("HOST", "0.0.0.0")
+    srv_port = int(env.get("PORT") or env.get("API_PORT") or os.environ.get("PORT", "8000"))
+    uvicorn.run("api.main:app", host=srv_host, port=srv_port, reload=True)
+

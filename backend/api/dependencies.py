@@ -32,15 +32,41 @@ def get_repository() -> EventRepository:
     return EventRepository(get_db_path())
 
 
+_cached_cfg: AppConfig | None = None
+_cached_cfg_mtime: float = -1.0
+_cached_cfg_path: Path | None = None
+
+
 def get_app_config(config_path: str | Path | None = None) -> AppConfig | None:
-    """Load and return application configuration if present."""
+    """Load and return application configuration if present, cached by file mtime."""
+    global _cached_cfg, _cached_cfg_mtime, _cached_cfg_path
     path = get_config_path() if config_path is None else Path(config_path)
-    if path.is_file():
+    try:
+        resolved_path = path.resolve()
+    except OSError:
+        return None
+
+    if not resolved_path.is_file():
+        return None
+
+    try:
+        current_mtime = resolved_path.stat().st_mtime
+        if _cached_cfg_path == resolved_path and _cached_cfg_mtime == current_mtime:
+            return _cached_cfg
+    except OSError:
+        pass
+
+    try:
+        cfg = load_config(resolved_path)
+        _cached_cfg = cfg
         try:
-            return load_config(path)
-        except Exception:
-            return None
-    return None
+            _cached_cfg_mtime = resolved_path.stat().st_mtime
+        except OSError:
+            _cached_cfg_mtime = -1.0
+        _cached_cfg_path = resolved_path
+        return cfg
+    except Exception:
+        return None
 
 
 def get_default_frame_dimensions(config_path: str | Path = "config.yaml") -> tuple[int, int]:

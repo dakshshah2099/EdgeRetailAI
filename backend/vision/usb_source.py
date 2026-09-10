@@ -41,12 +41,18 @@ class USBSource(CameraSource):
             return None
 
         ret, frame = self._cap.read()
-        if (not ret or frame is None) and self.loop:
+        if (not ret or frame is None or frame.size == 0) and self.loop:
             # Rewind video file to beginning
             self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             ret, frame = self._cap.read()
+            if not ret or frame is None or frame.size == 0:
+                self._open_capture()
+                if self._cap and self._cap.isOpened():
+                    ret, frame = self._cap.read()
+                else:
+                    ret = False
 
-        if not ret or frame is None:
+        if not ret or frame is None or frame.size == 0:
             logger.warning("Failed to read frame from device %s", self.source_id)
             return None
 

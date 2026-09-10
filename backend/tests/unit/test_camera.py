@@ -103,7 +103,11 @@ def test_rtsp_source_unreachable_returns_none_and_reconnects() -> None:
         result = source.get_frame()
         assert result is None
         assert mock_cap_cls.call_count >= 1
-        mock_cap_cls.assert_called_with("rtsp://192.168.1.999:8080/nonexistent", cv2.CAP_FFMPEG)
+        mock_cap_cls.assert_called_with(
+            "rtsp://192.168.1.999:8080/nonexistent",
+            cv2.CAP_FFMPEG,
+            [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000],
+        )
         mock_cap_fail.set.assert_any_call(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
         mock_cap_fail.set.assert_any_call(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
 
@@ -241,10 +245,17 @@ def test_no_pixel_persistence() -> None:
 def test_format_authenticated_rtsp_url() -> None:
     from vision.rtsp_source import format_authenticated_rtsp_url, mask_rtsp_credentials
 
-    # Inject user/pass
+    # Inject user/pass when both are present
     url = "rtsp://192.168.1.100:8080/live"
     auth_url = format_authenticated_rtsp_url(url, "admin", "p@ss:w0rd")
     assert auth_url == "rtsp://admin:p%40ss%3Aw0rd@192.168.1.100:8080/live"
+
+    # Stream without password: no password provided
+    assert format_authenticated_rtsp_url(url, "admin", None) == url
+    assert format_authenticated_rtsp_url(url, "admin", "") == url
+    assert format_authenticated_rtsp_url(url, None, None) == url
+    assert format_authenticated_rtsp_url(url, "", "") == url
+    assert format_authenticated_rtsp_url(url, None, "pass_only") == url
 
     # Already has user/pass
     existing = "rtsp://user:pass@192.168.1.100/live"
@@ -254,4 +265,27 @@ def test_format_authenticated_rtsp_url() -> None:
     masked = mask_rtsp_credentials(auth_url)
     assert "p@ss" not in masked
     assert "admin:***@192.168.1.100:8080" in masked
+
+    # Mask credentials for stream without password
+    no_auth_url = "rtsp://192.168.1.100:8080/live"
+    assert mask_rtsp_credentials(no_auth_url) == no_auth_url
+
+
+def test_rtsp_source_ffmpeg_transport_options() -> None:
+    import os
+
+    with patch("cv2.VideoCapture") as mock_cap_cls:
+        mock_cap = MagicMock()
+        mock_cap.isOpened.return_value = True
+        mock_cap_cls.return_value = mock_cap
+
+        source = RTSPSource(
+            source_url="rtsp://192.168.1.100:8080/h264_pcm.sdp",
+            source_id="no_auth_rtsp",
+        )
+        assert "rtsp_transport;tcp" in os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS", "")
+        assert "timeout;" in os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS", "")
+        assert source.source_url == "rtsp://192.168.1.100:8080/h264_pcm.sdp"
+        source.close()
+
 
