@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   export let activeTab = "camera";
   export let queueCount = 0;
   export let stockCount = 0;
@@ -8,7 +8,7 @@
   export let onToggleCollapse = () => {};
 </script>
 
-<aside class="bg-white border-r border-slate-200 flex flex-col justify-between h-full transition-all duration-200 {isCollapsed ? 'w-14' : 'w-52'} shrink-0 select-none z-40 relative">
+<aside class="bg-white border-r border-slate-200 flex flex-col justify-between h-full transition-all duration-200 {isCollapsed ? 'w-14 overflow-visible' : 'w-52'} shrink-0 select-none z-50 relative">
   <!-- Brand Area -->
   <div class="p-2.5 border-b border-slate-200 flex items-center {isCollapsed ? 'justify-center' : 'justify-start'} gap-2 shrink-0">
     <div class="flex items-center gap-2 overflow-hidden">
@@ -26,7 +26,7 @@
   </div>
 
   <!-- Navigation Menu Groups -->
-  <nav class="flex-1 p-1.5 space-y-3 overflow-y-auto">
+  <nav class="flex-1 p-1.5 space-y-3 {isCollapsed ? 'overflow-visible' : 'overflow-y-auto'}">
     <!-- Group 1: Live Vision & Spatial -->
     <div>
       {#if !isCollapsed}
@@ -75,7 +75,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               <span>Camera Feed</span>
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
             </div>
@@ -114,7 +114,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               Dwell Heatmap
             </div>
           {/if}
@@ -162,7 +162,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               Footfall Trends
             </div>
           {/if}
@@ -214,7 +214,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               <span>Checkout Queues</span>
               <span class="font-mono text-sky-400">({queueCount})</span>
             </div>
@@ -230,7 +230,7 @@
               on:click={(e) => { e.preventDefault(); onSelectTab('stock'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16v26a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v26a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
                 <line x1="12" y1="22.08" x2="12" y2="12"/>
               </svg>
@@ -252,7 +252,7 @@
               on:click={(e) => { e.preventDefault(); onSelectTab('stock'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16v26a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v26a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
                 <line x1="12" y1="22.08" x2="12" y2="12"/>
               </svg>
@@ -269,7 +269,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               <span>Shelf Inventory</span>
               <span class="font-mono text-amber-400">({stockCount})</span>
             </div>
@@ -332,7 +332,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               <span>Incident Log</span>
               {#if alertsCount > 0}
                 <span class="font-mono text-rose-400 font-semibold">({alertsCount})</span>
@@ -365,7 +365,7 @@
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
               {#if !isCollapsed}
                 <span class="flex-1 text-left truncate">Configuration</span>
@@ -373,7 +373,7 @@
             </a>
           {/if}
           {#if isCollapsed}
-            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-lg whitespace-nowrap z-50">
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               Configuration
             </div>
           {/if}
@@ -396,9 +396,9 @@
         </div>
       </div>
     {:else}
-      <div class="flex flex-col items-center justify-center gap-1 group relative" title="Inference: ONNX-RT | Privacy: ZERO-PII">
+      <div class="flex flex-col items-center justify-center gap-1 group relative cursor-pointer" title="Inference: ONNX-RT | Privacy: ZERO-PII">
         <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <div class="pointer-events-none absolute left-full bottom-0 ml-2 hidden group-hover:flex flex-col gap-0.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-mono rounded shadow-lg whitespace-nowrap z-50">
+        <div class="pointer-events-none absolute left-full bottom-0 ml-3 hidden group-hover:flex flex-col gap-0.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-mono rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
           <span>INFERENCE: ONNX-RT</span>
           <span class="text-emerald-400 font-semibold">PRIVACY: ZERO-PII</span>
         </div>
@@ -406,25 +406,32 @@
     {/if}
 
     <!-- Bottom Collapse Toggle Button -->
-    <button
-      type="button"
-      class="w-full flex items-center {isCollapsed ? 'justify-center p-1.5' : 'justify-between px-2 py-1'} rounded text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 border border-slate-200 transition-colors cursor-pointer"
-      on:click={onToggleCollapse}
-      title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-    >
-      {#if !isCollapsed}
-        <span class="flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="15 18 9 12 15 6"/>
+    <div class="relative group">
+      <button
+        type="button"
+        class="w-full flex items-center {isCollapsed ? 'justify-center p-1.5' : 'justify-between px-2 py-1'} rounded text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 border border-slate-200 transition-colors cursor-pointer"
+        on:click={onToggleCollapse}
+        title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+      >
+        {#if !isCollapsed}
+          <span class="flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            <span class="font-mono font-medium">COLLAPSE</span>
+          </span>
+          <span class="text-slate-400 font-mono">«</span>
+        {:else}
+          <svg class="w-3.5 h-3.5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
           </svg>
-          <span class="font-mono font-medium">COLLAPSE</span>
-        </span>
-        <span class="text-slate-400 font-mono">«</span>
-      {:else}
-        <svg class="w-3.5 h-3.5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
+        {/if}
+      </button>
+      {#if isCollapsed}
+        <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
+          Expand Sidebar
+        </div>
       {/if}
-    </button>
+    </div>
   </div>
 </aside>
