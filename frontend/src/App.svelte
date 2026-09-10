@@ -29,6 +29,7 @@
   let refreshIntervalSec = 3;
   let refreshTimer = null;
   let isSidebarCollapsed = false;
+  let isMobileSidebarOpen = false;
 
   // Settings & System Env
   let envVariables = {};
@@ -115,6 +116,7 @@
   }
 
   function navigateTo(tab) {
+    isMobileSidebarOpen = false;
     page(`/${tab}`);
   }
 
@@ -205,15 +207,17 @@
 </script>
 
 <div class="h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 flex font-sans">
-  <!-- Left Persistent Navigation Sidebar -->
+  <!-- Left Persistent Navigation Sidebar / Mobile Off-Canvas Drawer -->
   <Sidebar
     {activeTab}
     queueCount={queueData.length}
     stockCount={stockData.length}
     alertsCount={openAlertsCount}
     isCollapsed={isSidebarCollapsed}
+    isMobileOpen={isMobileSidebarOpen}
     onSelectTab={navigateTo}
     onToggleCollapse={handleToggleSidebar}
+    onCloseMobile={() => isMobileSidebarOpen = false}
   />
 
   <!-- Main Viewport Area -->
@@ -228,11 +232,12 @@
       bind:selectedTimeRange
       bind:selectedZone
       onRefresh={loadAllData}
+      onToggleMobileMenu={() => isMobileSidebarOpen = !isMobileSidebarOpen}
     />
 
-    <main class="flex-1 p-4 max-w-[1720px] w-full mx-auto flex flex-col gap-3 overflow-y-auto">
+    <main class="flex-1 p-2.5 sm:p-4 max-w-[1720px] w-full mx-auto flex flex-col gap-2.5 sm:gap-3 overflow-y-auto">
       <!-- Telemetry Readout Grid -->
-      <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5">
         <KPICard
           title="Occupancy"
           value={occupancy.toString()}
@@ -269,14 +274,16 @@
           status={lowStockShelves > 0 ? "warning" : "success"}
         />
 
-        <KPICard
-          title="Alert Stack"
-          value={openAlertsCount.toString()}
-          subtitle="Unresolved triage items"
-          icon="alerts"
-          tag={openAlertsCount > 0 ? "ALERTING" : "SECURE"}
-          status={openAlertsCount > 0 ? "danger" : "success"}
-        />
+        <div class="col-span-2 sm:col-span-1">
+          <KPICard
+            title="Alert Stack"
+            value={openAlertsCount.toString()}
+            subtitle="Unresolved triage items"
+            icon="alerts"
+            tag={openAlertsCount > 0 ? "ALERTING" : "SECURE"}
+            status={openAlertsCount > 0 ? "danger" : "success"}
+          />
+        </div>
       </section>
 
       <!-- Dedicated Route Context Banner -->

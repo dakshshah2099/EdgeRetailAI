@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   export let alerts = [];
   export let activeFilter = 'open';
   export let onFilterChange = (status) => {};
@@ -23,11 +23,11 @@
 
 <div class="flex flex-col h-full bg-white border border-slate-200 rounded-md shadow-xs">
   <!-- Feed Header -->
-  <div class="px-3.5 py-2.5 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap bg-slate-50/50">
+  <div class="px-3 sm:px-3.5 py-2 sm:py-2.5 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap bg-slate-50/50">
     <div class="flex items-center gap-2">
       <span class="w-2 h-2 rounded-full {alerts.filter(a => !a.resolved_at).length > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}"></span>
       <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Incident Triage</span>
-      <span class="px-1.5 py-0.2 text-xs font-mono bg-white text-slate-600 rounded border border-slate-200">
+      <span class="px-1.5 py-0.5 text-xs font-mono bg-white text-slate-600 rounded border border-slate-200">
         {alerts.length}
       </span>
     </div>
@@ -36,21 +36,21 @@
     <div class="flex items-center bg-slate-100 border border-slate-200 rounded-md p-0.5">
       <button 
         type="button"
-        class="px-2 py-0.5 text-xs font-mono rounded transition-colors {activeFilter === 'open' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'open' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
         on:click={() => onFilterChange('open')}
       >
         OPEN
       </button>
       <button 
         type="button"
-        class="px-2 py-0.5 text-xs font-mono rounded transition-colors {activeFilter === 'resolved' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'resolved' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
         on:click={() => onFilterChange('resolved')}
       >
         RESOLVED
       </button>
       <button 
         type="button"
-        class="px-2 py-0.5 text-xs font-mono rounded transition-colors {activeFilter === 'all' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'all' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
         on:click={() => onFilterChange('all')}
       >
         ALL

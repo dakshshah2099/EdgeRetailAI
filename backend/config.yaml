@@ -3,7 +3,6 @@ camera:
 zones:
 - zone_id: zone_entrance_exit
   zone_type: entry_exit
-  label: Main Entrance / Exit
   polygon:
   - - 40
     - 360
@@ -13,21 +12,21 @@ zones:
     - 470
   - - 40
     - 470
+  label: Main Entrance / Exit
 - zone_id: zone_shelf_beverages
   zone_type: shelf
-  label: Shelf 1 - Cold Beverages
   polygon:
   - - 50
     - 80
-  - - 220
-    - 80
+  - - 214
+    - 85
   - - 220
     - 240
   - - 50
     - 240
+  label: Shelf 1 - Cold Beverages
 - zone_id: zone_shelf_snacks
   zone_type: shelf
-  label: Shelf 2 - Snacks & Bakery
   polygon:
   - - 250
     - 80
@@ -37,9 +36,9 @@ zones:
     - 240
   - - 250
     - 240
+  label: Shelf 2 - Snacks & Bakery
 - zone_id: zone_shelf_electronics
   zone_type: shelf
-  label: Shelf 3 - Tech & Accessories
   polygon:
   - - 450
     - 80
@@ -49,9 +48,9 @@ zones:
     - 240
   - - 450
     - 240
+  label: Shelf 3 - Tech & Accessories
 - zone_id: zone_display_promo
   zone_type: product_display
-  label: Promotional Island Display
   polygon:
   - - 220
     - 260
@@ -61,9 +60,9 @@ zones:
     - 340
   - - 220
     - 340
+  label: Promotional Island Display
 - zone_id: zone_queue_checkout_1
   zone_type: checkout
-  label: Checkout Counter 1
   polygon:
   - - 300
     - 350
@@ -73,9 +72,9 @@ zones:
     - 460
   - - 300
     - 460
+  label: Checkout Counter 1
 - zone_id: zone_queue_checkout_2
   zone_type: checkout
-  label: Checkout Counter 2
   polygon:
   - - 470
     - 350
@@ -85,5 +84,6 @@ zones:
     - 460
   - - 470
     - 460
+  label: Checkout Counter 2
 low_stock_confidence_threshold: 0.6
 queue_congestion_length: 4

@@ -23,7 +23,7 @@
   }
 </script>
 
-<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+<div class="bg-white border border-slate-200 rounded-md p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3 shadow-xs">
   <!-- Header -->
   <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
@@ -68,20 +68,20 @@
     </div>
   {:else}
     <!-- Summary Metrics Grid -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-2.5 sm:p-3">
         <span class="block text-xs font-mono uppercase text-slate-500">Total Ingress</span>
         <span class="text-xl font-mono font-semibold text-emerald-700">+{footfallData.total_enters}</span>
       </div>
-      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-2.5 sm:p-3">
         <span class="block text-xs font-mono uppercase text-slate-500">Total Egress</span>
         <span class="text-xl font-mono font-semibold text-rose-700">-{footfallData.total_exits}</span>
       </div>
-      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-2.5 sm:p-3">
         <span class="block text-xs font-mono uppercase text-slate-500">Net Occupancy</span>
         <span class="text-xl font-mono font-semibold text-sky-700">{footfallData.net_occupancy}</span>
       </div>
-      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-2.5 sm:p-3">
         <span class="block text-xs font-mono uppercase text-slate-500">Time Window</span>
         <span class="text-xs font-mono text-slate-700 truncate block mt-1">
           {#if footfallData.since}
@@ -96,8 +96,8 @@
     <!-- Bucket Bars Chart -->
     {#if footfallData.buckets && footfallData.buckets.length > 0}
       {@const maxCount = getMaxBucketCount(footfallData.buckets)}
-      <div class="bg-slate-50 border border-slate-200 rounded-md p-3.5 flex flex-col gap-3">
-        <div class="flex items-center justify-between text-xs font-mono text-slate-600">
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-3 sm:p-3.5 flex flex-col gap-3">
+        <div class="flex items-center justify-between flex-wrap gap-2 text-xs font-mono text-slate-600">
           <span>Directional Traffic Flow Distribution</span>
           <div class="flex items-center gap-3">
             <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span> Ingress (Enters)</span>
@@ -105,7 +105,7 @@
           </div>
         </div>
 
-        <div class="flex items-end gap-2 h-44 pt-4 border-b border-slate-200 overflow-x-auto">
+        <div class="flex items-end gap-1.5 sm:gap-2 h-44 pt-4 border-b border-slate-200 overflow-x-auto touch-pan-x">
           {#each footfallData.buckets as bucket}
             <div class="flex-1 min-w-[28px] max-w-[48px] h-full flex flex-col justify-end items-center gap-1 group relative">
               <div class="w-full flex items-end justify-center gap-0.5 h-full">

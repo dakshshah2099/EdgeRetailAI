@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   export let queueEvents = [];
   export let congestionThreshold = 4;
 
@@ -8,7 +8,7 @@
   }
 </script>
 
-<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+<div class="bg-white border border-slate-200 rounded-md p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3 shadow-xs">
   <!-- Header -->
   <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
@@ -26,7 +26,7 @@
   </div>
 
   <!-- Counters Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
     {#if queueEvents.length === 0}
       <div class="col-span-full py-12 text-center text-slate-400 font-mono text-xs">
         NO CHECKOUT COUNTER TELEMETRY DETECTED
@@ -35,7 +35,7 @@
       {#each queueEvents as item (item.counter_id)}
         {@const isCongested = item.queue_length >= congestionThreshold}
         {@const isPredCongested = !isCongested && item.predicted_queue_length != null && item.predicted_queue_length >= congestionThreshold}
-        <div class="bg-white border rounded-md p-3.5 transition-all flex flex-col justify-between gap-3 shadow-xs {isCongested ? 'border-rose-300 bg-rose-50/30' : isPredCongested ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'}">
+        <div class="bg-white border rounded-md p-3 sm:p-3.5 transition-all flex flex-col justify-between gap-3 shadow-xs {isCongested ? 'border-rose-300 bg-rose-50/30' : isPredCongested ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'}">
           <!-- Top Row -->
           <div class="flex items-center justify-between">
             <span class="font-mono text-xs text-slate-700">

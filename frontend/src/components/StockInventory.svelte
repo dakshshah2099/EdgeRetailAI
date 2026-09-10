@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   export let stockEvents = [];
 
   function formatTime(isoStr) {
@@ -36,7 +36,7 @@
   }
 </script>
 
-<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+<div class="bg-white border border-slate-200 rounded-md p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3 shadow-xs">
   <!-- Header -->
   <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
@@ -54,7 +54,7 @@
   </div>
 
   <!-- Shelf Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3">
     {#if stockEvents.length === 0}
       <div class="col-span-full py-12 text-center text-slate-400 font-mono text-xs">
         NO SHELF STOCK EVENTS RECORDED
@@ -62,7 +62,7 @@
     {:else}
       {#each stockEvents as shelf (shelf.shelf_id)}
         {@const st = getStatusBadge(shelf.status)}
-        <div class="border rounded-md p-3.5 transition-all flex flex-col justify-between gap-3 shadow-xs {st.border} {st.bg}">
+        <div class="border rounded-md p-3 sm:p-3.5 transition-all flex flex-col justify-between gap-3 shadow-xs {st.border} {st.bg}">
           <!-- Top Row -->
           <div class="flex items-center justify-between">
             <span class="font-mono text-xs text-slate-900 font-semibold">

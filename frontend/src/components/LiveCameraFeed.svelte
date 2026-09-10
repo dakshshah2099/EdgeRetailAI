@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { onMount, onDestroy } from "svelte";
   import { fetchSystemZones, updateSystemZones } from "../lib/api.js";
 
@@ -218,12 +218,12 @@
 </script>
 
 <div 
-  class="bg-white border border-slate-200 rounded-md shadow-xs flex flex-col gap-3 p-4 transition-all duration-150 {isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-6 rounded-none border-none' : ''} {isEditingZones ? 'ring-2 ring-amber-500/50' : ''}" 
+  class="bg-white border border-slate-200 rounded-md shadow-xs flex flex-col gap-2.5 sm:gap-3 p-3 sm:p-4 transition-all duration-150 {isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-4 sm:p-6 rounded-none border-none' : ''} {isEditingZones ? 'ring-2 ring-amber-500/50' : ''}" 
   bind:this={videoContainer}
 >
   <!-- Stream Header Toolbar -->
-  <div class="flex items-center justify-between flex-wrap gap-2.5 pb-2.5 border-b border-slate-100">
-    <div class="flex items-center gap-2.5 flex-wrap">
+  <div class="flex items-center justify-between flex-wrap gap-2 sm:gap-2.5 pb-2 sm:pb-2.5 border-b border-slate-100">
+    <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap">
       <div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full {isConnected && !isStreamError ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></span>
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Live Camera Stream</h2>
@@ -231,7 +231,7 @@
       <span class="px-2 py-0.5 text-xs font-mono font-semibold uppercase rounded border {isConnected && !isStreamError ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}">
         {isConnected && !isStreamError ? 'LIVE' : 'STANDBY'}
       </span>
-      <span class="px-2 py-0.5 text-xs font-mono bg-sky-50 text-sky-800 border border-sky-200 rounded">
+      <span class="px-2 py-0.5 text-xs font-mono bg-sky-50 text-sky-800 border border-sky-200 rounded hidden sm:inline">
         YOLOv26n Active
       </span>
       {#if isEditingZones}
@@ -411,8 +411,8 @@
     />
 
     <!-- Top Watermark & CCTV Timecode Overlay -->
-    <div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none text-xs font-mono z-10">
-      <div class="flex items-center gap-2 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
+    <div class="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
+      <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
         <span class="w-2 h-2 rounded-full {isConnected && !isStreamError ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}"></span>
         <span class="text-slate-400">CAM_01</span>
         <span class="text-slate-600">|</span>
@@ -420,9 +420,9 @@
       </div>
 
       {#if isEditingZones}
-        <div class="flex items-center gap-2 bg-amber-950/80 backdrop-blur-xs border border-amber-600/50 text-amber-200 px-2.5 py-0.5 rounded shadow-sm">
+        <div class="flex items-center gap-1.5 sm:gap-2 bg-amber-950/80 backdrop-blur-xs border border-amber-600/50 text-amber-200 px-2 sm:px-2.5 py-0.5 rounded shadow-sm">
           <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-          <span>CALIBRATING</span>
+          <span class="hidden sm:inline">CALIBRATING</span>
           <span class="text-amber-400 font-bold">X:{cursorX} Y:{cursorY}</span>
         </div>
       {/if}
@@ -504,24 +504,24 @@
     {/if}
 
     <!-- Live Stream HUD -->
-    <div class="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none text-xs font-mono z-10">
-      <div class="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-200 px-2.5 py-1 rounded shadow-md">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-        <span>MJPEG {targetFps} FPS</span>
+    <div class="absolute bottom-2 sm:bottom-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
+      <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md truncate">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+        <span>{targetFps} FPS</span>
         <span class="text-slate-500">|</span>
         <span class="text-slate-300">{viewWidth}×{viewHeight}</span>
-        <span class="text-slate-500">|</span>
-        <span class="text-sky-400">YOLOv26n ONNX-RT</span>
+        <span class="text-slate-500 hidden sm:inline">|</span>
+        <span class="text-sky-400 hidden sm:inline">YOLOv26n ONNX-RT</span>
       </div>
 
-      <div class="flex items-center gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-300 px-2.5 py-1 rounded shadow-md">
+      <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-300 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md shrink-0">
         {#if overlayZones}
-          <span class="text-sky-400">ZONES: ON</span>
+          <span class="text-sky-400 hidden md:inline">ZONES: ON</span>
         {/if}
         {#if overlayDetections}
-          <span class="text-emerald-400">YOLO: ON</span>
+          <span class="text-emerald-400 hidden md:inline">YOLO: ON</span>
         {/if}
-        <span class="text-slate-500">|</span>
+        <span class="text-slate-500 hidden md:inline">|</span>
         <span class="text-emerald-400 font-semibold">ZERO PII</span>
       </div>
     </div>
@@ -529,42 +529,50 @@
 
   <!-- Calibration Mode Editor Form -->
   {#if isEditingZones}
-    <div class="bg-slate-50 border border-slate-200 rounded p-3 flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
+    <div class="bg-slate-50 border border-slate-200 rounded p-2.5 sm:p-3 flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
       {#if zones.length > 0 && zones[selectedZoneIdx]}
-        <div class="flex items-center gap-2 flex-wrap">
-          <label for="zone-select" class="text-slate-600 font-semibold">Zone:</label>
-          <select id="zone-select" bind:value={selectedZoneIdx} class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900">
-            {#each zones as z, i}
-              <option value={i}>{z.label || `Zone ${i + 1}`} ({z.zone_type})</option>
-            {/each}
-          </select>
+        <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <div class="flex items-center gap-1">
+            <label for="zone-select" class="text-slate-600 font-semibold">Zone:</label>
+            <select id="zone-select" bind:value={selectedZoneIdx} class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900">
+              {#each zones as z, i}
+                <option value={i}>{z.label || `Zone ${i + 1}`} ({z.zone_type})</option>
+              {/each}
+            </select>
+          </div>
 
-          <label for="zone-label-input" class="text-slate-600 font-semibold ml-2">Label:</label>
-          <input 
-            id="zone-label-input"
-            type="text" 
-            bind:value={zones[selectedZoneIdx].label} 
-            class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900 w-28"
-          />
+          <div class="flex items-center gap-1">
+            <label for="zone-label-input" class="text-slate-600 font-semibold">Label:</label>
+            <input 
+              id="zone-label-input"
+              type="text" 
+              bind:value={zones[selectedZoneIdx].label} 
+              class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900 w-24 sm:w-28"
+            />
+          </div>
 
-          <label for="zone-type-select" class="text-slate-600 font-semibold ml-2">Type:</label>
-          <select id="zone-type-select" bind:value={zones[selectedZoneIdx].zone_type} class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900">
-            <option value="entry_exit">Entry / Exit</option>
-            <option value="shelf">Product Shelf</option>
-            <option value="checkout">Checkout Queue</option>
-            <option value="product_display">Product Display</option>
-          </select>
+          <div class="flex items-center gap-1">
+            <label for="zone-type-select" class="text-slate-600 font-semibold">Type:</label>
+            <select id="zone-type-select" bind:value={zones[selectedZoneIdx].zone_type} class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900">
+              <option value="entry_exit">Entry / Exit</option>
+              <option value="shelf">Product Shelf</option>
+              <option value="checkout">Checkout Queue</option>
+              <option value="product_display">Product Display</option>
+            </select>
+          </div>
 
-          <label for="zone-id-input" class="text-slate-600 font-semibold ml-2">ID:</label>
-          <input 
-            id="zone-id-input"
-            type="text" 
-            bind:value={zones[selectedZoneIdx].zone_id} 
-            class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900 w-24"
-          />
+          <div class="flex items-center gap-1">
+            <label for="zone-id-input" class="text-slate-600 font-semibold">ID:</label>
+            <input 
+              id="zone-id-input"
+              type="text" 
+              bind:value={zones[selectedZoneIdx].zone_id} 
+              class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900 w-20 sm:w-24"
+            />
+          </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button type="button" class="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 rounded hover:bg-slate-100 cursor-pointer" on:click={addZone}>
             + Add Zone
           </button>

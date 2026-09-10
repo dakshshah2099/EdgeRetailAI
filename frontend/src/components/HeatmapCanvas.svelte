@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { onMount } from 'svelte';
 
   export let heatmapData = null;
@@ -68,11 +68,11 @@
     }
   }
 
-  function handleMouseMove(e) {
+  function updatePointer(clientX, clientY) {
     if (!canvas || !heatmapData || !heatmapData.grid) return;
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
     const { rows, cols, grid } = heatmapData;
     const scaleX = canvas.width / rect.width;
@@ -86,12 +86,22 @@
     }
   }
 
+  function handleMouseMove(e) {
+    updatePointer(e.clientX, e.clientY);
+  }
+
+  function handleTouchMove(e) {
+    if (e.touches && e.touches[0]) {
+      updatePointer(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }
+
   function handleMouseLeave() {
     hoveredCell = null;
   }
 </script>
 
-<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+<div class="bg-white border border-slate-200 rounded-md p-3 sm:p-4 flex flex-col gap-2.5 sm:gap-3 shadow-xs">
   <!-- Header -->
   <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
@@ -107,7 +117,7 @@
     <!-- Thermal Spectrum Legend -->
     <div class="flex items-center gap-2 text-xs font-mono text-slate-500">
       <span>MIN (0s)</span>
-      <div class="w-24 h-2 rounded-sm bg-gradient-to-r from-sky-200 via-emerald-400 via-amber-400 to-rose-500 border border-slate-200"></div>
+      <div class="w-20 sm:w-24 h-2 rounded-sm bg-gradient-to-r from-sky-200 via-emerald-400 via-amber-400 to-rose-500 border border-slate-200"></div>
       <span>MAX DWELL</span>
     </div>
   </div>
@@ -118,9 +128,12 @@
       bind:this={canvas}
       width={640}
       height={480}
-      class="w-full h-full object-contain cursor-crosshair"
+      class="w-full h-full object-contain cursor-crosshair touch-none"
       on:mousemove={handleMouseMove}
       on:mouseleave={handleMouseLeave}
+      on:touchstart={handleTouchMove}
+      on:touchmove={handleTouchMove}
+      on:touchend={handleMouseLeave}
     ></canvas>
 
     {#if isLoading}
@@ -138,7 +151,7 @@
     {/if}
   </div>
 
-  <div class="flex items-center justify-between text-xs font-mono text-slate-500 pt-1">
+  <div class="flex items-center justify-between flex-wrap gap-2 text-xs font-mono text-slate-500 pt-1">
     <span>Resolution: {heatmapData?.rows || 16} × {heatmapData?.cols || 16} cells</span>
     <span>Zero raw frames stored • Anonymized vectors only</span>
   </div>
