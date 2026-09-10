@@ -135,8 +135,14 @@ def main() -> None:
     from benchmarks.report import generate_report
     from vision.inference_backend import ONNXBackend
 
-    fp32_model = Path("models/yolo26n.onnx")
-    int8_model = Path("models/yolo26n_int8.onnx")
+    fp32_model = Path("backend/models/yolo26n.onnx")
+    if not fp32_model.is_file():
+        fp32_model = Path("models/yolo26n.onnx")
+
+    int8_model = Path("backend/models/yolo26n_int8.onnx")
+    if not int8_model.is_file():
+        int8_model = Path("models/yolo26n_int8.onnx")
+
     report_path = Path("BENCHMARK_REPORT.md")
 
     if not fp32_model.is_file():
