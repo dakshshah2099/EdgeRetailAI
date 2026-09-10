@@ -50,7 +50,7 @@ Phone (IP Webcam, RTSP) ──▶ CameraSource ──▶ Frame queue
                           ┌───────────────────────┼───────────────────────┐
                           ▼                        ▼                        ▼
                  Detection/Tracking        Shelf classifier          Queue detector
-                 (Slice 2/3, YOLOv8n)         (Slice 4)                  (Slice 5)
+                 (Slice 2/3, YOLOv26n)         (Slice 4)                  (Slice 5)
                           │                        │                        │
                           └───────────────────────┼───────────────────────┘
                                                   ▼
@@ -71,7 +71,7 @@ Phone (IP Webcam, RTSP) ──▶ CameraSource ──▶ Frame queue
   runtime to minimize agent context-switching across slices.
 - **Backend:** FastAPI + SQLite. No Postgres/Redis for POC — adds ops
   overhead with no POC benefit.
-- **Detection model:** YOLOv8n, exported ONNX, run via ONNX Runtime.
+- **Detection model:** YOLOv26n, exported ONNX, run via ONNX Runtime.
   Chosen for size/speed tradeoff suited to edge deployment.
 - **Tracking:** ByteTrack (or equivalent lightweight tracker) for person
   IDs — anonymous, frame-to-frame only, never persisted as identity.

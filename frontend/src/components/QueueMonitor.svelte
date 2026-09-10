@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   export let queueEvents = [];
   export let congestionThreshold = 4;
 
@@ -8,280 +8,93 @@
   }
 </script>
 
-<div class="queue-container">
-  <div class="queue-header">
+<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+  <!-- Header -->
+  <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
-      <h3 class="section-title">Checkout Queue Intelligence</h3>
-      <p class="section-desc">Real-time checkout counter monitoring and customer wait-time forecasting.</p>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-semibold uppercase tracking-wider text-slate-900">Checkout Queue Intelligence</span>
+        <span class="px-1.5 py-0.5 text-xs font-mono bg-sky-50 text-sky-700 border border-sky-200 rounded">
+          ACTIVE SENSORS
+        </span>
+      </div>
+      <p class="text-xs text-slate-500 font-mono mt-0.5">Real-time checkout lane wait time estimation and congestion mitigation.</p>
     </div>
-    <span class="threshold-badge">Congestion Threshold: ≥ {congestionThreshold} persons</span>
+    <span class="text-xs font-mono px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded">
+      CONGESTION THRESHOLD: ≥ {congestionThreshold} PERSONS
+    </span>
   </div>
 
-  <div class="counters-grid">
+  <!-- Counters Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
     {#if queueEvents.length === 0}
-      <div class="empty-state">No checkout counter telemetry recorded.</div>
+      <div class="col-span-full py-12 text-center text-slate-400 font-mono text-xs">
+        NO CHECKOUT COUNTER TELEMETRY DETECTED
+      </div>
     {:else}
       {#each queueEvents as item (item.counter_id)}
         {@const isCongested = item.queue_length >= congestionThreshold}
         {@const isPredCongested = !isCongested && item.predicted_queue_length != null && item.predicted_queue_length >= congestionThreshold}
-        <div class="counter-card" class:congested={isCongested} class:warning-pred={isPredCongested}>
-          <div class="counter-top">
-            <span class="counter-id">Counter: <strong>{item.counter_id}</strong></span>
+        <div class="bg-white border rounded-md p-3.5 transition-all flex flex-col justify-between gap-3 shadow-xs {isCongested ? 'border-rose-300 bg-rose-50/30' : isPredCongested ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200 hover:border-slate-300'}">
+          <!-- Top Row -->
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs text-slate-700">
+              LANE: <strong class="text-slate-900">{item.counter_id}</strong>
+            </span>
             {#if isCongested}
-              <span class="badge badge-danger">Congested</span>
+              <span class="px-2 py-0.5 text-xs font-mono uppercase bg-rose-100 text-rose-800 border border-rose-200 rounded font-semibold animate-pulse">
+                CONGESTED
+              </span>
             {:else if isPredCongested}
-              <span class="badge badge-warning">Surge Predicted</span>
+              <span class="px-2 py-0.5 text-xs font-mono uppercase bg-amber-100 text-amber-800 border border-amber-200 rounded">
+                SURGE PREDICTED
+              </span>
             {:else}
-              <span class="badge badge-normal">Optimal</span>
+              <span class="px-2 py-0.5 text-xs font-mono uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 rounded">
+                OPTIMAL
+              </span>
             {/if}
           </div>
 
-          <div class="counter-stats">
-            <div class="stat-block">
-              <span class="stat-label">Queue Length</span>
-              <span class="stat-value">{item.queue_length} <small>persons</small></span>
+          <!-- Metrics Row -->
+          <div class="grid grid-cols-2 gap-2 bg-slate-50 border border-slate-200 rounded-md p-2.5">
+            <div>
+              <span class="block text-xs font-mono uppercase text-slate-500">Queue Length</span>
+              <span class="text-xl font-mono font-semibold {isCongested ? 'text-rose-700' : 'text-slate-900'}">
+                {item.queue_length} <small class="text-xs font-normal text-slate-500">prs</small>
+              </span>
             </div>
-
-            <div class="stat-block">
-              <span class="stat-label">Est. Wait Time</span>
-              <span class="stat-value">
+            <div>
+              <span class="block text-xs font-mono uppercase text-slate-500">Est. Wait</span>
+              <span class="text-xl font-mono font-semibold {isCongested ? 'text-amber-700' : 'text-sky-700'}">
                 {item.avg_wait_est_sec != null ? `${Math.round(item.avg_wait_est_sec)}s` : 'N/A'}
               </span>
             </div>
           </div>
 
+          <!-- Forecast Banner -->
           {#if item.predicted_queue_length != null}
-            <div class="forecast-banner">
-              <span class="forecast-label">Forecast (3m):</span>
-              <span class="forecast-value">~{item.predicted_queue_length} persons ({Math.round(item.predicted_wait_sec ?? 0)}s)</span>
+            <div class="px-2 py-1 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-xs font-mono">
+              <span class="text-slate-600">Forecast (+3m):</span>
+              <span class="text-sky-800 font-semibold">~{item.predicted_queue_length} prs ({Math.round(item.predicted_wait_sec ?? 0)}s)</span>
             </div>
           {/if}
 
-          <!-- Queue progress visualization dots -->
-          <div class="queue-visual">
+          <!-- Visual Queue Track -->
+          <div class="flex items-center gap-1.5 py-1">
             {#each Array(Math.min(10, Math.max(item.queue_length, 1))) as _, i}
               <span 
-                class="person-dot" 
-                class:active={i < item.queue_length}
-                class:alert-person={isCongested && i >= congestionThreshold - 1}
+                class="flex-1 h-1.5 rounded-sm transition-all {i < item.queue_length ? (isCongested ? 'bg-rose-500' : 'bg-sky-500') : 'bg-slate-200'}"
               ></span>
             {/each}
           </div>
 
-          <div class="counter-footer">
-            <span>Last reading: {formatTime(item.timestamp)}</span>
+          <div class="text-xs font-mono text-slate-400 pt-1 border-t border-slate-100 flex justify-between">
+            <span>Edge Tracker</span>
+            <span>{formatTime(item.timestamp)}</span>
           </div>
         </div>
       {/each}
     {/if}
   </div>
 </div>
-
-<style>
-  .queue-container {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .queue-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .section-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .section-desc {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .threshold-badge {
-    font-size: 0.72rem;
-    font-family: var(--font-mono);
-    color: var(--accent-amber);
-    background: var(--accent-amber-light);
-    border: 1px solid #fde68a;
-    padding: 0.2rem 0.55rem;
-    border-radius: var(--radius-sm);
-    font-weight: 500;
-  }
-
-  .counters-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
-  }
-
-  .empty-state {
-    grid-column: 1 / -1;
-    padding: 3rem;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 0.88rem;
-  }
-
-  .counter-card {
-    background: #ffffff;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 1.15rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.85rem;
-    transition: all 0.15s ease;
-  }
-
-  .counter-card:hover {
-    box-shadow: var(--shadow-md);
-  }
-
-  .counter-card.congested {
-    border-color: #fca5a5;
-    background: #fff8f8;
-  }
-
-  .counter-card.warning-pred {
-    border-color: #fde047;
-    background: #fefce8;
-  }
-
-  .counter-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .counter-id {
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-  }
-
-  .counter-id strong {
-    color: var(--text-primary);
-  }
-
-  .badge {
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 0.15rem 0.45rem;
-    border-radius: 4px;
-    font-family: var(--font-mono);
-  }
-
-  .badge-normal {
-    background: var(--accent-green-light);
-    color: var(--accent-green);
-    border: 1px solid #a7f3d0;
-  }
-
-  .badge-danger {
-    background: var(--accent-red-light);
-    color: var(--accent-red);
-    border: 1px solid #fca5a5;
-  }
-
-  .badge-warning {
-    background: #fef9c3;
-    color: #854d0e;
-    border: 1px solid #fde047;
-  }
-
-  .forecast-banner {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #f1f5f9;
-    padding: 0.35rem 0.6rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.73rem;
-  }
-
-  .forecast-label {
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .forecast-value {
-    color: #0f766e;
-    font-weight: 600;
-    font-family: var(--font-mono);
-  }
-
-  .counter-stats {
-    display: flex;
-    justify-content: space-between;
-    background: #f8fafc;
-    padding: 0.6rem 0.85rem;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
-  }
-
-  .stat-block {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .stat-label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-  }
-
-  .stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    font-family: var(--font-mono);
-    color: var(--text-primary);
-  }
-
-  .stat-value small {
-    font-size: 0.75rem;
-    font-weight: 400;
-    color: var(--text-muted);
-  }
-
-  .queue-visual {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    padding: 0.25rem 0;
-  }
-
-  .person-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #e2e8f0;
-    border: 1px solid #cbd5e1;
-  }
-
-  .person-dot.active {
-    background: var(--accent-blue);
-    border-color: #1d4ed8;
-  }
-
-  .person-dot.alert-person {
-    background: var(--accent-red);
-    border-color: #b91c1c;
-  }
-
-  .counter-footer {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    border-top: 1px solid #f1f5f9;
-    padding-top: 0.5rem;
-  }
-</style>

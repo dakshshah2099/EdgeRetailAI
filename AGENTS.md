@@ -85,7 +85,7 @@ retail-poc/
 ## Stack (fixed for this POC — do not swap without discussion)
 
 - Python 3.11+, FastAPI, Pydantic v2, SQLite, OpenCV, ONNX Runtime
-- YOLOv8n (person/object detection) exported to ONNX
+- YOLOv26n (person/object detection) exported to ONNX
 - pytest, mypy --strict, ruff, pre-commit
 
 ## Non-negotiables

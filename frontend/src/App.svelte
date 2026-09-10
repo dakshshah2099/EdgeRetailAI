@@ -1,14 +1,16 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
-  import Header from './components/Header.svelte';
-  import KPICard from './components/KPICard.svelte';
-  import HeatmapCanvas from './components/HeatmapCanvas.svelte';
-  import LiveCameraFeed from './components/LiveCameraFeed.svelte';
-  import AlertsFeed from './components/AlertsFeed.svelte';
-  import FootfallChart from './components/FootfallChart.svelte';
-  import QueueMonitor from './components/QueueMonitor.svelte';
-  import StockInventory from './components/StockInventory.svelte';
-  import DebugControlPanel from './components/DebugControlPanel.svelte';
+  import { onMount, onDestroy } from "svelte";
+  import page from "page";
+  import Header from "./components/Header.svelte";
+  import Sidebar from "./components/Sidebar.svelte";
+  import KPICard from "./components/KPICard.svelte";
+  import HeatmapCanvas from "./components/HeatmapCanvas.svelte";
+  import LiveCameraFeed from "./components/LiveCameraFeed.svelte";
+  import AlertsFeed from "./components/AlertsFeed.svelte";
+  import FootfallChart from "./components/FootfallChart.svelte";
+  import QueueMonitor from "./components/QueueMonitor.svelte";
+  import StockInventory from "./components/StockInventory.svelte";
+  import DebugControlPanel from "./components/DebugControlPanel.svelte";
   import {
     fetchKPIFootfall,
     fetchKPIQueue,
@@ -17,7 +19,7 @@
     fetchHeatmap,
     fetchSystemEnv,
     checkHealth,
-  } from './lib/api.js';
+  } from "./lib/api.js";
 
   // App State
   let isConnected = false;
@@ -26,15 +28,19 @@
   let autoRefresh = true;
   let refreshIntervalSec = 3;
   let refreshTimer = null;
+  let isSidebarCollapsed = false;
 
   // Settings & System Env
   let envVariables = {};
 
   // Filters
-  let selectedTimeRange = 'all';
-  let selectedZone = '';
-  let groupBy = 'hour';
-  let alertFilter = 'open';
+  let selectedTimeRange = "all";
+  let selectedZone = "";
+  let groupBy = "hour";
+  let alertFilter = "open";
+
+  // Camera Feed Page Subpanel Tab
+  let cameraSideTab = "alerts"; // 'alerts' | 'telemetry'
 
   // Data Store
   let footfallData = null;
@@ -43,14 +49,80 @@
   let alertsData = [];
   let heatmapData = null;
 
-  // Active Main Tab
-  let activeTab = 'camera'; // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'settings'
+  // Active Route Identifier
+  let activeTab = "camera"; // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'settings'
+
+  const validRoutes = ["camera", "heatmap", "footfall", "queues", "stock", "alerts", "settings"];
+
+  const routeMeta = {
+    camera: {
+      title: "Live Camera Stream",
+      category: "Live Vision",
+      desc: "Real-time RTSP ingest, YOLOv26n inference & interactive ROI calibration",
+    },
+    heatmap: {
+      title: "Customer Dwell Heatmap",
+      category: "Live Vision",
+      desc: "Spatial dwell distribution and customer attention density mapping",
+    },
+    footfall: {
+      title: "Footfall Traffic Trends",
+      category: "Store Intelligence",
+      desc: "Store entry/exit flow, net occupancy, and peak-hour accumulation",
+    },
+    queues: {
+      title: "Checkout Queue Intelligence",
+      category: "Store Intelligence",
+      desc: "Register line length, customer dwell time, and congestion monitoring",
+    },
+    stock: {
+      title: "Shelf Inventory & Depletions",
+      category: "Store Intelligence",
+      desc: "Visual shelf out-of-stock monitoring and low stock replenishment triggers",
+    },
+    alerts: {
+      title: "Operations Incident Log",
+      category: "Operations",
+      desc: "Real-time alert triage, status filtering, and incident resolution",
+    },
+    settings: {
+      title: "Edge Node Configuration",
+      category: "Operations",
+      desc: "Runtime inference parameters, video sources, and camera hyperparameters",
+    },
+  };
+
+  $: if (typeof document !== "undefined" && routeMeta[activeTab]) {
+    document.title = `${routeMeta[activeTab].title} — EdgeRetail AI`;
+  }
+
+  function setupRouting() {
+    page("/", () => {
+      activeTab = "camera";
+    });
+
+    validRoutes.forEach((route) => {
+      page(`/${route}`, () => {
+        activeTab = route;
+      });
+    });
+
+    page("*", () => {
+      activeTab = "camera";
+    });
+
+    page.start({ hashbang: true });
+  }
+
+  function navigateTo(tab) {
+    page(`/${tab}`);
+  }
 
   function getSinceISO(range) {
     const now = new Date();
-    if (range === '1h') return new Date(now.getTime() - 3600 * 1000).toISOString();
-    if (range === '6h') return new Date(now.getTime() - 6 * 3600 * 1000).toISOString();
-    if (range === '24h') return new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
+    if (range === "1h") return new Date(now.getTime() - 3600 * 1000).toISOString();
+    if (range === "6h") return new Date(now.getTime() - 6 * 3600 * 1000).toISOString();
+    if (range === "24h") return new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
     return null;
   }
 
@@ -73,27 +145,27 @@
         fetchSystemEnv(),
       ]);
 
-      isConnected = healthy.status === 'fulfilled' && healthy.value;
-      if (footfall.status === 'fulfilled') footfallData = footfall.value;
-      if (queue.status === 'fulfilled') queueData = queue.value;
-      if (stock.status === 'fulfilled') stockData = stock.value;
-      if (alerts.status === 'fulfilled') alertsData = alerts.value;
-      if (heatmap.status === 'fulfilled') heatmapData = heatmap.value;
-      if (sysEnv.status === 'fulfilled') {
+      isConnected = healthy.status === "fulfilled" && healthy.value;
+      if (footfall.status === "fulfilled") footfallData = footfall.value;
+      if (queue.status === "fulfilled") queueData = queue.value;
+      if (stock.status === "fulfilled") stockData = stock.value;
+      if (alerts.status === "fulfilled") alertsData = alerts.value;
+      if (heatmap.status === "fulfilled") heatmapData = heatmap.value;
+      if (sysEnv.status === "fulfilled") {
         envVariables = sysEnv.value.variables;
       }
 
       lastUpdated = new Date();
     } catch (err) {
-      console.error('Failed to load dashboard data:', err);
+      console.error("Failed to load dashboard data:", err);
       isConnected = false;
     } finally {
       isRefreshing = false;
     }
   }
 
-  function handleOpenSettings() {
-    activeTab = activeTab === 'settings' ? 'camera' : 'settings';
+  function handleToggleSidebar() {
+    isSidebarCollapsed = !isSidebarCollapsed;
   }
 
   function handleEnvSaved(res) {
@@ -113,11 +185,13 @@
   $: autoRefresh, refreshIntervalSec, setupPolling();
 
   onMount(() => {
+    setupRouting();
     loadAllData();
     setupPolling();
   });
 
   onDestroy(() => {
+    page.stop();
     if (refreshTimer) clearInterval(refreshTimer);
   });
 
@@ -126,210 +200,250 @@
   $: totalEnters = footfallData ? footfallData.total_enters : 0;
   $: totalExits = footfallData ? footfallData.total_exits : 0;
   $: maxQueueLength = queueData.length ? Math.max(...queueData.map((q) => q.queue_length)) : 0;
-  $: lowStockShelves = stockData.filter((s) => s.status === 'empty' || s.status === 'low').length;
+  $: lowStockShelves = stockData.filter((s) => s.status === "empty" || s.status === "low").length;
   $: openAlertsCount = alertsData.filter((a) => !a.resolved_at).length;
 </script>
 
-<Header
-  {isConnected}
-  {lastUpdated}
-  {isRefreshing}
-  {activeTab}
-  bind:autoRefresh
-  bind:refreshInterval={refreshIntervalSec}
-  bind:selectedTimeRange
-  bind:selectedZone
-  onRefresh={loadAllData}
-  onOpenSettings={handleOpenSettings}
-/>
+<div class="h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 flex font-sans">
+  <!-- Left Persistent Navigation Sidebar -->
+  <Sidebar
+    {activeTab}
+    queueCount={queueData.length}
+    stockCount={stockData.length}
+    alertsCount={openAlertsCount}
+    isCollapsed={isSidebarCollapsed}
+    onSelectTab={navigateTo}
+    onToggleCollapse={handleToggleSidebar}
+  />
 
-<main class="dashboard-main">
-  <!-- Top KPI Metric Summary Cards -->
-  <section class="kpi-grid">
-    <KPICard
-      title="Current Occupancy"
-      value={occupancy.toString()}
-      subtitle={`Enters: ${totalEnters} • Exits: ${totalExits}`}
-      icon="occupancy"
-      tag="Live"
-      status={occupancy > 30 ? 'warning' : 'normal'}
+  <!-- Main Viewport Area -->
+  <div class="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+    <!-- Top Operational Header -->
+    <Header
+      {isConnected}
+      {lastUpdated}
+      {isRefreshing}
+      bind:autoRefresh
+      bind:refreshInterval={refreshIntervalSec}
+      bind:selectedTimeRange
+      bind:selectedZone
+      onRefresh={loadAllData}
     />
 
-    <KPICard
-      title="Total Footfall"
-      value={totalEnters.toString()}
-      subtitle="Cumulative recorded enters"
-      icon="footfall"
-      tag="Cumulative"
-      status="normal"
-    />
+    <main class="flex-1 p-4 max-w-[1720px] w-full mx-auto flex flex-col gap-3 overflow-y-auto">
+      <!-- Telemetry Readout Grid -->
+      <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        <KPICard
+          title="Occupancy"
+          value={occupancy.toString()}
+          subtitle={`IN: ${totalEnters} • OUT: ${totalExits}`}
+          icon="occupancy"
+          tag="REALTIME"
+          status={occupancy > 30 ? "warning" : "normal"}
+        />
 
-    <KPICard
-      title="Peak Queue Length"
-      value={`${maxQueueLength} persons`}
-      subtitle={`${queueData.length} checkout counters active`}
-      icon="queue"
-      tag={maxQueueLength >= 4 ? 'Congested' : 'Optimal'}
-      status={maxQueueLength >= 4 ? 'danger' : 'success'}
-    />
+        <KPICard
+          title="Footfall"
+          value={totalEnters.toString()}
+          subtitle="Cumulative window enters"
+          icon="footfall"
+          tag="CUMULATIVE"
+          status="normal"
+        />
 
-    <KPICard
-      title="Stock Depletions"
-      value={`${lowStockShelves} low/empty`}
-      subtitle={`Across ${stockData.length} monitored shelves`}
-      icon="stock"
-      tag={lowStockShelves > 0 ? 'Action Needed' : 'Optimal'}
-      status={lowStockShelves > 0 ? 'warning' : 'success'}
-    />
+        <KPICard
+          title="Max Queue"
+          value={`${maxQueueLength}`}
+          subtitle={`${queueData.length} counters monitored`}
+          icon="queue"
+          tag={maxQueueLength >= 4 ? "CONGESTED" : "OPTIMAL"}
+          status={maxQueueLength >= 4 ? "danger" : "success"}
+        />
 
-    <KPICard
-      title="Active Alerts"
-      value={openAlertsCount.toString()}
-      subtitle="Unresolved system notices"
-      icon="alerts"
-      tag={openAlertsCount > 0 ? 'Active' : 'Clear'}
-      status={openAlertsCount > 0 ? 'danger' : 'success'}
-    />
-  </section>
+        <KPICard
+          title="Depletions"
+          value={`${lowStockShelves}`}
+          subtitle={`Across ${stockData.length} active shelves`}
+          icon="stock"
+          tag={lowStockShelves > 0 ? "ATTENTION" : "STOCKED"}
+          status={lowStockShelves > 0 ? "warning" : "success"}
+        />
 
-  <!-- Navigation View Tabs -->
-  <div class="view-tabs">
-    <button class="view-tab" class:active={activeTab === 'camera'} on:click={() => activeTab = 'camera'}>
-      Live Camera Feed
-    </button>
-    <button class="view-tab" class:active={activeTab === 'heatmap'} on:click={() => activeTab = 'heatmap'}>
-      Traffic Heatmap
-    </button>
-    <button class="view-tab" class:active={activeTab === 'footfall'} on:click={() => activeTab = 'footfall'}>
-      Footfall Trends
-    </button>
-    <button class="view-tab" class:active={activeTab === 'queues'} on:click={() => activeTab = 'queues'}>
-      Checkout Queues ({queueData.length})
-    </button>
-    <button class="view-tab" class:active={activeTab === 'stock'} on:click={() => activeTab = 'stock'}>
-      Shelf Stock ({stockData.length})
-    </button>
-    <button class="view-tab" class:active={activeTab === 'alerts'} on:click={() => activeTab = 'alerts'}>
-      Alert Log ({alertsData.length})
-    </button>
-    <button class="view-tab settings-tab" class:active={activeTab === 'settings'} on:click={() => activeTab = 'settings'}>
-      Settings
-    </button>
+        <KPICard
+          title="Alert Stack"
+          value={openAlertsCount.toString()}
+          subtitle="Unresolved triage items"
+          icon="alerts"
+          tag={openAlertsCount > 0 ? "ALERTING" : "SECURE"}
+          status={openAlertsCount > 0 ? "danger" : "success"}
+        />
+      </section>
+
+      <!-- Dedicated Route Context Banner -->
+      <div class="flex items-center justify-between flex-wrap gap-2 px-1 pt-0.5">
+        <div class="flex items-center gap-2 text-xs font-mono">
+          <span class="text-slate-500 uppercase">{routeMeta[activeTab]?.category || "Vision"}</span>
+          <span class="text-slate-300">/</span>
+          <h1 class="text-sm font-semibold text-slate-900">{routeMeta[activeTab]?.title || "Dashboard"}</h1>
+        </div>
+        <p class="text-xs text-slate-500 font-sans hidden sm:block">
+          {routeMeta[activeTab]?.desc || ""}
+        </p>
+      </div>
+
+      <!-- Primary Stage Viewport: Dedicated Routed Views -->
+      <section class="flex-1 min-h-[460px]">
+        {#if activeTab === "camera"}
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
+            <div class="lg:col-span-2">
+              <LiveCameraFeed {isConnected} />
+            </div>
+            <div class="lg:col-span-1 flex flex-col gap-2.5">
+              <!-- Camera Page Subpanel Switcher -->
+              <div class="flex items-center bg-white border border-slate-200 rounded-md p-1 shadow-xs">
+                {#if cameraSideTab === "alerts"}
+                  <button
+                    type="button"
+                    class="flex-1 py-1 px-2 text-xs font-mono rounded bg-sky-50 text-sky-900 border border-sky-300 font-semibold cursor-pointer transition-colors"
+                    on:click={() => cameraSideTab = "alerts"}
+                  >
+                    INCIDENTS ({openAlertsCount})
+                  </button>
+                  <button
+                    type="button"
+                    class="flex-1 py-1 px-2 text-xs font-mono rounded text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent cursor-pointer transition-colors"
+                    on:click={() => cameraSideTab = "telemetry"}
+                  >
+                    STREAM TELEMETRY
+                  </button>
+                {:else}
+                  <button
+                    type="button"
+                    class="flex-1 py-1 px-2 text-xs font-mono rounded text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent cursor-pointer transition-colors"
+                    on:click={() => cameraSideTab = "alerts"}
+                  >
+                    INCIDENTS ({openAlertsCount})
+                  </button>
+                  <button
+                    type="button"
+                    class="flex-1 py-1 px-2 text-xs font-mono rounded bg-sky-50 text-sky-900 border border-sky-300 font-semibold cursor-pointer transition-colors"
+                    on:click={() => cameraSideTab = "telemetry"}
+                  >
+                    STREAM TELEMETRY
+                  </button>
+                {/if}
+              </div>
+
+              {#if cameraSideTab === "alerts"}
+                <AlertsFeed 
+                  alerts={alertsData} 
+                  activeFilter={alertFilter} 
+                  onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
+                />
+              {:else}
+                <!-- Stream Diagnostics & Telemetry Card -->
+                <div class="bg-white border border-slate-200 rounded-md shadow-xs p-4 flex flex-col gap-3 font-mono text-xs">
+                  <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                    <span class="font-semibold text-slate-900 uppercase">Camera Ingest Telemetry</span>
+                    <span class="px-2 py-0.5 rounded border text-xs {isConnected ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}">
+                      {isConnected ? 'FEED ACTIVE' : 'FEED OFFLINE'}
+                    </span>
+                  </div>
+
+                  <div class="space-y-2.5">
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">Video Ingest Source</span>
+                      <span class="text-slate-800 font-semibold truncate max-w-[180px]" title={envVariables.VIDEO_SOURCE || "0 (USB Camera / RTSP)"}>
+                        {envVariables.VIDEO_SOURCE || "0 (Default Camera)"}
+                      </span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">Inference Backend</span>
+                      <span class="text-sky-800 font-semibold">ONNX Runtime (YOLOv26n)</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">Target Resolution</span>
+                      <span class="text-slate-800">640 × 640 Letterbox</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">Detection Confidence</span>
+                      <span class="text-slate-800 font-semibold">{envVariables.YOLO_CONF_THRESHOLD || "0.40"}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">NMS IoU Threshold</span>
+                      <span class="text-slate-800 font-semibold">{envVariables.YOLO_IOU_THRESHOLD || "0.45"}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">Queue Congestion Level</span>
+                      <span class="text-amber-800 font-semibold">≥ {envVariables.QUEUE_CONGESTION_THRESHOLD || "4"} persons</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1 border-b border-slate-100">
+                      <span class="text-slate-500">Depletion Warning Level</span>
+                      <span class="text-rose-800 font-semibold">≤ {envVariables.STOCK_LOW_THRESHOLD || "3"} units</span>
+                    </div>
+
+                    <div class="flex items-center justify-between py-1">
+                      <span class="text-slate-500">Privacy & PII Policy</span>
+                      <span class="text-emerald-700 font-semibold">In-Memory / Zero Disk</span>
+                    </div>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-slate-400 text-xs">Need to change source or thresholds?</span>
+                    <button
+                      type="button"
+                      class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 cursor-pointer transition-colors"
+                      on:click={() => navigateTo("settings")}
+                    >
+                      Open Config →
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {:else if activeTab === "heatmap"}
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
+            <div class="lg:col-span-2">
+              <HeatmapCanvas {heatmapData} isLoading={isRefreshing} />
+            </div>
+            <div class="lg:col-span-1">
+              <AlertsFeed 
+                alerts={alertsData} 
+                activeFilter={alertFilter} 
+                onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
+              />
+            </div>
+          </div>
+        {:else if activeTab === "footfall"}
+          <FootfallChart 
+            {footfallData} 
+            {groupBy} 
+            onGroupByChange={(gb) => { groupBy = gb; loadAllData(); }} 
+          />
+        {:else if activeTab === "queues"}
+          <QueueMonitor queueEvents={queueData} congestionThreshold={4} />
+        {:else if activeTab === "stock"}
+          <StockInventory stockEvents={stockData} />
+        {:else if activeTab === "alerts"}
+          <AlertsFeed 
+            alerts={alertsData} 
+            activeFilter={alertFilter} 
+            onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
+          />
+        {:else if activeTab === "settings"}
+          <DebugControlPanel 
+            {envVariables} 
+            onSave={handleEnvSaved} 
+          />
+        {/if}
+      </section>
+    </main>
   </div>
-
-  <!-- Primary Analytics Content Area -->
-  <section class="content-view">
-    {#if activeTab === 'camera'}
-      <div class="grid-2col">
-        <LiveCameraFeed {isConnected} />
-        <AlertsFeed 
-          alerts={alertsData} 
-          activeFilter={alertFilter} 
-          onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
-        />
-      </div>
-    {:else if activeTab === 'heatmap'}
-      <div class="grid-2col">
-        <HeatmapCanvas {heatmapData} isLoading={isRefreshing} />
-        <AlertsFeed 
-          alerts={alertsData} 
-          activeFilter={alertFilter} 
-          onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
-        />
-      </div>
-    {:else if activeTab === 'footfall'}
-      <FootfallChart 
-        {footfallData} 
-        {groupBy} 
-        onGroupByChange={(gb) => { groupBy = gb; loadAllData(); }} 
-      />
-    {:else if activeTab === 'queues'}
-      <QueueMonitor queueEvents={queueData} congestionThreshold={4} />
-    {:else if activeTab === 'stock'}
-      <StockInventory stockEvents={stockData} />
-    {:else if activeTab === 'alerts'}
-      <AlertsFeed 
-        alerts={alertsData} 
-        activeFilter={alertFilter} 
-        onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
-      />
-    {:else if activeTab === 'settings'}
-      <DebugControlPanel 
-        {envVariables} 
-        onSave={handleEnvSaved} 
-      />
-    {/if}
-  </section>
-</main>
-
-<style>
-  .dashboard-main {
-    flex: 1;
-    padding: 1.5rem 2rem 3rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    max-width: 1600px;
-    width: 100%;
-    margin: 0 auto;
-  }
-
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-  }
-
-  .view-tabs {
-    display: flex;
-    gap: 0.35rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
-    overflow-x: auto;
-  }
-
-  .view-tab {
-    padding: 0.5rem 1rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    border-radius: var(--radius-sm);
-    transition: all 0.15s ease;
-    white-space: nowrap;
-    border: 1px solid transparent;
-  }
-
-  .view-tab:hover {
-    color: var(--text-primary);
-    background: #ffffff;
-  }
-
-  .view-tab.active {
-    background: var(--accent-blue);
-    color: #ffffff;
-    box-shadow: var(--shadow-sm);
-    font-weight: 600;
-  }
-
-  .view-tab.settings-tab {
-    margin-left: auto;
-  }
-
-  .content-view {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .grid-2col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-  }
-
-  @media (max-width: 1024px) {
-    .grid-2col {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
+</div>

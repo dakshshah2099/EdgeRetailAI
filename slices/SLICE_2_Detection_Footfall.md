@@ -22,10 +22,10 @@ produces the raw events; aggregation into trends happens in Slice 8).
 ```
 detection/__init__.py
 detection/inference_backend.py   # InferenceBackend interface + ONNXBackend impl
-detection/detector.py             # YOLOv8n wrapper producing raw bboxes
+detection/detector.py             # YOLOv26n wrapper producing raw bboxes
 detection/tracker.py               # ByteTrack (or equivalent) wrapper, assigns track_id
 detection/footfall.py               # line-crossing / zone-entry logic -> DetectionEvent
-models/yolov8n.onnx                  # pretrained, exported — do not train from scratch
+models/yolov26n.onnx                  # pretrained, exported — do not train from scratch
 tests/unit/test_detector.py
 tests/unit/test_tracker.py
 tests/unit/test_footfall.py
@@ -132,9 +132,9 @@ def process_frame(
 
 ## Agent prompt seed
 
-> Implement `InferenceBackend`/`ONNXBackend`, the YOLOv8n person detector,
+> Implement `InferenceBackend`/`ONNXBackend`, the YOLOv26n person detector,
 > a tracker, and footfall zone-crossing logic exactly per
-> `slices/SLICE_2_detection_footfall.md`. Use a pretrained YOLOv8n ONNX
+> `slices/SLICE_2_detection_footfall.md`. Use a pretrained YOLOv26n ONNX
 > export (download or export one — do not train from scratch; state where
 > the model file came from). Keep `InferenceBackend` genuinely thin so a
 > `TensorRTBackend` could be added later by only adding a new file, never

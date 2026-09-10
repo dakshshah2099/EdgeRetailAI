@@ -23,294 +23,112 @@
   }
 </script>
 
-<div class="chart-container">
-  <div class="chart-header">
+<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+  <!-- Header -->
+  <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
-      <h3 class="section-title">Footfall Traffic Analytics</h3>
-      <p class="section-desc">Temporal distribution of customer enters, exits, and in-store occupancy.</p>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-semibold uppercase tracking-wider text-slate-900">Footfall Traffic Analytics</span>
+        <span class="px-1.5 py-0.5 text-xs font-mono bg-sky-50 text-sky-700 border border-sky-200 rounded">
+          BYTE-TRACK
+        </span>
+      </div>
+      <p class="text-xs text-slate-500 font-mono mt-0.5">Temporal customer movement, directional lines, and net store occupancy.</p>
     </div>
 
-    <div class="group-toggle">
+    <!-- Aggregation Toggle -->
+    <div class="flex items-center bg-slate-100 border border-slate-200 rounded-md p-0.5">
       <button 
         type="button"
-        class="toggle-btn" 
-        class:active={groupBy === 'none'} 
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'none' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
         on:click={() => onGroupByChange('none')}
       >
-        Summary
+        SUMMARY
       </button>
       <button 
         type="button"
-        class="toggle-btn" 
-        class:active={groupBy === 'hour'} 
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'hour' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
         on:click={() => onGroupByChange('hour')}
       >
-        Hourly
+        HOURLY
       </button>
       <button 
         type="button"
-        class="toggle-btn" 
-        class:active={groupBy === 'day'} 
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'day' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
         on:click={() => onGroupByChange('day')}
       >
-        Daily
+        DAILY
       </button>
     </div>
   </div>
 
   {#if !footfallData}
-    <div class="placeholder">Loading footfall statistics...</div>
-  {:else if footfallData.buckets && footfallData.buckets.length > 0}
-    {@const maxVal = getMaxBucketCount(footfallData.buckets)}
-    <div class="chart-body">
-      <div class="bars-container">
-        {#each footfallData.buckets as bucket}
-          <div class="bar-group">
-            <div class="bars-column">
-              <div 
-                class="bar enter-bar" 
-                style="height: {Math.max(4, (bucket.enters / maxVal) * 160)}px;"
-                title="Enters: {bucket.enters}"
-              ></div>
-              <div 
-                class="bar exit-bar" 
-                style="height: {Math.max(4, (bucket.exits / maxVal) * 160)}px;"
-                title="Exits: {bucket.exits}"
-              ></div>
-            </div>
-            <span class="bar-label">{formatBucketTime(bucket.bucket_start)}</span>
-          </div>
-        {/each}
-      </div>
-
-      <div class="chart-legend">
-        <div class="legend-item">
-          <span class="legend-dot enter-dot"></span>
-          <span>Enters ({footfallData.total_enters})</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-dot exit-dot"></span>
-          <span>Exits ({footfallData.total_exits})</span>
-        </div>
-        <div class="legend-item net-info">
-          <span>Net Occupancy: <strong>{footfallData.net_occupancy}</strong></span>
-        </div>
-      </div>
+    <div class="py-16 text-center text-slate-400 font-mono text-xs">
+      NO FOOTFALL TELEMETRY AVAILABLE
     </div>
   {:else}
-    <div class="summary-card">
-      <div class="summary-metrics">
-        <div class="sum-item">
-          <span class="sum-val text-green">{footfallData.total_enters}</span>
-          <span class="sum-lbl">Total Enters</span>
+    <!-- Summary Metrics Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+        <span class="block text-xs font-mono uppercase text-slate-500">Total Ingress</span>
+        <span class="text-xl font-mono font-semibold text-emerald-700">+{footfallData.total_enters}</span>
+      </div>
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+        <span class="block text-xs font-mono uppercase text-slate-500">Total Egress</span>
+        <span class="text-xl font-mono font-semibold text-rose-700">-{footfallData.total_exits}</span>
+      </div>
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+        <span class="block text-xs font-mono uppercase text-slate-500">Net Occupancy</span>
+        <span class="text-xl font-mono font-semibold text-sky-700">{footfallData.net_occupancy}</span>
+      </div>
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-3">
+        <span class="block text-xs font-mono uppercase text-slate-500">Time Window</span>
+        <span class="text-xs font-mono text-slate-700 truncate block mt-1">
+          {#if footfallData.since}
+            Since {new Date(footfallData.since).toLocaleTimeString()}
+          {:else}
+            All-Time Accumulation
+          {/if}
+        </span>
+      </div>
+    </div>
+
+    <!-- Bucket Bars Chart -->
+    {#if footfallData.buckets && footfallData.buckets.length > 0}
+      {@const maxCount = getMaxBucketCount(footfallData.buckets)}
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-3.5 flex flex-col gap-3">
+        <div class="flex items-center justify-between text-xs font-mono text-slate-600">
+          <span>Directional Traffic Flow Distribution</span>
+          <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span> Ingress (Enters)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-600"></span> Egress (Exits)</span>
+          </div>
         </div>
-        <div class="sum-item">
-          <span class="sum-val text-red">{footfallData.total_exits}</span>
-          <span class="sum-lbl">Total Exits</span>
-        </div>
-        <div class="sum-item">
-          <span class="sum-val text-blue">{footfallData.net_occupancy}</span>
-          <span class="sum-lbl">Current In-Store Occupancy</span>
+
+        <div class="flex items-end gap-2 h-44 pt-4 border-b border-slate-200 overflow-x-auto">
+          {#each footfallData.buckets as bucket}
+            <div class="flex-1 min-w-[28px] max-w-[48px] h-full flex flex-col justify-end items-center gap-1 group relative">
+              <div class="w-full flex items-end justify-center gap-0.5 h-full">
+                <!-- Enters Bar -->
+                <div 
+                  class="w-1/2 bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-sm"
+                  style="height: {Math.max(4, (bucket.enters / maxCount) * 100)}%;"
+                  title="Enters: {bucket.enters}"
+                ></div>
+                <!-- Exits Bar -->
+                <div 
+                  class="w-1/2 bg-rose-500 hover:bg-rose-600 transition-all rounded-t-sm"
+                  style="height: {Math.max(4, (bucket.exits / maxCount) * 100)}%;"
+                  title="Exits: {bucket.exits}"
+                ></div>
+              </div>
+              <span class="text-xs font-mono text-slate-500 transform -rotate-45 origin-top-left mt-1 whitespace-nowrap">
+                {formatBucketTime(bucket.bucket)}
+              </span>
+            </div>
+          {/each}
         </div>
       </div>
-      <p class="sum-note">Select "Hourly" or "Daily" grouping to visualize temporal traffic charts.</p>
-    </div>
+    {/if}
   {/if}
 </div>
-
-<style>
-  .chart-container {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .section-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .section-desc {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .group-toggle {
-    display: flex;
-    background: #f1f5f9;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: 0.2rem;
-  }
-
-  .toggle-btn {
-    padding: 0.3rem 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    transition: all 0.15s ease;
-  }
-
-  .toggle-btn.active {
-    background: #ffffff;
-    color: var(--accent-blue);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .chart-body {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .bars-container {
-    display: flex;
-    align-items: flex-end;
-    gap: 1rem;
-    height: 190px;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-    overflow-x: auto;
-  }
-
-  .bar-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    flex: 1;
-    min-width: 48px;
-  }
-
-  .bars-column {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    height: 160px;
-  }
-
-  .bar {
-    width: 14px;
-    border-radius: 3px 3px 0 0;
-  }
-
-  .enter-bar {
-    background: var(--accent-green);
-  }
-
-  .exit-bar {
-    background: var(--accent-red);
-  }
-
-  .bar-label {
-    font-size: 0.72rem;
-    font-family: var(--font-mono);
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-
-  .chart-legend {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    padding-top: 0.25rem;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-
-  .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-  }
-
-  .enter-dot {
-    background: var(--accent-green);
-  }
-
-  .exit-dot {
-    background: var(--accent-red);
-  }
-
-  .net-info {
-    margin-left: auto;
-    font-family: var(--font-mono);
-  }
-
-  .net-info strong {
-    color: var(--accent-blue);
-  }
-
-  .summary-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-    padding: 2.5rem 1rem;
-    background: #f8fafc;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-  }
-
-  .summary-metrics {
-    display: flex;
-    gap: 3.5rem;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .sum-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .sum-val {
-    font-size: 2.2rem;
-    font-weight: 700;
-    font-family: var(--font-mono);
-  }
-
-  .sum-lbl {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .text-green { color: var(--accent-green); }
-  .text-red { color: var(--accent-red); }
-  .text-blue { color: var(--accent-blue); }
-
-  .sum-note {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .placeholder {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    padding: 2rem;
-    text-align: center;
-  }
-</style>

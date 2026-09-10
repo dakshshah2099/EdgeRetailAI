@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   import { onMount } from 'svelte';
 
   export let heatmapData = null;
@@ -14,19 +14,19 @@
   function getHeatColor(val, max) {
     if (val <= 0 || max <= 0) return '#f8fafc';
     const ratio = Math.min(1.0, val / max);
-    // Smooth thermal gradient: light-blue -> green -> yellow -> bright orange -> crimson
+    // Crisp light thermal spectrum: light-sky -> emerald -> amber -> deep-crimson
     if (ratio < 0.25) {
       const t = ratio / 0.25;
-      return `rgb(${Math.round(224 * (1 - t) + 147 * t)}, ${Math.round(242 * (1 - t) + 197 * t)}, ${Math.round(254 * (1 - t) + 253 * t)})`;
+      return `rgba(56, 189, 248, ${0.2 + 0.3 * t})`; // Sky blue
     } else if (ratio < 0.5) {
       const t = (ratio - 0.25) / 0.25;
-      return `rgb(${Math.round(147 * (1 - t) + 110 * t)}, ${Math.round(197 * (1 - t) + 231 * t)}, ${Math.round(253 * (1 - t) + 183 * t)})`;
+      return `rgba(16, 185, 129, ${0.4 + 0.3 * t})`; // Emerald
     } else if (ratio < 0.75) {
       const t = (ratio - 0.5) / 0.25;
-      return `rgb(${Math.round(110 * (1 - t) + 251 * t)}, ${Math.round(231 * (1 - t) + 191 * t)}, ${Math.round(183 * (1 - t) + 36 * t)})`;
+      return `rgba(245, 158, 11, ${0.6 + 0.3 * t})`; // Amber
     } else {
       const t = (ratio - 0.75) / 0.25;
-      return `rgb(${Math.round(251 * (1 - t) + 220 * t)}, ${Math.round(191 * (1 - t) + 38 * t)}, ${Math.round(36 * (1 - t) + 38 * t)})`;
+      return `rgba(225, 29, 72, ${0.75 + 0.25 * t})`; // Crimson
     }
   }
 
@@ -50,222 +50,96 @@
     const cellW = canvas.width / cols;
     const cellH = canvas.height / rows;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Draw Heat Cells
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const val = grid[r] ? grid[r][c] || 0 : 0;
         ctx.fillStyle = getHeatColor(val, maxVal);
         ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
 
-        ctx.strokeStyle = '#e2e8f0';
+        // Technical gridlines
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.8)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(c * cellW, r * cellH, cellW, cellH);
       }
     }
-
-    if (hoveredCell && hoveredCell.r < rows && hoveredCell.c < cols) {
-      ctx.strokeStyle = '#2563eb';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(hoveredCell.c * cellW, hoveredCell.r * cellH, cellW, cellH);
-    }
   }
 
   function handleMouseMove(e) {
-    if (!canvas || !heatmapData) return;
+    if (!canvas || !heatmapData || !heatmapData.grid) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const { rows, cols, grid, cell_size } = heatmapData;
-    const cellW = rect.width / cols;
-    const cellH = rect.height / rows;
+    const { rows, cols, grid } = heatmapData;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
 
-    const col = Math.floor(x / cellW);
-    const row = Math.floor(y / cellH);
+    const c = Math.floor((x * scaleX) / (canvas.width / cols));
+    const r = Math.floor((y * scaleY) / (canvas.height / rows));
 
-    if (row >= 0 && row < rows && col >= 0 && col < cols) {
-      const val = grid[row] ? grid[row][col] || 0 : 0;
-      hoveredCell = {
-        r: row,
-        c: col,
-        val,
-        x: Math.round(col * cell_size),
-        y: Math.round(row * cell_size),
-      };
-      drawHeatmap();
+    if (r >= 0 && r < rows && c >= 0 && c < cols) {
+      hoveredCell = { row: r, col: c, dwell_seconds: grid[r] ? grid[r][c] || 0 : 0 };
     }
   }
 
   function handleMouseLeave() {
     hoveredCell = null;
-    drawHeatmap();
   }
-
-  onMount(() => {
-    drawHeatmap();
-  });
 </script>
 
-<div class="heatmap-container">
-  <div class="heatmap-header">
+<div class="bg-white border border-slate-200 rounded-md p-4 flex flex-col gap-3 shadow-xs">
+  <!-- Header -->
+  <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
     <div>
-      <h3 class="section-title">Traffic & Dwell Heatmap</h3>
-      <p class="section-desc">2D numeric accumulation of customer positions across the monitored camera viewport.</p>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-semibold uppercase tracking-wider text-slate-900">Spatial Dwell Heatmap</span>
+        <span class="px-1.5 py-0.5 text-xs font-mono bg-sky-50 text-sky-700 border border-sky-200 rounded">
+          SPATIAL ROI
+        </span>
+      </div>
+      <p class="text-xs text-slate-500 font-mono mt-0.5">Aggregated dwell time density across camera tracking perspective.</p>
     </div>
-    {#if heatmapData}
-      <div class="meta-badges">
-        <span class="meta-badge">Grid: {heatmapData.rows}×{heatmapData.cols} ({heatmapData.cell_size}px)</span>
-        <span class="meta-badge">Points: {heatmapData.total_points}</span>
-        <span class="meta-badge">Viewport: {heatmapData.width}×{heatmapData.height}</span>
+
+    <!-- Thermal Spectrum Legend -->
+    <div class="flex items-center gap-2 text-xs font-mono text-slate-500">
+      <span>MIN (0s)</span>
+      <div class="w-24 h-2 rounded-sm bg-gradient-to-r from-sky-200 via-emerald-400 via-amber-400 to-rose-500 border border-slate-200"></div>
+      <span>MAX DWELL</span>
+    </div>
+  </div>
+
+  <!-- Heatmap Canvas Stage -->
+  <div class="relative w-full aspect-video bg-slate-50 border border-slate-200 rounded-md overflow-hidden flex items-center justify-center">
+    <canvas
+      bind:this={canvas}
+      width={640}
+      height={480}
+      class="w-full h-full object-contain cursor-crosshair"
+      on:mousemove={handleMouseMove}
+      on:mouseleave={handleMouseLeave}
+    ></canvas>
+
+    {#if isLoading}
+      <div class="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center font-mono text-xs text-sky-700 gap-2">
+        <span class="w-2 h-2 rounded-full bg-sky-600 animate-ping"></span>
+        <span>UPDATING SPATIAL MATRIX...</span>
+      </div>
+    {/if}
+
+    <!-- Inspection Reticle / Tooltip -->
+    {#if hoveredCell}
+      <div class="absolute bottom-2 left-2 bg-white/95 border border-slate-200 px-2.5 py-1 text-xs font-mono text-slate-800 rounded shadow-md">
+        GRID [R{hoveredCell.row}, C{hoveredCell.col}]: <strong class="text-sky-700">{Math.round(hoveredCell.dwell_seconds)}s</strong> DWELL
       </div>
     {/if}
   </div>
 
-  <div class="canvas-wrapper">
-    {#if isLoading && !heatmapData}
-      <div class="placeholder">Loading heatmap data...</div>
-    {:else if heatmapData && heatmapData.rows > 0}
-      <canvas 
-        bind:this={canvas} 
-        width={heatmapData.width || 640} 
-        height={heatmapData.height || 480}
-        on:mousemove={handleMouseMove}
-        on:mouseleave={handleMouseLeave}
-      ></canvas>
-
-      {#if hoveredCell}
-        <div class="cell-tooltip">
-          <span>Coordinate: <strong>({hoveredCell.x}px, {hoveredCell.y}px)</strong></span>
-          <span>Grid: <strong>[{hoveredCell.r}, {hoveredCell.c}]</strong></span>
-          <span>Intensity: <strong>{hoveredCell.val.toFixed(1)}</strong></span>
-        </div>
-      {/if}
-    {:else}
-      <div class="placeholder">No dwell heatmap data recorded.</div>
-    {/if}
-  </div>
-
-  <div class="heatmap-legend">
-    <span class="legend-label">Low Activity</span>
-    <div class="legend-gradient"></div>
-    <span class="legend-label">Peak Dwell Intensity</span>
+  <div class="flex items-center justify-between text-xs font-mono text-slate-500 pt-1">
+    <span>Resolution: {heatmapData?.rows || 16} × {heatmapData?.cols || 16} cells</span>
+    <span>Zero raw frames stored • Anonymized vectors only</span>
   </div>
 </div>
-
-<style>
-  .heatmap-container {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .heatmap-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .section-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .section-desc {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  .meta-badges {
-    display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-  }
-
-  .meta-badge {
-    font-size: 0.72rem;
-    font-family: var(--font-mono);
-    padding: 0.2rem 0.5rem;
-    background: #f1f5f9;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-  }
-
-  .canvas-wrapper {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    max-height: 440px;
-    background: #f8fafc;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  canvas {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    cursor: crosshair;
-  }
-
-  .cell-tooltip {
-    position: absolute;
-    bottom: 12px;
-    left: 12px;
-    background: #ffffff;
-    border: 1px solid var(--border-color);
-    padding: 0.4rem 0.8rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.75rem;
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-    display: flex;
-    gap: 0.75rem;
-    pointer-events: none;
-    box-shadow: var(--shadow-md);
-  }
-
-  .cell-tooltip strong {
-    color: var(--accent-blue);
-  }
-
-  .placeholder {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-  }
-
-  .heatmap-legend {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-top: 0.5rem;
-  }
-
-  .legend-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-
-  .legend-gradient {
-    flex: 1;
-    height: 8px;
-    border-radius: 4px;
-    background: linear-gradient(to right, #e0f2fe, #6ee7b7, #fde047, #f97316, #dc2626);
-    border: 1px solid var(--border-color);
-  }
-</style>
