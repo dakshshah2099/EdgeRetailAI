@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import random
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +24,7 @@ BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from storage.db import get_connection, init_db
+from storage.db import get_connection, init_db  # noqa: E402
 
 DEFAULT_ZONES: list[dict[str, Any]] = [
     {
@@ -110,10 +110,12 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
     init_db(db_path)
     rng = random.Random(42)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     start_time = now - timedelta(hours=hours)
 
-    print(f"Generating synthetic telemetry from {start_time.strftime('%Y-%m-%d %H:%M:%S UTC')} to {now.strftime('%Y-%m-%d %H:%M:%S UTC')}...")
+    start_str = start_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"Generating synthetic telemetry from {start_str} to {now_str}...")
 
     detection_rows: list[tuple] = []
     dwell_rows: list[tuple] = []
@@ -164,17 +166,19 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
                 continue
 
             # Enter event at entrance
-            detection_rows.append((
-                f"det_ent_{shopper_idx}",
-                track_id,
-                enter_ts.isoformat(),
-                rng.randint(60, 180),
-                rng.randint(370, 440),
-                rng.randint(50, 75),
-                rng.randint(120, 160),
-                "zone_entrance_exit",
-                "enter",
-            ))
+            detection_rows.append(
+                (
+                    f"det_ent_{shopper_idx}",
+                    track_id,
+                    enter_ts.isoformat(),
+                    rng.randint(60, 180),
+                    rng.randint(370, 440),
+                    rng.randint(50, 75),
+                    rng.randint(120, 160),
+                    "zone_entrance_exit",
+                    "enter",
+                )
+            )
             total_enters += 1
 
             # Browsing stops (1 to 3 zones visited)
@@ -194,47 +198,55 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
                     det_ts = current_shopper_ts + timedelta(seconds=p_idx * 10)
                     if det_ts > now:
                         break
-                    detection_rows.append((
-                        f"det_in_{shopper_idx}_{z_id}_{p_idx}",
-                        track_id,
-                        det_ts.isoformat(),
-                        max(20, int(rng.gauss(cx, 18))),
-                        max(20, int(rng.gauss(cy, 18))),
-                        max(40, int(rng.gauss(std_w, 8))),
-                        max(80, int(rng.gauss(std_h, 12))),
-                        z_id,
-                        "in_zone",
-                    ))
+                    detection_rows.append(
+                        (
+                            f"det_in_{shopper_idx}_{z_id}_{p_idx}",
+                            track_id,
+                            det_ts.isoformat(),
+                            max(20, int(rng.gauss(cx, 18))),
+                            max(20, int(rng.gauss(cy, 18))),
+                            max(40, int(rng.gauss(std_w, 8))),
+                            max(80, int(rng.gauss(std_h, 12))),
+                            z_id,
+                            "in_zone",
+                        )
+                    )
 
                 # Save dwell record
                 dwell_end = current_shopper_ts + timedelta(seconds=dwell_sec)
-                dwell_rows.append((
-                    f"dwl_{shopper_idx}_{z_id}",
-                    z_id,
-                    track_id,
-                    current_shopper_ts.isoformat(),
-                    min(dwell_end, now).isoformat(),
-                    dwell_sec,
-                ))
+                dwell_rows.append(
+                    (
+                        f"dwl_{shopper_idx}_{z_id}",
+                        z_id,
+                        track_id,
+                        current_shopper_ts.isoformat(),
+                        min(dwell_end, now).isoformat(),
+                        dwell_sec,
+                    )
+                )
                 current_shopper_ts = dwell_end
 
             # Exit simulation: 88% leave if visited > 15 mins ago
             is_recent = (now - enter_ts).total_seconds() < 900
-            should_exit = (not is_recent and rng.random() < 0.92) or (is_recent and rng.random() < 0.25)
+            should_exit = (not is_recent and rng.random() < 0.92) or (
+                is_recent and rng.random() < 0.25
+            )
             if should_exit:
                 exit_ts = current_shopper_ts + timedelta(seconds=rng.uniform(20.0, 90.0))
                 if exit_ts <= now:
-                    detection_rows.append((
-                        f"det_ext_{shopper_idx}",
-                        track_id,
-                        exit_ts.isoformat(),
-                        rng.randint(70, 190),
-                        rng.randint(370, 440),
-                        rng.randint(50, 75),
-                        rng.randint(120, 160),
-                        "zone_entrance_exit",
-                        "exit",
-                    ))
+                    detection_rows.append(
+                        (
+                            f"det_ext_{shopper_idx}",
+                            track_id,
+                            exit_ts.isoformat(),
+                            rng.randint(70, 190),
+                            rng.randint(370, 440),
+                            rng.randint(50, 75),
+                            rng.randint(120, 160),
+                            "zone_entrance_exit",
+                            "exit",
+                        )
+                    )
                     total_exits += 1
 
     # 2. Simulate Queue Telemetry
@@ -253,30 +265,37 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
         is_peak = (11 <= hr < 14) or (17 <= hr < 21)
 
         # Counter 1 (Primary Lane)
-        q1_len = rng.choices([3, 4, 5], weights=[0.4, 0.4, 0.2])[0] if is_peak else rng.randint(0, 2)
+        q1_len = (
+            rng.choices([3, 4, 5], weights=[0.4, 0.4, 0.2])[0] if is_peak else rng.randint(0, 2)
+        )
+
         q1_wait = float(q1_len * rng.uniform(28.0, 36.0))
-        queue_rows.append((
-            f"q_ev_c1_{idx}",
-            "zone_queue_checkout_1",
-            snap_ts.isoformat(),
-            q1_len,
-            round(q1_wait, 1),
-            min(6, q1_len + rng.choice([0, 1])),
-            round(q1_wait + 15.0, 1),
-        ))
+        queue_rows.append(
+            (
+                f"q_ev_c1_{idx}",
+                "zone_queue_checkout_1",
+                snap_ts.isoformat(),
+                q1_len,
+                round(q1_wait, 1),
+                min(6, q1_len + rng.choice([0, 1])),
+                round(q1_wait + 15.0, 1),
+            )
+        )
 
         # Counter 2 (Secondary Lane)
         q2_len = rng.randint(1, 3) if is_peak else rng.choice([0, 1])
         q2_wait = float(q2_len * rng.uniform(25.0, 32.0))
-        queue_rows.append((
-            f"q_ev_c2_{idx}",
-            "zone_queue_checkout_2",
-            snap_ts.isoformat(),
-            q2_len,
-            round(q2_wait, 1),
-            q2_len,
-            round(q2_wait + 5.0, 1),
-        ))
+        queue_rows.append(
+            (
+                f"q_ev_c2_{idx}",
+                "zone_queue_checkout_2",
+                snap_ts.isoformat(),
+                q2_len,
+                round(q2_wait, 1),
+                q2_len,
+                round(q2_wait + 5.0, 1),
+            )
+        )
 
     # 3. Simulate Shelf Stock Events
     print("Generating category shelf stock events...")
@@ -321,74 +340,78 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
     for s_idx, (shelf_id, timeline) in enumerate(stock_records):
         for t_idx, (hrs_ago, st, conf) in enumerate(timeline):
             ev_ts = now - timedelta(hours=hrs_ago)
-            stock_rows.append((
-                f"stk_{s_idx}_{t_idx}_{int(ev_ts.timestamp())}",
-                shelf_id,
-                ev_ts.isoformat(),
-                st,
-                conf,
-            ))
+            stock_rows.append(
+                (
+                    f"stk_{s_idx}_{t_idx}_{int(ev_ts.timestamp())}",
+                    shelf_id,
+                    ev_ts.isoformat(),
+                    st,
+                    conf,
+                )
+            )
 
     # 4. Simulate Operational Alerts
     print("Generating operational incident alerts...")
-    alert_rows.extend([
-        # Open alerts
-        (
-            "alert_bakery_empty",
-            "low_stock",
-            "critical",
-            "zone_shelf_bakery",
-            "Critical out-of-stock: Fresh Bakery Shelf depleted (0 units detected)",
-            (now - timedelta(minutes=28)).isoformat(),
-            None,
-        ),
-        (
-            "alert_queue1_surge",
-            "queue_congestion",
-            "warning",
-            "zone_queue_checkout_1",
-            "Checkout Lane 1 congested: 4+ customers waiting (est. wait 140s)",
-            (now - timedelta(minutes=14)).isoformat(),
-            None,
-        ),
-        (
-            "alert_snacks_low",
-            "low_stock",
-            "warning",
-            "zone_shelf_snacks",
-            "Low inventory alert: Snacks & Confectionery shelf below safety threshold",
-            (now - timedelta(minutes=42)).isoformat(),
-            None,
-        ),
-        # Resolved historical alerts
-        (
-            "alert_hist_beverages",
-            "low_stock",
-            "warning",
-            "zone_shelf_beverages",
-            "Cold Beverages shelf depleted during midday rush",
-            (now - timedelta(hours=6)).isoformat(),
-            (now - timedelta(hours=4, minutes=45)).isoformat(),
-        ),
-        (
-            "alert_hist_queue2",
-            "queue_congestion",
-            "warning",
-            "zone_queue_checkout_2",
-            "Checkout Lane 2 congestion spike resolved by opening secondary register",
-            (now - timedelta(hours=4, minutes=30)).isoformat(),
-            (now - timedelta(hours=3, minutes=50)).isoformat(),
-        ),
-        (
-            "alert_hist_promo",
-            "custom",
-            "info",
-            "zone_display_promo",
-            "Shopper dwell density surge detected at Promotional Island Display",
-            (now - timedelta(hours=8)).isoformat(),
-            (now - timedelta(hours=6, minutes=30)).isoformat(),
-        ),
-    ])
+    alert_rows.extend(
+        [
+            # Open alerts
+            (
+                "alert_bakery_empty",
+                "low_stock",
+                "critical",
+                "zone_shelf_bakery",
+                "Critical out-of-stock: Fresh Bakery Shelf depleted (0 units detected)",
+                (now - timedelta(minutes=28)).isoformat(),
+                None,
+            ),
+            (
+                "alert_queue1_surge",
+                "queue_congestion",
+                "warning",
+                "zone_queue_checkout_1",
+                "Checkout Lane 1 congested: 4+ customers waiting (est. wait 140s)",
+                (now - timedelta(minutes=14)).isoformat(),
+                None,
+            ),
+            (
+                "alert_snacks_low",
+                "low_stock",
+                "warning",
+                "zone_shelf_snacks",
+                "Low inventory alert: Snacks & Confectionery shelf below safety threshold",
+                (now - timedelta(minutes=42)).isoformat(),
+                None,
+            ),
+            # Resolved historical alerts
+            (
+                "alert_hist_beverages",
+                "low_stock",
+                "warning",
+                "zone_shelf_beverages",
+                "Cold Beverages shelf depleted during midday rush",
+                (now - timedelta(hours=6)).isoformat(),
+                (now - timedelta(hours=4, minutes=45)).isoformat(),
+            ),
+            (
+                "alert_hist_queue2",
+                "queue_congestion",
+                "warning",
+                "zone_queue_checkout_2",
+                "Checkout Lane 2 congestion spike resolved by opening secondary register",
+                (now - timedelta(hours=4, minutes=30)).isoformat(),
+                (now - timedelta(hours=3, minutes=50)).isoformat(),
+            ),
+            (
+                "alert_hist_promo",
+                "custom",
+                "info",
+                "zone_display_promo",
+                "Shopper dwell density surge detected at Promotional Island Display",
+                (now - timedelta(hours=8)).isoformat(),
+                (now - timedelta(hours=6, minutes=30)).isoformat(),
+            ),
+        ]
+    )
 
     # 5. Fast batch commit to SQLite
     print("Writing batch records to SQLite database...")
@@ -444,7 +467,8 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
     print("\n" + "=" * 60)
     print("[OK] Synthetic Retail Data Seeding Completed Successfully!")
     print("=" * 60)
-    print(f"- Footfall: Enters={total_enters} | Exits={total_exits} | Net Occupancy={total_enters - total_exits}")
+    net_occ = total_enters - total_exits
+    print(f"- Footfall: Enters={total_enters} | Exits={total_exits} | Net Occupancy={net_occ}")
     print(f"- Detection events: {len(detection_rows)} coordinates for 2D dwell heatmap")
     print(f"- Dwell records: {len(dwell_rows)}")
     print(f"- Queue snapshots: {len(queue_rows)} across 2 checkout lanes")
@@ -454,7 +478,9 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed artificial retail telemetry for EdgeRetail AI.")
+    parser = argparse.ArgumentParser(
+        description="Seed artificial retail telemetry for EdgeRetail AI."
+    )
     parser.add_argument(
         "--db-path",
         type=Path,
@@ -489,11 +515,13 @@ def main() -> None:
     root_db = BACKEND_DIR.parent / "retail.db"
     if root_db.resolve() != args.db_path.resolve():
         import shutil
+
         shutil.copyfile(args.db_path, root_db)
 
     root_cfg = BACKEND_DIR.parent / "config.yaml"
     if root_cfg.resolve() != args.config_path.resolve():
         import shutil
+
         shutil.copyfile(args.config_path, root_cfg)
 
 

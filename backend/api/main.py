@@ -5,7 +5,6 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from api.routes.alerts import router as alerts_router
 from api.routes.heatmap import router as heatmap_router
@@ -59,14 +58,10 @@ def create_app() -> FastAPI:
         dist_dir = Path(__file__).resolve().parent.parent.parent / "dashboard" / "dist"
 
     if dist_dir.is_dir():
-        application.mount(
-            "/app", StaticFiles(directory=str(dist_dir), html=True), name="static_dashboard"
-        )
+        application.frontend("/app", directory=dist_dir)
         assets_dir = dist_dir / "assets"
         if assets_dir.is_dir():
-            application.mount(
-                "/assets", StaticFiles(directory=str(assets_dir)), name="static_assets"
-            )
+            application.frontend("/assets", directory=assets_dir)
 
     @application.get("/", tags=["system"])
     def root() -> Response:
@@ -98,4 +93,3 @@ if __name__ == "__main__":
     srv_host = env.get("HOST") or env.get("API_HOST") or os.environ.get("HOST", "0.0.0.0")
     srv_port = int(env.get("PORT") or env.get("API_PORT") or os.environ.get("PORT", "8000"))
     uvicorn.run("api.main:app", host=srv_host, port=srv_port, reload=True)
-

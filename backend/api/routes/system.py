@@ -1,31 +1,18 @@
 import os
-from typing import Any
+from typing import Annotated, Any
 
 import yaml
 from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel, Field
 
-from api.dependencies import get_app_config
+from api.dependencies import AppConfigDep, ConfigPathDep, RequireDebugModeDep
 from api.env_manager import is_debug_mode, read_env_file, write_env_file
+from api.schemas_api import SystemEnvResponse, UpdateEnvRequest, UpdateZonesRequest
 from core.schemas import ZoneConfig
 
 router = APIRouter(prefix="/system", tags=["system"])
 
 
-class SystemEnvResponse(BaseModel):
-    debug_mode: bool
-    variables: dict[str, str] = Field(default_factory=dict)
-
-
-class UpdateEnvRequest(BaseModel):
-    variables: dict[str, str]
-
-
-class UpdateZonesRequest(BaseModel):
-    zones: list[ZoneConfig]
-
-
-@router.get("/env", response_model=SystemEnvResponse)
+@router.get("/env")
 def get_system_environment() -> SystemEnvResponse:
     """Return all system environment variables and active debug mode status."""
     env_vars = read_env_file()
@@ -33,15 +20,12 @@ def get_system_environment() -> SystemEnvResponse:
     return SystemEnvResponse(debug_mode=debug, variables=env_vars)
 
 
-@router.put("/env", response_model=SystemEnvResponse)
-def update_system_environment(req: UpdateEnvRequest) -> SystemEnvResponse:
+@router.put("/env")
+def update_system_environment(
+    req: UpdateEnvRequest,
+    _: RequireDebugModeDep,
+) -> SystemEnvResponse:
     """Update system .env variables when permitted."""
-    if not is_debug_mode():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debug mode is disabled. Cannot modify environment variables.",
-        )
-
     updated_vars = write_env_file(req.variables)
     return SystemEnvResponse(
         debug_mode=is_debug_mode(),
@@ -49,9 +33,9 @@ def update_system_environment(req: UpdateEnvRequest) -> SystemEnvResponse:
     )
 
 
-@router.post("/toggle-debug", response_model=SystemEnvResponse)
+@router.post("/toggle-debug")
 def toggle_debug_mode(
-    x_debug_token: str | None = Header(None, alias="X-Debug-Token"),
+    x_debug_token: Annotated[str | None, Header(alias="X-Debug-Token")] = None,
 ) -> SystemEnvResponse:
     """Toggle DEBUG_MODE boolean flag in .env.
 
@@ -84,28 +68,23 @@ def toggle_debug_mode(
     )
 
 
-@router.get("/zones", response_model=list[ZoneConfig])
-def get_system_zones() -> list[ZoneConfig]:
+@router.get("/zones")
+def get_system_zones(cfg: AppConfigDep) -> list[ZoneConfig]:
     """Return currently configured spatial ROI and detection zones."""
-    cfg = get_app_config()
     if cfg and cfg.zones:
         return cfg.zones
     return []
 
 
-@router.put("/zones", response_model=list[ZoneConfig])
-def update_system_zones(req: UpdateZonesRequest) -> list[ZoneConfig]:
+@router.put("/zones")
+def update_system_zones(
+    req: UpdateZonesRequest,
+    cfg_path: ConfigPathDep,
+    _: RequireDebugModeDep,
+) -> list[ZoneConfig]:
     """Save modified zone polygons directly into config.yaml."""
-    if not is_debug_mode():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debug mode is disabled. Cannot modify zone layout.",
-        )
-
-    from api.dependencies import get_config_path
-
-    cfg_path = get_config_path()
     raw_cfg: dict[str, Any] = {}
+
     if cfg_path.is_file():
         with cfg_path.open("r", encoding="utf-8") as f:
             raw_cfg = yaml.safe_load(f) or {}

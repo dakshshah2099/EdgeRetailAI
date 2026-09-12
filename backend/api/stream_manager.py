@@ -44,9 +44,7 @@ def resolve_camera_source() -> str:
     return os.environ.get("CAMERA_SOURCE", "0")
 
 
-def scale_zones_to_frame(
-    zones: list[ZoneConfig], frame_w: int, frame_h: int
-) -> list[ZoneConfig]:
+def scale_zones_to_frame(zones: list[ZoneConfig], frame_w: int, frame_h: int) -> list[ZoneConfig]:
     """Proportionally scale zone polygon vertices to the actual video frame resolution."""
     if not zones or frame_w <= 0 or frame_h <= 0:
         return zones
@@ -79,9 +77,7 @@ def scale_zones_to_frame(
     return scaled_zones
 
 
-def generate_fallback_frame(
-    src: str, width: int = 640, height: int = 480
-) -> npt.NDArray[np.uint8]:
+def generate_fallback_frame(src: str, width: int = 640, height: int = 480) -> npt.NDArray[np.uint8]:
     """Generate a clean synthetic standby canvas when camera stream is disconnected."""
     img = np.full((height, width, 3), 24, dtype=np.uint8)
     masked_src = mask_rtsp_credentials(src)
@@ -226,11 +222,7 @@ class StreamManager:
         self.footfall_tracker: FootfallTracker = (
             FootfallTracker(
                 mode="directional",
-                emit_on=(
-                    "zone_enter"
-                    if footfall_emit_on == "zone_enter"
-                    else "zone_exit"
-                ),
+                emit_on=("zone_enter" if footfall_emit_on == "zone_enter" else "zone_exit"),
             )
             if footfall_mode == "directional"
             else FootfallTracker(mode="edge")
@@ -576,4 +568,3 @@ class StreamManager:
 
 # Global singleton StreamManager
 stream_manager = StreamManager()
-

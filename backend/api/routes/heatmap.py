@@ -1,23 +1,20 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from analytics.heatmap import HeatmapAccumulator
 from api.dependencies import (
+    RepoDep,
     get_default_frame_dimensions,
-    get_repository,
     is_timestamp_ge,
 )
 from api.schemas_api import HeatmapResponse
-from storage.repository import EventRepository
 
 router = APIRouter(prefix="/heatmap", tags=["heatmap"])
 
-RepoDep = Annotated[EventRepository, Depends(get_repository)]
 
-
-@router.get("", response_model=HeatmapResponse)
+@router.get("")
 def get_heatmap(
     repo: RepoDep,
     zone_id: Annotated[str | None, Query(description="Optional zone ID filter")] = None,
@@ -25,9 +22,7 @@ def get_heatmap(
         datetime | None,
         Query(description="Filter events on or after this ISO timestamp"),
     ] = None,
-    cell_size: Annotated[
-        int, Query(ge=1, le=200, description="Grid cell size in pixels")
-    ] = 20,
+    cell_size: Annotated[int, Query(ge=1, le=200, description="Grid cell size in pixels")] = 20,
     width: Annotated[
         int | None, Query(ge=10, le=3840, description="Optional frame width override")
     ] = None,

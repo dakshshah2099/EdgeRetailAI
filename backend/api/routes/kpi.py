@@ -1,19 +1,16 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
-from api.dependencies import get_repository, is_timestamp_ge
+from api.dependencies import RepoDep, is_timestamp_ge
 from api.schemas_api import FootfallBucket, FootfallSummary
 from core.schemas import QueueEvent, StockEvent
-from storage.repository import EventRepository
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 
-RepoDep = Annotated[EventRepository, Depends(get_repository)]
 
-
-@router.get("/footfall", response_model=FootfallSummary)
+@router.get("/footfall")
 def get_footfall_kpi(
     repo: RepoDep,
     zone_id: Annotated[str | None, Query(description="Optional zone ID filter")] = None,
@@ -90,15 +87,11 @@ def get_footfall_kpi(
     )
 
 
-@router.get("/queue", response_model=list[QueueEvent])
+@router.get("/queue")
 def get_queue_kpi(
     repo: RepoDep,
-    counter_id: Annotated[
-        str | None, Query(description="Optional counter ID filter")
-    ] = None,
-    limit: Annotated[
-        int, Query(ge=1, le=1000, description="Max raw queue events to query")
-    ] = 100,
+    counter_id: Annotated[str | None, Query(description="Optional counter ID filter")] = None,
+    limit: Annotated[int, Query(ge=1, le=1000, description="Max raw queue events to query")] = 100,
 ) -> list[QueueEvent]:
     """Return the latest queue length and avg wait estimate per checkout counter."""
     events = repo.get_recent_queue_events(limit=limit, counter_id=counter_id)
@@ -113,15 +106,11 @@ def get_queue_kpi(
     return latest_per_counter
 
 
-@router.get("/stock", response_model=list[StockEvent])
+@router.get("/stock")
 def get_stock_kpi(
     repo: RepoDep,
-    shelf_id: Annotated[
-        str | None, Query(description="Optional shelf ID filter")
-    ] = None,
-    limit: Annotated[
-        int, Query(ge=1, le=1000, description="Max raw stock events to query")
-    ] = 100,
+    shelf_id: Annotated[str | None, Query(description="Optional shelf ID filter")] = None,
+    limit: Annotated[int, Query(ge=1, le=1000, description="Max raw stock events to query")] = 100,
 ) -> list[StockEvent]:
     """Return the latest stock level status (empty, low, ok) per shelf."""
     events = repo.get_recent_stock_events(limit=limit, shelf_id=shelf_id)

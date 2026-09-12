@@ -1,8 +1,11 @@
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 
-from api.env_manager import read_env_file
+from fastapi import Depends, HTTPException, status
+
+from api.env_manager import is_debug_mode, read_env_file
 from core.schemas import AppConfig, load_config
 from storage.repository import EventRepository
 
@@ -30,6 +33,22 @@ def get_config_path() -> Path:
 def get_repository() -> EventRepository:
     """FastAPI dependency for accessing EventRepository."""
     return EventRepository(get_db_path())
+
+
+RepoDep = Annotated[EventRepository, Depends(get_repository)]
+ConfigPathDep = Annotated[Path, Depends(get_config_path)]
+
+
+def require_debug_mode() -> None:
+    """Dependency ensuring debug mode is active before sensitive configuration changes."""
+    if not is_debug_mode():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debug mode is disabled. Cannot modify system configuration.",
+        )
+
+
+RequireDebugModeDep = Annotated[None, Depends(require_debug_mode)]
 
 
 _cached_cfg: AppConfig | None = None
@@ -67,6 +86,9 @@ def get_app_config(config_path: str | Path | None = None) -> AppConfig | None:
         return cfg
     except Exception:
         return None
+
+
+AppConfigDep = Annotated[AppConfig | None, Depends(get_app_config)]
 
 
 def get_default_frame_dimensions(config_path: str | Path = "config.yaml") -> tuple[int, int]:

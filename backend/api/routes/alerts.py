@@ -1,17 +1,14 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
-from api.dependencies import get_repository
+from api.dependencies import RepoDep
 from core.schemas import Alert
-from storage.repository import EventRepository
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
-RepoDep = Annotated[EventRepository, Depends(get_repository)]
 
-
-@router.get("", response_model=list[Alert])
+@router.get("")
 def get_alerts(
     repo: RepoDep,
     status: Annotated[

@@ -1,13 +1,16 @@
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
+from typing import Annotated
 
 import cv2
-from fastapi import APIRouter, Query
+import numpy as np
+import numpy.typing as npt
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from api.dependencies import get_app_config
+from api.dependencies import AppConfigDep
 from api.stream_manager import (
     draw_tracked_overlay,
     draw_zones_overlay,
@@ -16,6 +19,7 @@ from api.stream_manager import (
     stream_manager,
 )
 from vision.rtsp_source import mask_rtsp_credentials
+from vision.tracker import TrackedDetection
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +32,38 @@ class CameraStatusResponse(BaseModel):
     width: int
     height: int
     zones_count: int
+
+
+def process_and_encode_frame(
+    frame: npt.NDArray[np.uint8],
+    tracked: list[TrackedDetection],
+    overlay_zones: bool,
+    overlay_detections: bool,
+    quality: int = 80,
+) -> bytes:
+    """Draw configured overlays and encode frame to JPEG bytes."""
+    display_frame = frame.copy()
+    if overlay_zones:
+        display_frame = draw_zones_overlay(display_frame)
+    if overlay_detections:
+        display_frame = draw_tracked_overlay(display_frame, tracked)
+    ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    return jpeg.tobytes() if ret else b""
+
+
+def process_and_encode_fallback(
+    src: str,
+    width: int,
+    height: int,
+    overlay_zones: bool,
+    quality: int = 80,
+) -> bytes:
+    """Generate fallback canvas with optional zones overlay and encode to JPEG bytes."""
+    fallback = generate_fallback_frame(src, width=width, height=height)
+    if overlay_zones:
+        fallback = draw_zones_overlay(fallback)
+    ret, jpeg = cv2.imencode(".jpg", fallback, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    return jpeg.tobytes() if ret else b""
 
 
 async def frame_streamer(
@@ -45,23 +81,27 @@ async def frame_streamer(
         try:
             is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame()
             if is_conn and cached_bgr is not None:
-                display_frame = cached_bgr.copy()
-                if overlay_zones:
-                    display_frame = draw_zones_overlay(display_frame)
-                if overlay_detections:
-                    display_frame = draw_tracked_overlay(display_frame, tracked)
-                ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                frame_bytes = jpeg.tobytes() if ret else b""
+                frame_bytes = await asyncio.to_thread(
+                    process_and_encode_frame,
+                    cached_bgr,
+                    tracked,
+                    overlay_zones,
+                    overlay_detections,
+                    80,
+                )
             else:
                 now = asyncio.get_event_loop().time()
                 # Cache synthetic standby frame for 1s to prevent repeated OpenCV encodings
                 if not cached_fallback_bytes or now - last_fallback_time > 1.0:
                     src = resolve_camera_source()
-                    fallback = generate_fallback_frame(src, width=w, height=h)
-                    if overlay_zones:
-                        fallback = draw_zones_overlay(fallback)
-                    ret, jpeg = cv2.imencode(".jpg", fallback, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                    cached_fallback_bytes = jpeg.tobytes() if ret else b""
+                    cached_fallback_bytes = await asyncio.to_thread(
+                        process_and_encode_fallback,
+                        src,
+                        w,
+                        h,
+                        overlay_zones,
+                        80,
+                    )
                     last_fallback_time = now
                 frame_bytes = cached_fallback_bytes
         except Exception as e:
@@ -72,8 +112,11 @@ async def frame_streamer(
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n"
-                b"Content-Length: " + str(len(frame_bytes)).encode() + b"\r\n\r\n"
-                + frame_bytes + b"\r\n"
+                b"Content-Length: "
+                + str(len(frame_bytes)).encode()
+                + b"\r\n\r\n"
+                + frame_bytes
+                + b"\r\n"
             )
 
         await asyncio.sleep(delay)
@@ -81,9 +124,11 @@ async def frame_streamer(
 
 @router.get("/stream")
 async def video_stream(
-    overlay_zones: bool = Query(True, description="Overlay configured detection zones"),
-    overlay_detections: bool = Query(True, description="Overlay live YOLO person bounding boxes"),
-    fps: int = Query(15, ge=1, le=30, description="Target streaming frames per second"),
+    overlay_zones: Annotated[bool, Query(description="Overlay configured detection zones")] = True,
+    overlay_detections: Annotated[
+        bool, Query(description="Overlay live YOLO person bounding boxes")
+    ] = True,
+    fps: Annotated[int, Query(ge=1, le=30, description="Target streaming frames per second")] = 15,
 ) -> StreamingResponse:
     """Stream live camera feed with real-time zone polygons and YOLO detections via MJPEG."""
     return StreamingResponse(
@@ -103,34 +148,37 @@ async def video_stream(
 
 @router.get("/snapshot")
 def video_snapshot(
-    overlay_zones: bool = Query(True, description="Overlay configured detection zones"),
-    overlay_detections: bool = Query(True, description="Overlay live YOLO person bounding boxes"),
+    overlay_zones: Annotated[bool, Query(description="Overlay configured detection zones")] = True,
+    overlay_detections: Annotated[
+        bool, Query(description="Overlay live YOLO person bounding boxes")
+    ] = True,
 ) -> Response:
     """Capture a single JPEG snapshot frame instantly from memory."""
     src = resolve_camera_source()
     is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame()
 
     if is_conn and cached_bgr is not None:
-        frame = cached_bgr.copy()
-        if overlay_zones:
-            frame = draw_zones_overlay(frame)
-        if overlay_detections:
-            frame = draw_tracked_overlay(frame, tracked)
+        frame_bytes = process_and_encode_frame(
+            cached_bgr, tracked, overlay_zones, overlay_detections, quality=90
+        )
     else:
-        frame = generate_fallback_frame(src, width=w, height=h)
+        frame_bytes = process_and_encode_fallback(
+            src, width=w, height=h, overlay_zones=overlay_zones, quality=90
+        )
 
-    ret, jpeg = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-    if not ret:
-        return Response(status_code=500, content="Failed to encode frame")
+    if not frame_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to encode frame",
+        )
 
-    return Response(content=jpeg.tobytes(), media_type="image/jpeg")
+    return Response(content=frame_bytes, media_type="image/jpeg")
 
 
-@router.get("/status", response_model=CameraStatusResponse)
-def video_status() -> CameraStatusResponse:
+@router.get("/status")
+def video_status(cfg: AppConfigDep) -> CameraStatusResponse:
     """Return live camera connection status and dimensions instantly in 0ms."""
     src = resolve_camera_source()
-    cfg = get_app_config()
     zones_cnt = len(cfg.zones) if cfg and cfg.zones else 0
     is_conn, _, _, w, h = stream_manager.get_latest_frame()
 

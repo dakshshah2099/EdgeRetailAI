@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from core.schemas import ZoneConfig
+
 
 class FootfallBucket(BaseModel):
     bucket_start: datetime
@@ -51,3 +53,16 @@ class CentralSummaryResponse(BaseModel):
     total_reachable: int
     total_unreachable: int
     stores: list[CentralStoreStatus]
+
+
+class SystemEnvResponse(BaseModel):
+    debug_mode: bool
+    variables: dict[str, str] = Field(default_factory=dict)
+
+
+class UpdateEnvRequest(BaseModel):
+    variables: dict[str, str]
+
+
+class UpdateZonesRequest(BaseModel):
+    zones: list[ZoneConfig]
