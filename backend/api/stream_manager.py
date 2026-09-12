@@ -24,6 +24,7 @@ from api.dependencies import get_app_config, get_repository
 from api.env_manager import read_env_file
 from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
 from vision.camera_base import CameraSource
+from vision.camera_mesh import camera_mesh
 from vision.detector import PersonDetector
 from vision.inference_backend import ONNXBackend
 from vision.rtsp_source import RTSPSource, format_authenticated_rtsp_url, mask_rtsp_credentials
@@ -275,6 +276,14 @@ class StreamManager:
                         else os.environ.get("RTSP_PASSWORD")
                     )
                     formatted_src = format_authenticated_rtsp_url(target_src, rtsp_user, rtsp_pass)
+                    if not camera_mesh.get_camera("cam_primary"):
+                        camera_mesh.register_camera(
+                            camera_id="cam_primary",
+                            source=target_src,
+                            role="entrance",
+                            label="Primary Store Camera",
+                            auto_start=False,
+                        )
                     last_check_time = now
 
                 # Initialize or swap camera if source changed
@@ -314,10 +323,17 @@ class StreamManager:
                         self.height = meta.height
                         self.is_connected = True
                         self.last_frame_time = time.monotonic()
+                    primary_node = camera_mesh.get_camera("cam_primary")
+                    if primary_node:
+                        primary_node.update_frame(raw_bgr, meta.width, meta.height)
                 else:
                     with self._slot_lock:
                         if time.monotonic() - self.last_frame_time > 4.0:
                             self.is_connected = False
+                    primary_node = camera_mesh.get_camera("cam_primary")
+                    if primary_node and time.monotonic() - self.last_frame_time > 4.0:
+                        primary_node.is_connected = False
+
                     # Throttle sleep when stream is offline/backing off to eliminate CPU/lock burden
                     time.sleep(0.15)
             except Exception as e:
@@ -550,11 +566,21 @@ class StreamManager:
             with contextlib.suppress(Exception):
                 self.camera.close()
             self.camera = None
+        camera_mesh.close()
 
     def get_latest_frame(
         self,
+        camera_id: str | None = None,
     ) -> tuple[bool, npt.NDArray[np.uint8] | None, list[TrackedDetection], int, int]:
         self._ensure_workers_started()
+        if camera_id == "mosaic":
+            mosaic = camera_mesh.generate_mosaic()
+            return True, mosaic, [], mosaic.shape[1], mosaic.shape[0]
+
+        if camera_id and camera_id not in ("cam_primary", "default", "primary"):
+            is_conn, frame, w, h = camera_mesh.get_frame(camera_id)
+            return is_conn, frame, [], w, h
+
         with self._slot_lock:
             frame_copy = self._slot_frame.copy() if self._slot_frame is not None else None
             return (

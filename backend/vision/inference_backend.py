@@ -195,9 +195,7 @@ class ONNXBackend(InferenceBackend):
         h_orig, w_orig = frame.shape[:2]
         blob, scale, pad = self._letterbox(frame)
 
-        outputs: list[npt.NDArray[np.float32]] = self.session.run(
-            None, {self.input_name: blob}
-        )
+        outputs: list[npt.NDArray[np.float32]] = self.session.run(None, {self.input_name: blob})
         if not outputs:
             return []
 
@@ -258,4 +256,3 @@ class ONNXBackend(InferenceBackend):
             )
 
         return detections
-

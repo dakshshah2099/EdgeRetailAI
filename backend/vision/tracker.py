@@ -101,7 +101,7 @@ class _Track:
         self.age = 1
         self.time_since_update = 0
         self.min_hits = min_hits
-        self.is_activated = (min_hits <= 1)
+        self.is_activated = min_hits <= 1
 
     def predict(self) -> None:
         """Advance track state by one frame without detection."""
@@ -156,7 +156,8 @@ class Tracker:
         # Split detections by confidence (ByteTrack principle)
         dets_high = [d for d in detections if d.confidence >= self.high_conf_threshold]
         dets_low = [
-            d for d in detections
+            d
+            for d in detections
             if self.low_conf_threshold <= d.confidence < self.high_conf_threshold
         ]
 
@@ -211,10 +212,7 @@ class Tracker:
             self.tracks.append(new_track)
 
         # Remove dead tracks
-        self.tracks = [
-            t for t in self.tracks
-            if t.time_since_update <= self.max_age
-        ]
+        self.tracks = [t for t in self.tracks if t.time_since_update <= self.max_age]
 
         # Return currently active detections updated in this frame
         active_outputs: list[TrackedDetection] = []

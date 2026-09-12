@@ -11,6 +11,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from api.dependencies import AppConfigDep
+from api.schemas_api import CameraMeshNodeConfig, CameraMeshSummary, RegisterCameraRequest
 from api.stream_manager import (
     draw_tracked_overlay,
     draw_zones_overlay,
@@ -18,6 +19,7 @@ from api.stream_manager import (
     resolve_camera_source,
     stream_manager,
 )
+from vision.camera_mesh import camera_mesh
 from vision.rtsp_source import mask_rtsp_credentials
 from vision.tracker import TrackedDetection
 
@@ -70,6 +72,7 @@ async def frame_streamer(
     overlay_zones: bool,
     overlay_detections: bool,
     target_fps: int = 15,
+    camera_id: str | None = None,
 ) -> AsyncGenerator[bytes, None]:
     """Asynchronous generator yielding multipart/x-mixed-replace JPEG frames purely from memory."""
     delay = 1.0 / max(1, min(target_fps, 30))
@@ -79,14 +82,18 @@ async def frame_streamer(
 
     while True:
         try:
-            is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame()
+            is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame(
+                camera_id=camera_id
+            )
             if is_conn and cached_bgr is not None:
+                eff_overlay_zones = overlay_zones if camera_id != "mosaic" else False
+                eff_overlay_det = overlay_detections if camera_id != "mosaic" else False
                 frame_bytes = await asyncio.to_thread(
                     process_and_encode_frame,
                     cached_bgr,
                     tracked,
-                    overlay_zones,
-                    overlay_detections,
+                    eff_overlay_zones,
+                    eff_overlay_det,
                     80,
                 )
             else:
@@ -99,7 +106,7 @@ async def frame_streamer(
                         src,
                         w,
                         h,
-                        overlay_zones,
+                        overlay_zones if camera_id != "mosaic" else False,
                         80,
                     )
                     last_fallback_time = now
@@ -122,8 +129,41 @@ async def frame_streamer(
         await asyncio.sleep(delay)
 
 
+@router.get("/cameras")
+def list_mesh_cameras() -> CameraMeshSummary:
+    """Return live status of all camera nodes in the multi-camera mesh network."""
+    return camera_mesh.get_summary()
+
+
+@router.post("/cameras")
+def register_mesh_camera(req: RegisterCameraRequest) -> CameraMeshNodeConfig:
+    """Register and start an edge camera node in the retail camera mesh."""
+    node = camera_mesh.register_camera(
+        camera_id=req.camera_id,
+        source=req.source,
+        role=req.role,
+        label=req.label,
+    )
+    return node.to_config()
+
+
+@router.delete("/cameras/{camera_id}")
+def unregister_mesh_camera(camera_id: str) -> dict[str, str]:
+    """Remove and shut down a camera node from the mesh topology."""
+    success = camera_mesh.unregister_camera(camera_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera node '{camera_id}' not found in mesh.",
+        )
+    return {"status": "ok", "unregistered": camera_id}
+
+
 @router.get("/stream")
 async def video_stream(
+    camera_id: Annotated[
+        str | None, Query(description="Camera ID filter or 'mosaic' for multi-view grid")
+    ] = None,
     overlay_zones: Annotated[bool, Query(description="Overlay configured detection zones")] = True,
     overlay_detections: Annotated[
         bool, Query(description="Overlay live YOLO person bounding boxes")
@@ -136,6 +176,7 @@ async def video_stream(
             overlay_zones=overlay_zones,
             overlay_detections=overlay_detections,
             target_fps=fps,
+            camera_id=camera_id,
         ),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={
@@ -148,6 +189,9 @@ async def video_stream(
 
 @router.get("/snapshot")
 def video_snapshot(
+    camera_id: Annotated[
+        str | None, Query(description="Camera ID filter or 'mosaic' for multi-view grid")
+    ] = None,
     overlay_zones: Annotated[bool, Query(description="Overlay configured detection zones")] = True,
     overlay_detections: Annotated[
         bool, Query(description="Overlay live YOLO person bounding boxes")
@@ -155,12 +199,12 @@ def video_snapshot(
 ) -> Response:
     """Capture a single JPEG snapshot frame instantly from memory."""
     src = resolve_camera_source()
-    is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame()
+    is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame(camera_id=camera_id)
 
     if is_conn and cached_bgr is not None:
-        frame_bytes = process_and_encode_frame(
-            cached_bgr, tracked, overlay_zones, overlay_detections, quality=90
-        )
+        eff_zones = overlay_zones if camera_id != "mosaic" else False
+        eff_det = overlay_detections if camera_id != "mosaic" else False
+        frame_bytes = process_and_encode_frame(cached_bgr, tracked, eff_zones, eff_det, quality=90)
     else:
         frame_bytes = process_and_encode_fallback(
             src, width=w, height=h, overlay_zones=overlay_zones, quality=90
@@ -176,11 +220,25 @@ def video_snapshot(
 
 
 @router.get("/status")
-def video_status(cfg: AppConfigDep) -> CameraStatusResponse:
+def video_status(
+    cfg: AppConfigDep,
+    camera_id: Annotated[str | None, Query(description="Optional camera ID filter")] = None,
+) -> CameraStatusResponse:
     """Return live camera connection status and dimensions instantly in 0ms."""
+    if camera_id and camera_id not in ("cam_primary", "default", "primary"):
+        node = camera_mesh.get_camera(camera_id)
+        if node is not None:
+            return CameraStatusResponse(
+                source=mask_rtsp_credentials(node.source),
+                is_connected=node.is_connected,
+                width=node.width,
+                height=node.height,
+                zones_count=0,
+            )
+
     src = resolve_camera_source()
     zones_cnt = len(cfg.zones) if cfg and cfg.zones else 0
-    is_conn, _, _, w, h = stream_manager.get_latest_frame()
+    is_conn, _, _, w, h = stream_manager.get_latest_frame(camera_id=camera_id)
 
     return CameraStatusResponse(
         source=mask_rtsp_credentials(src),

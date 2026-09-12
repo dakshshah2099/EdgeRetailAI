@@ -1,4 +1,4 @@
-﻿"""Computer vision module: cameras, inference, detection, and tracking."""
+"""Computer vision module: cameras, inference, detection, and tracking."""
 
 from vision.camera_base import CameraSource
 from vision.detector import PersonDetector

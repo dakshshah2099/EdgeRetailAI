@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -66,3 +67,27 @@ class UpdateEnvRequest(BaseModel):
 
 class UpdateZonesRequest(BaseModel):
     zones: list[ZoneConfig]
+
+
+class CameraMeshNodeConfig(BaseModel):
+    camera_id: str
+    source: str
+    role: Literal["entrance", "checkout", "shelf", "general"] = "general"
+    label: str = ""
+    is_connected: bool = False
+    fps: float = 0.0
+    width: int = 640
+    height: int = 480
+
+
+class RegisterCameraRequest(BaseModel):
+    camera_id: str
+    source: str
+    role: Literal["entrance", "checkout", "shelf", "general"] = "general"
+    label: str = ""
+
+
+class CameraMeshSummary(BaseModel):
+    total_cameras: int
+    active_cameras: int
+    cameras: list[CameraMeshNodeConfig]
