@@ -242,6 +242,17 @@ class CameraMesh:
             return False, None, 640, 480
         return node.get_frame()
 
+    def get_active_frames(self) -> list[tuple[str, npt.NDArray[np.uint8]]]:
+        """Return frames for all currently connected camera nodes in the mesh."""
+        frames: list[tuple[str, npt.NDArray[np.uint8]]] = []
+        with self._lock:
+            nodes = list(self._nodes.values())
+        for node in nodes:
+            is_conn, frame, _, _ = node.get_frame()
+            if is_conn and frame is not None:
+                frames.append((node.camera_id, frame))
+        return frames
+
     def generate_mosaic(
         self,
         grid_cols: int = 2,

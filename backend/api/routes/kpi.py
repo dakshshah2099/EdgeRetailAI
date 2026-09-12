@@ -3,8 +3,15 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query
 
+from analytics.sku_classifier import sku_segregator
 from api.dependencies import RepoDep, is_timestamp_ge
-from api.schemas_api import FootfallBucket, FootfallSummary
+from api.schemas_api import (
+    FootfallBucket,
+    FootfallSummary,
+    RegisterSKURequest,
+    SKUProfile,
+    SKUSegregationReport,
+)
 from core.schemas import QueueEvent, StockEvent
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
@@ -123,3 +130,37 @@ def get_stock_kpi(
             latest_per_shelf.append(ev)
 
     return latest_per_shelf
+
+
+@router.get("/sku")
+def get_sku_segregation_kpi() -> SKUSegregationReport:
+    """Return latest edge SKU segregation and planogram compliance report (locked >=10s)."""
+    return sku_segregator.get_latest_report()
+
+
+@router.get("/sku/catalog")
+def list_sku_catalog() -> list[SKUProfile]:
+    """Return all catalog SKU profiles registered in the edge planogram."""
+    return sku_segregator.get_catalog()
+
+
+@router.post("/sku/catalog")
+def register_catalog_sku(req: RegisterSKURequest) -> SKUProfile:
+    """Register or update an SKU item in the edge planogram catalog."""
+    sku_segregator.register_sku(
+        sku_id=req.sku_id,
+        name=req.name,
+        brand=req.brand,
+        expected_zone_id=req.expected_zone_id,
+        category=req.category,
+    )
+    sku = sku_segregator.get_sku(req.sku_id)
+    if sku is None:
+        return SKUProfile(
+            sku_id=req.sku_id,
+            name=req.name,
+            brand=req.brand,
+            expected_zone_id=req.expected_zone_id,
+            category=req.category,
+        )
+    return sku

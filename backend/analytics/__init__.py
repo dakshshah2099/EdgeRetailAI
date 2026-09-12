@@ -1,4 +1,4 @@
-﻿"""Retail analytics module: footfall, dwell, queue, shelf, and heatmap."""
+"""Retail analytics module: footfall, dwell, queue, shelf, and heatmap."""
 
 from analytics.dwell import DwellTracker
 from analytics.footfall import FootfallTracker, process_frame

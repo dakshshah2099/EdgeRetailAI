@@ -467,8 +467,7 @@ class EventRepository:
                     ),
                     predicted_wait_sec=(
                         float(row["predicted_wait_sec"])
-                        if "predicted_wait_sec" in row
-                        and row["predicted_wait_sec"] is not None
+                        if "predicted_wait_sec" in row and row["predicted_wait_sec"] is not None
                         else None
                     ),
                 )

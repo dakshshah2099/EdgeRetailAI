@@ -91,3 +91,43 @@ class CameraMeshSummary(BaseModel):
     total_cameras: int
     active_cameras: int
     cameras: list[CameraMeshNodeConfig]
+
+
+class SKUProfile(BaseModel):
+    sku_id: str
+    name: str
+    brand: str
+    expected_zone_id: str
+    category: str = "general"
+
+
+class RegisterSKURequest(BaseModel):
+    sku_id: str
+    name: str
+    brand: str
+    expected_zone_id: str
+    category: str = "general"
+
+
+class SKUSegregationItem(BaseModel):
+    shelf_id: str
+    camera_id: str
+    detected_sku_id: str | None = None
+    detected_sku_name: str | None = None
+    expected_sku_id: str | None = None
+    facing_count: int = Field(ge=0)
+    fill_percentage: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    status: Literal["ok", "low", "empty", "misplaced"]
+    planogram_compliant: bool
+    timestamp: datetime
+
+
+class SKUSegregationReport(BaseModel):
+    interval_seconds: float
+    total_shelves_monitored: int
+    compliant_shelves: int
+    misplaced_shelves: int
+    low_or_empty_shelves: int
+    last_evaluated_at: datetime | None = None
+    items: list[SKUSegregationItem]

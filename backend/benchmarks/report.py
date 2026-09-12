@@ -30,8 +30,11 @@ def generate_report(
 
     if fp32_result.mean_latency_ms > 0.0:
         latency_delta_pct = round(
-            ((int8_result.mean_latency_ms - fp32_result.mean_latency_ms)
-             / fp32_result.mean_latency_ms) * 100.0,
+            (
+                (int8_result.mean_latency_ms - fp32_result.mean_latency_ms)
+                / fp32_result.mean_latency_ms
+            )
+            * 100.0,
             1,
         )
         if latency_delta_pct > 0:
@@ -153,50 +156,56 @@ def generate_report(
             f"{spec.precision} | {fps_str} | [Source]({spec.source_url}) |"
         )
 
-    lines.extend([
-        "",
-        "### Benchmark Citations & Hardware Assessment",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "### Benchmark Citations & Hardware Assessment",
+            "",
+        ]
+    )
 
     for spec in jetson_specs:
         lines.append(f"- **{spec.device_name}:** {spec.notes}. Source: {spec.source_url}")
 
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## 4. Edge Deployment Conclusions & Architecture Fit",
-        "",
-        (
-            f"1. **Local Host Performance:** Baseline FP32 achieves **{fp32_result.fps:.2f} FPS** "
-            f"({fp32_result.mean_latency_ms:.2f} ms/frame) on the development laptop. Dynamic INT8 "
-            f"runs at **{int8_result.fps:.2f} FPS** due to activation dequantization on CPU, "
-            "while shrinking binary size for edge distribution."
-        ),
-        (
-            f"2. **Memory Footprint:** Dynamic quantization slashes binary storage from "
-            f"**{fp32_result.model_size_mb:.2f} MB** to **{int8_result.model_size_mb:.2f} MB**, "
-            "easing distribution to edge appliances with constrained flash memory."
-        ),
-        (
-            "3. **Raspberry Pi 4B (8GB) Viability:** Raspberry Pi 4B runs the edge pipeline "
-            "natively. With 8GB RAM and INT8 ONNX Runtime / NCNN, the CPU achieves ~8.5 FPS at "
-            "640x640 (and ~16 FPS at 320x320) per Ultralytics published benchmarks."
-        ),
-        (
-            "4. **ESP32 Microcontroller Tier:** ESP32-S3 (8MB PSRAM) is memory-constrained for "
-            "running multi-zone YOLO models directly. Instead, ESP32-CAM devices function as "
-            "ultra-low-cost ($5) wireless RTSP video sensors streaming directly into the "
-            "Raspberry Pi 4B host."
-        ),
-        (
-            "5. **Jetson Scaling:** Upgrading to an NVIDIA Jetson Orin Nano (8GB) with TensorRT "
-            "provides a published headroom of **95+ FPS** (NVIDIA official benchmark), supporting "
-            "multi-camera retail ingestion without modifying any pipeline code."
-        ),
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            "## 4. Edge Deployment Conclusions & Architecture Fit",
+            "",
+            (
+                f"1. **Local Host Performance:** Baseline FP32 achieves **{fp32_result.fps:.2f} "
+                f"FPS** ({fp32_result.mean_latency_ms:.2f} ms/frame) on the development laptop. "
+                f"Dynamic INT8 runs at **{int8_result.fps:.2f} FPS** due to activation "
+                "dequantization on CPU, while shrinking binary size for edge distribution."
+            ),
+            (
+                f"2. **Memory Footprint:** Dynamic quantization slashes binary storage from "
+                f"**{fp32_result.model_size_mb:.2f} MB** to "
+                f"**{int8_result.model_size_mb:.2f} MB**, easing distribution to edge appliances "
+                "with constrained flash memory."
+            ),
+            (
+                "3. **Raspberry Pi 4B (8GB) Viability:** Raspberry Pi 4B runs the edge pipeline "
+                "natively. With 8GB RAM and INT8 ONNX Runtime / NCNN, the CPU achieves ~8.5 FPS at "
+                "640x640 (and ~16 FPS at 320x320) per Ultralytics published benchmarks."
+            ),
+            (
+                "4. **ESP32 Microcontroller Tier:** ESP32-S3 (8MB PSRAM) is memory-constrained for "
+                "running multi-zone YOLO models directly. Instead, ESP32-CAM devices function as "
+                "ultra-low-cost ($5) wireless RTSP video sensors streaming directly into the "
+                "Raspberry Pi 4B host."
+            ),
+            (
+                "5. **Jetson Scaling:** Upgrading to an NVIDIA Jetson Orin Nano (8GB) with "
+                "TensorRT provides a published headroom of **95+ FPS** "
+                "(NVIDIA official benchmark), supporting multi-camera retail ingestion "
+                "without modifying any pipeline code."
+            ),
+            "",
+        ]
+    )
 
     report_content = "\n".join(lines)
     out_file = Path(output_path)

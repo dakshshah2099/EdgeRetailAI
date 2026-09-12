@@ -79,9 +79,7 @@ def run_sync_job(
                 )
         except Exception as exc:
             logger.exception("Error pushing stock update for shelf %s", update.shelf_id)
-            failures.append(
-                f"Exception pushing stock update for shelf '{update.shelf_id}': {exc}"
-            )
+            failures.append(f"Exception pushing stock update for shelf '{update.shelf_id}': {exc}")
 
     # 2. Pull recent sales transactions from POS/ERP
     sales_records: list[POSSalesRecord] = []

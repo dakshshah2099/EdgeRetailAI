@@ -36,9 +36,7 @@ def test_alerts_empty_data(client: TestClient) -> None:
     assert resp.json() == []
 
 
-def test_alerts_open_and_resolved_filtering(
-    client: TestClient, test_repo: EventRepository
-) -> None:
+def test_alerts_open_and_resolved_filtering(client: TestClient, test_repo: EventRepository) -> None:
     now = datetime.now(UTC)
 
     # 1 open alert

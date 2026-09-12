@@ -25,10 +25,7 @@ def zone_polygon_cache(zones: list[ZoneConfig]) -> dict[str, npt.NDArray[np.int3
     was. State clearly what each caller's caching behavior was before and
     after).
     """
-    return {
-        z.zone_id: np.array(z.polygon, dtype=np.int32).reshape((-1, 1, 2))
-        for z in zones
-    }
+    return {z.zone_id: np.array(z.polygon, dtype=np.int32).reshape((-1, 1, 2)) for z in zones}
 
 
 def is_inside_zone(

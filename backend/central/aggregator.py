@@ -142,8 +142,7 @@ def aggregate_stores(
     try:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_cfg = {
-                executor.submit(poll_store, cfg, timeout_sec, http_client): cfg
-                for cfg in registry
+                executor.submit(poll_store, cfg, timeout_sec, http_client): cfg for cfg in registry
             }
             for future in as_completed(future_to_cfg):
                 cfg = future_to_cfg[future]

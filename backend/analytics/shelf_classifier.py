@@ -52,11 +52,7 @@ class EdgeDensityShelfClassifier(ShelfClassifier):
         if shelf_crop.size == 0 or shelf_crop.shape[0] == 0 or shelf_crop.shape[1] == 0:
             return "empty", 0.0
 
-        gray = (
-            cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY)
-            if shelf_crop.ndim == 3
-            else shelf_crop
-        )
+        gray = cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY) if shelf_crop.ndim == 3 else shelf_crop
 
         edges = cv2.Canny(gray, self.canny_low, self.canny_high)
         total_pixels = edges.size
@@ -113,11 +109,7 @@ class HybridShelfClassifier(ShelfClassifier):
             return "empty", 0.0
 
         # 1. Edge density component
-        gray = (
-            cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY)
-            if shelf_crop.ndim == 3
-            else shelf_crop
-        )
+        gray = cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY) if shelf_crop.ndim == 3 else shelf_crop
         edges = cv2.Canny(gray, self.canny_low, self.canny_high)
         edge_density = float(np.count_nonzero(edges)) / float(max(1, edges.size))
         edge_score = min(1.0, edge_density / 0.07)

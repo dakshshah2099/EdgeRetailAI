@@ -81,4 +81,3 @@ def test_person_detector_filters_non_person_classes() -> None:
 def test_onnx_backend_mismatched_input_size_raises_value_error() -> None:
     with pytest.raises(ValueError, match="does not match model static"):
         ONNXBackend(MODEL_PATH, input_size=(512, 512))
-

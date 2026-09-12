@@ -145,4 +145,3 @@ def test_root_endpoint_redirects_or_returns_json() -> None:
     else:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
-

@@ -130,12 +130,8 @@ class QueueMonitor:
 
             # --- FR9 Congestion Prediction ---
             window_cutoff = frame.timestamp - timedelta(seconds=self.rate_window_sec)
-            recent_arrivals = [
-                t for t in self._arrivals[zone.zone_id] if t >= window_cutoff
-            ]
-            recent_departures = [
-                t for t in self._departures[zone.zone_id] if t >= window_cutoff
-            ]
+            recent_arrivals = [t for t in self._arrivals[zone.zone_id] if t >= window_cutoff]
+            recent_departures = [t for t in self._departures[zone.zone_id] if t >= window_cutoff]
 
             window_duration = max(10.0, self.rate_window_sec)
             arrival_rate_per_sec = len(recent_arrivals) / window_duration

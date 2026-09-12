@@ -189,9 +189,9 @@ class FootfallTracker:
                                     zone_id
                                 )
                                 if already_emitted is None:
-                                    entry_info = self._track_entry_info.get(
-                                        det.track_id, {}
-                                    ).get(zone_id)
+                                    entry_info = self._track_entry_info.get(det.track_id, {}).get(
+                                        zone_id
+                                    )
                                     if entry_info is not None:
                                         entry_dir = self._get_zone_direction(zone)
                                         c = _polygon_centroid(zone.polygon)
@@ -206,10 +206,9 @@ class FootfallTracker:
                                         curr_side = (point[0] - c[0]) * entry_dir[0] + (
                                             point[1] - c[1]
                                         ) * entry_dir[1]
-                                        disp_from_entry = (
-                                            (point[0] - orig_pt[0]) * entry_dir[0]
-                                            + (point[1] - orig_pt[1]) * entry_dir[1]
-                                        )
+                                        disp_from_entry = (point[0] - orig_pt[0]) * entry_dir[0] + (
+                                            point[1] - orig_pt[1]
+                                        ) * entry_dir[1]
 
                                         if (
                                             (dot >= 0 and start_side <= 0)
@@ -313,18 +312,14 @@ class FootfallTracker:
                         entry_dir = self._get_zone_direction(zone)
                         c = _polygon_centroid(zone.polygon)
 
-                        if prev_point is not None and (
-                            is_inside or zone_id in previously_inside
-                        ):
+                        if prev_point is not None and (is_inside or zone_id in previously_inside):
                             d_prev = (prev_point[0] - c[0]) * entry_dir[0] + (
                                 prev_point[1] - c[1]
                             ) * entry_dir[1]
                             d_curr = (point[0] - c[0]) * entry_dir[0] + (
                                 point[1] - c[1]
                             ) * entry_dir[1]
-                            last_side = self._track_line_side.get(det.track_id, {}).get(
-                                zone_id, 0
-                            )
+                            last_side = self._track_line_side.get(det.track_id, {}).get(zone_id, 0)
 
                             if d_prev < 0 and d_curr >= 0 and last_side != 1:
                                 events.append(

@@ -630,4 +630,3 @@ def test_directional_emit_on_zone_enter_outward_exit() -> None:
     assert len(ev_exit) == 1
     assert ev_exit[0].event_type == "exit"
     assert ev_exit[0].zone_id == "entrance_1"
-

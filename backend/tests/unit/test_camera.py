@@ -287,5 +287,3 @@ def test_rtsp_source_ffmpeg_transport_options() -> None:
         assert "timeout;" in os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS", "")
         assert source.source_url == "rtsp://192.168.1.100:8080/h264_pcm.sdp"
         source.close()
-
-

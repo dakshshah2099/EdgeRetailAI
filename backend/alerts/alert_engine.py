@@ -179,8 +179,7 @@ class AlertEngine:
             if shelf_id in latest_stock_events:
                 stock_ev = latest_stock_events[shelf_id]
                 is_cleared = (
-                    stock_ev.status == "ok"
-                    and stock_ev.confidence >= self.low_stock_threshold
+                    stock_ev.status == "ok" and stock_ev.confidence >= self.low_stock_threshold
                 )
                 if is_cleared:
                     open_alert = self._open_stock_alerts.pop(shelf_id)

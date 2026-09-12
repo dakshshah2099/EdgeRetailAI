@@ -20,6 +20,7 @@ from analytics.shelf_classifier import (
     TemporalShelfSmoother,
     check_shelves,
 )
+from analytics.sku_classifier import sku_segregator
 from api.dependencies import get_app_config, get_repository
 from api.env_manager import read_env_file
 from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
@@ -351,6 +352,8 @@ class StreamManager:
         env_vars = read_env_file()
         target_interval = 0.2
         shelf_interval = 1.0
+        last_sku_time = 0.0
+        sku_interval = 10.0
 
         while not self._shutdown_event.is_set():
             try:
@@ -366,6 +369,13 @@ class StreamManager:
                     shelf_interval = float(
                         env_vars.get("SHELF_ANALYSIS_INTERVAL")
                         or os.environ.get("SHELF_ANALYSIS_INTERVAL", "1.0")
+                    )
+                    sku_interval = max(
+                        10.0,
+                        float(
+                            env_vars.get("SKU_SEGREGATION_INTERVAL")
+                            or os.environ.get("SKU_SEGREGATION_INTERVAL", "10.0")
+                        ),
                     )
                     last_cfg_time = now
 
@@ -542,7 +552,30 @@ class StreamManager:
                     except Exception as e:
                         logger.error("Alert resolution error: %s", e)
 
-                # 7. Throttle inference loop to target FPS
+                # 7. Workload C: Periodic Edge SKU Segregation (Locked >= 10s cadence)
+                now = time.monotonic()
+                if now - last_sku_time >= sku_interval:
+                    last_sku_time = now
+                    shelf_zones = [z for z in zones if z.zone_type == "shelf"]
+                    if shelf_zones:
+                        try:
+                            # Collate active frames from multi-camera mesh and primary feed
+                            mesh_frames = camera_mesh.get_active_frames()
+                            frames_to_eval = list(mesh_frames)
+                            if curr_frame is not None and not any(
+                                cam_id == "cam_primary" for cam_id, _ in frames_to_eval
+                            ):
+                                frames_to_eval.insert(0, ("cam_primary", curr_frame))
+
+                            if frames_to_eval:
+                                sku_segregator.evaluate_all_shelves(
+                                    frames_by_camera=frames_to_eval,
+                                    zones=shelf_zones,
+                                )
+                        except Exception as e:
+                            logger.error("SKU segregation error: %s", e)
+
+                # 8. Throttle inference loop to target FPS
                 elapsed = time.monotonic() - inf_start
                 sleep_time = target_interval - elapsed
                 if sleep_time > 0:

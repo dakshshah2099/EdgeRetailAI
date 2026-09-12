@@ -19,9 +19,7 @@ from storage.repository import EventRepository
 from vision.tracker import TrackedDetection
 
 
-def make_synthetic_frame(
-    width: int = 640, height: int = 480
-) -> npt.NDArray[np.uint8]:
+def make_synthetic_frame(width: int = 640, height: int = 480) -> npt.NDArray[np.uint8]:
     """Generate a clean synthetic BGR canvas for video pipeline tests."""
     img = np.full((height, width, 3), 30, dtype=np.uint8)
     for x in range(0, width, 40):
@@ -97,9 +95,7 @@ def test_end_to_end_retail_lifecycle(
     # -------------------------------------------------------------------------
     t2 = base_time + timedelta(seconds=2)
     f2_meta = Frame(source_id="cam_main", timestamp=t2, width=640, height=480)
-    f2_tracks = [
-        TrackedDetection(track_id="shopper_1", bbox=(100, 100, 30, 60), confidence=0.94)
-    ]
+    f2_tracks = [TrackedDetection(track_id="shopper_1", bbox=(100, 100, 30, 60), confidence=0.94)]
     ff_events_2 = footfall_tracker.update(f2_meta, f2_tracks, zones)
     for ev in ff_events_2:
         e2e_repo.save_detection_event(ev)
@@ -110,9 +106,7 @@ def test_end_to_end_retail_lifecycle(
     # -------------------------------------------------------------------------
     t3 = base_time + timedelta(seconds=10)
     f3_meta = Frame(source_id="cam_main", timestamp=t3, width=640, height=480)
-    f3_tracks = [
-        TrackedDetection(track_id="shopper_1", bbox=(400, 120, 30, 60), confidence=0.91)
-    ]
+    f3_tracks = [TrackedDetection(track_id="shopper_1", bbox=(400, 120, 30, 60), confidence=0.91)]
     ff_events_3 = footfall_tracker.update(f3_meta, f3_tracks, zones)
     for ev in ff_events_3:
         e2e_repo.save_detection_event(ev)
@@ -121,9 +115,7 @@ def test_end_to_end_retail_lifecycle(
 
     t4 = base_time + timedelta(seconds=25)
     f4_meta = Frame(source_id="cam_main", timestamp=t4, width=640, height=480)
-    f4_tracks = [
-        TrackedDetection(track_id="shopper_1", bbox=(400, 120, 30, 60), confidence=0.93)
-    ]
+    f4_tracks = [TrackedDetection(track_id="shopper_1", bbox=(400, 120, 30, 60), confidence=0.93)]
     ff_events_4 = footfall_tracker.update(f4_meta, f4_tracks, zones)
     for ev in ff_events_4:
         e2e_repo.save_detection_event(ev)
@@ -133,9 +125,7 @@ def test_end_to_end_retail_lifecycle(
     # Frame 5 (t=35s): Shopper 1 leaves display zone -> Dwell event emitted
     t5 = base_time + timedelta(seconds=35)
     f5_meta = Frame(source_id="cam_main", timestamp=t5, width=640, height=480)
-    f5_tracks = [
-        TrackedDetection(track_id="shopper_1", bbox=(20, 20, 30, 60), confidence=0.90)
-    ]
+    f5_tracks = [TrackedDetection(track_id="shopper_1", bbox=(20, 20, 30, 60), confidence=0.90)]
     ff_events_5 = footfall_tracker.update(f5_meta, f5_tracks, zones)
     for ev in ff_events_5:
         e2e_repo.save_detection_event(ev)
