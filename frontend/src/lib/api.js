@@ -143,3 +143,53 @@ export async function checkHealth(options = {}) {
     return false;
   }
 }
+
+export async function fetchPlanogramCompliance(zoneId, options = {}) {
+  const res = await fetch(`${API_BASE}/kpi/planogram?zone_id=${encodeURIComponent(zoneId)}`, {
+    signal: options.signal,
+  });
+  if (!res.ok) throw new Error(`Planogram KPI error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchKPIStaff(params = {}, options = {}) {
+  const search = new URLSearchParams();
+  if (params.since) search.set('since', params.since);
+  if (params.until) search.set('until', params.until);
+
+  const query = search.toString() ? `?${search.toString()}` : '';
+  const res = await fetch(`${API_BASE}/kpi/staff${query}`, { signal: options.signal });
+  if (!res.ok) throw new Error(`Staff KPI error: ${res.statusText}`);
+  return res.json();
+}
+
+export function getDailyReportDownloadUrl(dateStr, format = 'csv') {
+  return `${API_BASE}/reports/daily?date=${encodeURIComponent(dateStr)}&format=${encodeURIComponent(format)}`;
+}
+
+export async function resetTelemetry(options = {}) {
+  const res = await fetch(`${API_BASE}/kpi/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to reset telemetry');
+  }
+  return res.json();
+}
+
+export async function resolveAllAlerts(options = {}) {
+  const res = await fetch(`${API_BASE}/alerts/resolve-all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to resolve alerts');
+  }
+  return res.json();
+}
+

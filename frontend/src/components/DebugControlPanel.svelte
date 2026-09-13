@@ -1,10 +1,13 @@
 <script>
-  import { updateSystemEnv } from '../lib/api.js';
+  import { updateSystemEnv, resetTelemetry, resolveAllAlerts } from '../lib/api.js';
 
   let {
     envVariables = {},
     onSave = () => {}
   } = $props();
+
+  let isResettingTelemetry = $state(false);
+  let isResolvingAlerts = $state(false);
 
   let editVars = $state({});
   let isDirty = $state(false);
@@ -74,6 +77,36 @@
     editVars = next;
     isDirty = true;
   }
+
+  async function handleResetTelemetry() {
+    if (isResettingTelemetry) return;
+    isResettingTelemetry = true;
+    try {
+      const res = await resetTelemetry();
+      statusMessage = `✓ Telemetry purged: ${res.cleared_events || 0} events reset to zero.`;
+      isError = false;
+    } catch (err) {
+      statusMessage = `Error resetting telemetry: ${err.message}`;
+      isError = true;
+    } finally {
+      isResettingTelemetry = false;
+    }
+  }
+
+  async function handleResolveAllAlerts() {
+    if (isResolvingAlerts) return;
+    isResolvingAlerts = true;
+    try {
+      const res = await resolveAllAlerts();
+      statusMessage = `✓ Operations triage: ${res.resolved_count || 0} alerts marked resolved.`;
+      isError = false;
+    } catch (err) {
+      statusMessage = `Error resolving alerts: ${err.message}`;
+      isError = true;
+    } finally {
+      isResolvingAlerts = false;
+    }
+  }
 </script>
 
 <div class="bg-white border border-slate-200 rounded-md p-3 sm:p-5 flex flex-col gap-4 sm:gap-5 shadow-xs">
@@ -91,7 +124,27 @@
       <p class="text-xs text-slate-500 font-mono">Direct real-time control over YOLO detection thresholds, RTSP authentication, and system environment variables.</p>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-wrap">
+      <button 
+        type="button"
+        class="px-2.5 py-1.5 text-xs font-mono font-medium rounded-md bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 cursor-pointer transition-colors disabled:opacity-50"
+        onclick={handleResetTelemetry}
+        disabled={isResettingTelemetry}
+        title="Purge transient detection & dwell events"
+      >
+        {isResettingTelemetry ? 'Resetting...' : 'Reset Telemetry'}
+      </button>
+
+      <button 
+        type="button"
+        class="px-2.5 py-1.5 text-xs font-mono font-medium rounded-md bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 cursor-pointer transition-colors disabled:opacity-50"
+        onclick={handleResolveAllAlerts}
+        disabled={isResolvingAlerts}
+        title="Resolve all open operational alerts"
+      >
+        {isResolvingAlerts ? 'Resolving...' : 'Resolve All Alerts'}
+      </button>
+
       {#if isDirty}
         <button 
           type="button"

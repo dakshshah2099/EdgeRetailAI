@@ -10,15 +10,22 @@
   import QueueMonitor from "./components/QueueMonitor.svelte";
   import StockInventory from "./components/StockInventory.svelte";
   import DebugControlPanel from "./components/DebugControlPanel.svelte";
+  import PlanogramCompliance from "./components/PlanogramCompliance.svelte";
+  import StaffEfficiency from "./components/StaffEfficiency.svelte";
+  import ReportsManager from "./components/ReportsManager.svelte";
   import {
     fetchKPIFootfall,
     fetchKPIQueue,
     fetchKPIStock,
     fetchKPISKU,
+    fetchPlanogramCompliance,
+    fetchKPIStaff,
     fetchAlerts,
     fetchHeatmap,
     fetchSystemEnv,
     checkHealth,
+    resetTelemetry,
+    resolveAllAlerts,
   } from "./lib/api.js";
 
   // App State
@@ -47,13 +54,26 @@
   let queueData = $state.raw([]);
   let stockData = $state.raw([]);
   let skuReport = $state.raw(null);
+  let planogramData = $state.raw(null);
+  let staffData = $state.raw(null);
   let alertsData = $state.raw([]);
   let heatmapData = $state.raw(null);
 
   // Active Route Identifier
-  let activeTab = $state("camera"); // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'settings'
+  let activeTab = $state("camera"); // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'planogram' | 'staff' | 'reports' | 'alerts' | 'settings'
 
-  const validRoutes = ["camera", "heatmap", "footfall", "queues", "stock", "alerts", "settings"];
+  const validRoutes = [
+    "camera",
+    "heatmap",
+    "footfall",
+    "queues",
+    "stock",
+    "planogram",
+    "staff",
+    "reports",
+    "alerts",
+    "settings",
+  ];
 
   const routeMeta = {
     camera: {
@@ -80,6 +100,21 @@
       title: "Shelf Inventory & Depletions",
       category: "Store Intelligence",
       desc: "Visual shelf out-of-stock monitoring and low stock replenishment triggers",
+    },
+    planogram: {
+      title: "Planogram-Lite Compliance",
+      category: "Store Intelligence",
+      desc: "Shelf facing grid subdivision, expected layout compliance, and empty facing detection",
+    },
+    staff: {
+      title: "Staff Efficiency Analytics",
+      category: "Store Intelligence",
+      desc: "Counter utilization, recommendation follow rates, and operational alert response speed",
+    },
+    reports: {
+      title: "Automated Daily Reports",
+      category: "Operations",
+      desc: "On-demand shift and daily analytics compilation with CSV & PDF report downloads",
     },
     alerts: {
       title: "Operations Incident Log",
@@ -141,7 +176,7 @@
     };
 
     try {
-      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku] = await Promise.allSettled([
+      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, staff] = await Promise.allSettled([
         checkHealth({ signal: ac.signal }),
         fetchKPIFootfall({ ...params, group_by: groupBy }, { signal: ac.signal }),
         fetchKPIQueue(params, { signal: ac.signal }),
@@ -150,6 +185,8 @@
         fetchHeatmap(params, { signal: ac.signal }),
         fetchSystemEnv({ signal: ac.signal }),
         fetchKPISKU(params, { signal: ac.signal }),
+        fetchPlanogramCompliance("zone_shelf_beverages", { signal: ac.signal }),
+        fetchKPIStaff(params, { signal: ac.signal }),
       ]);
 
       if (ac.signal.aborted) return;
@@ -161,6 +198,8 @@
       if (alerts.status === "fulfilled") alertsData = alerts.value;
       if (heatmap.status === "fulfilled") heatmapData = heatmap.value;
       if (sku.status === "fulfilled") skuReport = sku.value;
+      if (plano.status === "fulfilled") planogramData = plano.value;
+      if (staff.status === "fulfilled") staffData = staff.value;
       if (sysEnv.status === "fulfilled") {
         envVariables = sysEnv.value.variables;
       }
@@ -451,6 +490,21 @@
           <QueueMonitor queueEvents={queueData} congestionThreshold={4} />
         {:else if activeTab === "stock"}
           <StockInventory stockEvents={stockData} {skuReport} />
+        {:else if activeTab === "planogram"}
+          <PlanogramCompliance 
+            {planogramData} 
+            zoneId={selectedZone || "zone_shelf_beverages"} 
+            isLoading={isRefreshing} 
+            onRefresh={loadAllData} 
+          />
+        {:else if activeTab === "staff"}
+          <StaffEfficiency 
+            {staffData} 
+            isLoading={isRefreshing} 
+            onRefresh={loadAllData} 
+          />
+        {:else if activeTab === "reports"}
+          <ReportsManager />
         {:else if activeTab === "alerts"}
           <AlertsFeed 
             alerts={alertsData} 

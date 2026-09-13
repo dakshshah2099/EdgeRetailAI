@@ -311,6 +311,132 @@
             </div>
           {/if}
         </div>
+
+        <!-- Planogram Compliance -->
+        <div class="relative group">
+          {#if activeTab === 'planogram'}
+            <a
+              href="#!/planogram"
+              class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
+              onclick={(e) => { e.preventDefault(); handleTabClick('planogram'); }}
+            >
+              <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+              {#if !isCollapsed}
+                <span class="flex-1 text-left truncate">Planogram</span>
+              {/if}
+            </a>
+          {:else}
+            <a
+              href="#!/planogram"
+              class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
+              onclick={(e) => { e.preventDefault(); handleTabClick('planogram'); }}
+            >
+              <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+              {#if !isCollapsed}
+                <span class="flex-1 text-left truncate">Planogram</span>
+              {/if}
+            </a>
+          {/if}
+          {#if isCollapsed}
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
+              Planogram
+            </div>
+          {/if}
+        </div>
+
+        <!-- Staff Efficiency -->
+        <div class="relative group">
+          {#if activeTab === 'staff'}
+            <a
+              href="#!/staff"
+              class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
+              onclick={(e) => { e.preventDefault(); handleTabClick('staff'); }}
+            >
+              <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              {#if !isCollapsed}
+                <span class="flex-1 text-left truncate">Staff Efficiency</span>
+              {/if}
+            </a>
+          {:else}
+            <a
+              href="#!/staff"
+              class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
+              onclick={(e) => { e.preventDefault(); handleTabClick('staff'); }}
+            >
+              <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              {#if !isCollapsed}
+                <span class="flex-1 text-left truncate">Staff Efficiency</span>
+              {/if}
+            </a>
+          {/if}
+          {#if isCollapsed}
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
+              Staff Efficiency
+            </div>
+          {/if}
+        </div>
+
+        <!-- Automated Reports -->
+        <div class="relative group">
+          {#if activeTab === 'reports'}
+            <a
+              href="#!/reports"
+              class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
+              onclick={(e) => { e.preventDefault(); handleTabClick('reports'); }}
+            >
+              <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+              {#if !isCollapsed}
+                <span class="flex-1 text-left truncate">Daily Reports</span>
+              {/if}
+            </a>
+          {:else}
+            <a
+              href="#!/reports"
+              class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
+              onclick={(e) => { e.preventDefault(); handleTabClick('reports'); }}
+            >
+              <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+              {#if !isCollapsed}
+                <span class="flex-1 text-left truncate">Daily Reports</span>
+              {/if}
+            </a>
+          {/if}
+          {#if isCollapsed}
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
+              Daily Reports
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
 
