@@ -117,11 +117,11 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
     now_str = now.strftime("%Y-%m-%d %H:%M:%S UTC")
     print(f"Generating synthetic telemetry from {start_str} to {now_str}...")
 
-    detection_rows: list[tuple] = []
-    dwell_rows: list[tuple] = []
-    queue_rows: list[tuple] = []
-    stock_rows: list[tuple] = []
-    alert_rows: list[tuple] = []
+    detection_rows: list[tuple[Any, ...]] = []
+    dwell_rows: list[tuple[Any, ...]] = []
+    queue_rows: list[tuple[Any, ...]] = []
+    stock_rows: list[tuple[Any, ...]] = []
+    alert_rows: list[tuple[Any, ...]] = []
 
     shopper_idx = 1000
     total_enters = 0
@@ -299,7 +299,7 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
 
     # 3. Simulate Shelf Stock Events
     print("Generating category shelf stock events...")
-    stock_records = [
+    stock_records: list[tuple[str, list[tuple[float, str, float]]]] = [
         (
             "zone_shelf_beverages",
             [
@@ -520,18 +520,6 @@ def main() -> None:
     if not args.keep_existing:
         clear_existing_data(args.db_path)
     seed_database(args.db_path, hours=args.hours)
-
-    root_db = BACKEND_DIR.parent / "retail.db"
-    if root_db.resolve() != args.db_path.resolve():
-        import shutil
-
-        shutil.copyfile(args.db_path, root_db)
-
-    root_cfg = BACKEND_DIR.parent / "config.yaml"
-    if root_cfg.resolve() != args.config_path.resolve():
-        import shutil
-
-        shutil.copyfile(args.config_path, root_cfg)
 
 
 if __name__ == "__main__":

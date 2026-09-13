@@ -1,11 +1,23 @@
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
+import api.env_manager as em
 from api.env_manager import read_env_file, write_env_file
 from api.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolate_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    temp_env = tmp_path / ".env"
+    temp_env.write_text("DEBUG_MODE=true\n", encoding="utf-8")
+    monkeypatch.setattr("api.env_manager.get_default_env_path", lambda: temp_env)
+    em._cached_env_mtime = -1.0
+    em._cached_env = {}
+    em._cached_env_path = None
 
 
 def test_env_file_parser_and_writer(tmp_path: Path) -> None:
@@ -95,12 +107,16 @@ def test_toggle_debug_endpoint() -> None:
     write_env_file({"DEBUG_MODE": "true"})
 
 
-def test_get_and_update_zones() -> None:
-    from api.dependencies import get_config_path
+def test_get_and_update_zones(tmp_path: Path) -> None:
+    import api.dependencies as dep
 
-    cfg_file = get_config_path()
-    orig_content = cfg_file.read_text(encoding="utf-8") if cfg_file.is_file() else ""
-    created_new = not cfg_file.is_file()
+    temp_cfg = tmp_path / "config.yaml"
+    temp_cfg.write_text("zones: []\n", encoding="utf-8")
+    app.dependency_overrides[dep.get_config_path] = lambda: temp_cfg
+
+    dep._cached_cfg = None
+    dep._cached_cfg_mtime = -1.0
+    dep._cached_cfg_path = None
 
     try:
         # Ensure debug mode enabled
@@ -125,11 +141,7 @@ def test_get_and_update_zones() -> None:
         assert len(put_resp.json()) == 1
         assert put_resp.json()[0]["zone_id"] == "test_entrance"
     finally:
-        # Restore original config
-        if orig_content:
-            cfg_file.write_text(orig_content, encoding="utf-8")
-        elif created_new and cfg_file.is_file():
-            cfg_file.unlink()
+        app.dependency_overrides.pop(dep.get_config_path, None)
 
 
 def test_root_endpoint_redirects_or_returns_json() -> None:

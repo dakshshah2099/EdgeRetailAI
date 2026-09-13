@@ -37,15 +37,18 @@ queue_congestion_length: 4
 
 
 def test_load_repo_default_config() -> None:
-    repo_config_path = Path("config.yaml")
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    repo_config_path = backend_dir / "config.yaml"
     if not repo_config_path.is_file():
         repo_config_path = Path("backend/config.yaml")
-    if repo_config_path.is_file():
-        cfg = load_config(str(repo_config_path))
-        assert isinstance(cfg, AppConfig)
-        assert cfg.camera.source.startswith("rtsp://")
-        assert cfg.low_stock_confidence_threshold >= 0.0
-        assert cfg.queue_congestion_length >= 1
+    if not repo_config_path.is_file():
+        repo_config_path = Path("config.yaml")
+    assert repo_config_path.is_file(), f"config.yaml not found at {repo_config_path}"
+    cfg = load_config(str(repo_config_path))
+    assert isinstance(cfg, AppConfig)
+    assert cfg.camera.source.startswith("rtsp://")
+    assert cfg.low_stock_confidence_threshold >= 0.0
+    assert cfg.queue_congestion_length >= 1
 
 
 def test_load_config_missing_field(tmp_path: Path) -> None:

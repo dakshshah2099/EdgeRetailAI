@@ -9,15 +9,21 @@ from api.env_manager import is_debug_mode, read_env_file
 from core.schemas import AppConfig, load_config
 from storage.repository import EventRepository
 
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
 
 def get_db_path() -> Path:
     """Return configured or default database path for the repository."""
     env_vars = read_env_file()
     db_str = env_vars.get("DATABASE_PATH") or os.environ.get("DATABASE_PATH", "retail.db")
     p = Path(db_str)
-    if not p.is_file() and (Path("backend") / db_str).is_file():
-        return Path("backend") / db_str
-    return p
+    if p.is_absolute():
+        return p
+    if (BACKEND_DIR / db_str).is_file():
+        return BACKEND_DIR / db_str
+    if p.is_file():
+        return p
+    return BACKEND_DIR / db_str
 
 
 def get_config_path() -> Path:
@@ -25,9 +31,13 @@ def get_config_path() -> Path:
     env_vars = read_env_file()
     cfg_str = env_vars.get("CONFIG_PATH") or os.environ.get("CONFIG_PATH", "config.yaml")
     p = Path(cfg_str)
-    if not p.is_file() and (Path("backend") / cfg_str).is_file():
-        return Path("backend") / cfg_str
-    return p
+    if p.is_absolute():
+        return p
+    if (BACKEND_DIR / cfg_str).is_file():
+        return BACKEND_DIR / cfg_str
+    if p.is_file():
+        return p
+    return BACKEND_DIR / cfg_str
 
 
 def get_repository() -> EventRepository:
@@ -91,7 +101,9 @@ def get_app_config(config_path: str | Path | None = None) -> AppConfig | None:
 AppConfigDep = Annotated[AppConfig | None, Depends(get_app_config)]
 
 
-def get_default_frame_dimensions(config_path: str | Path = "config.yaml") -> tuple[int, int]:
+def get_default_frame_dimensions(
+    config_path: str | Path | None = None,
+) -> tuple[int, int]:
     """Derive default frame width and height from configuration or zones."""
     cfg = get_app_config(config_path)
     if cfg and cfg.zones:

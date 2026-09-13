@@ -1,19 +1,27 @@
 import os
 from pathlib import Path
 
-ENV_PATH = Path(".env")
+BACKEND_DIR = Path(__file__).resolve().parent.parent
 
+
+def get_default_env_path() -> Path:
+    """Resolve backend .env file path, ensuring root directory is never polluted."""
+    return BACKEND_DIR / ".env"
+
+
+ENV_PATH = get_default_env_path()
 
 _cached_env: dict[str, str] = {}
 _cached_env_mtime: float = -1.0
 _cached_env_path: Path | None = None
 
 
-def read_env_file(path: Path = ENV_PATH) -> dict[str, str]:
+def read_env_file(path: Path | None = None) -> dict[str, str]:
     """Parse .env file into key-value dictionary with mtime-based in-memory caching."""
     global _cached_env, _cached_env_mtime, _cached_env_path
+    target_path = path if path is not None else get_default_env_path()
     try:
-        resolved_path = path.resolve()
+        resolved_path = target_path.resolve()
     except OSError:
         return {}
 
@@ -48,11 +56,12 @@ def read_env_file(path: Path = ENV_PATH) -> dict[str, str]:
     return dict(env_vars)
 
 
-def write_env_file(updates: dict[str, str], path: Path = ENV_PATH) -> dict[str, str]:
+def write_env_file(updates: dict[str, str], path: Path | None = None) -> dict[str, str]:
     """Update or append environment variables in .env file while preserving structure."""
+    target_path = path if path is not None else get_default_env_path()
     existing_lines: list[str] = []
-    if path.is_file():
-        with path.open("r", encoding="utf-8") as f:
+    if target_path.is_file():
+        with target_path.open("r", encoding="utf-8") as f:
             existing_lines = f.readlines()
 
     updated_keys: set[str] = set()
@@ -75,13 +84,13 @@ def write_env_file(updates: dict[str, str], path: Path = ENV_PATH) -> dict[str, 
             new_lines.append(f"{k}={v}\n")
             os.environ[k] = str(v)
 
-    with path.open("w", encoding="utf-8") as f:
+    with target_path.open("w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
     global _cached_env_mtime
     _cached_env_mtime = -1.0
 
-    return read_env_file(path)
+    return read_env_file(target_path)
 
 
 def is_debug_mode() -> bool:
