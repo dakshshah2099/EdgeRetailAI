@@ -35,6 +35,18 @@ export async function fetchKPIStock(params = {}) {
   return res.json();
 }
 
+export async function fetchKPISKU() {
+  const res = await fetch(`${API_BASE}/kpi/sku`);
+  if (!res.ok) throw new Error(`SKU KPI error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchSKUCatalog() {
+  const res = await fetch(`${API_BASE}/kpi/sku/catalog`);
+  if (!res.ok) throw new Error(`SKU catalog error: ${res.statusText}`);
+  return res.json();
+}
+
 export async function fetchAlerts(params = {}) {
   const search = new URLSearchParams();
   if (params.status) search.set('status', params.status);

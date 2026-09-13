@@ -536,7 +536,12 @@ class StreamManager:
                             for s_ev in stock_events:
                                 repo.save_stock_event(s_ev)
                                 self.latest_stock_events[s_ev.shelf_id] = s_ev
-                                s_alert = self.alert_engine.process_stock_event(s_ev)
+                                sku_prof = sku_segregator.get_sku_for_zone(s_ev.shelf_id)
+                                s_alert = self.alert_engine.process_stock_event(
+                                    s_ev,
+                                    sku_name=sku_prof.name if sku_prof else None,
+                                    sku_id=sku_prof.sku_id if sku_prof else None,
+                                )
                                 if s_alert:
                                     repo.upsert_alert(s_alert)
                         except Exception as e:
@@ -568,10 +573,35 @@ class StreamManager:
                                 frames_to_eval.insert(0, ("cam_primary", curr_frame))
 
                             if frames_to_eval:
-                                sku_segregator.evaluate_all_shelves(
+                                sku_report = sku_segregator.evaluate_all_shelves(
                                     frames_by_camera=frames_to_eval,
                                     zones=shelf_zones,
                                 )
+                                # SKU-specific stock alerts with facing counts
+                                for item in sku_report.items:
+                                    if item.status in ("low", "empty"):
+                                        sku_ev = StockEvent(
+                                            event_id=f"sku_ev_{item.shelf_id}_{int(time.time())}",
+                                            shelf_id=item.shelf_id,
+                                            timestamp=item.timestamp,
+                                            status="empty" if item.status == "empty" else "low",
+                                            confidence=item.confidence,
+                                        )
+                                        sku_prof = sku_segregator.get_sku_for_zone(item.shelf_id)
+                                        sku_name = item.detected_sku_name or (
+                                            sku_prof.name if sku_prof else None
+                                        )
+                                        sku_id = item.detected_sku_id or (
+                                            sku_prof.sku_id if sku_prof else None
+                                        )
+                                        s_alert = self.alert_engine.process_stock_event(
+                                            sku_ev,
+                                            sku_name=sku_name,
+                                            sku_id=sku_id,
+                                            facing_count=item.facing_count,
+                                        )
+                                        if s_alert:
+                                            repo.upsert_alert(s_alert)
                         except Exception as e:
                             logger.error("SKU segregation error: %s", e)
 

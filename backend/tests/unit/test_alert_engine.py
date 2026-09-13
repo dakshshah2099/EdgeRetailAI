@@ -404,3 +404,67 @@ def test_predictive_queue_congestion_alert_and_escalation(alert_engine: AlertEng
     assert alert2 is not None
     assert "has 4 people waiting" in alert2.message
     assert alert2.alert_id == alert1.alert_id  # In-place escalation
+
+
+def test_stock_empty_with_sku_produces_sku_specific_alert(alert_engine: AlertEngine) -> None:
+    """Stock empty event with SKU name and ID produces product-specific critical alert."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    event = make_stock_event("shelf_bev_1", "empty", confidence=0.88, ts=t0)
+
+    alert = alert_engine.process_stock_event(
+        event,
+        sku_name="Classic Cola Can 330ml",
+        sku_id="sku_bev_cola_330",
+    )
+
+    assert alert is not None
+    assert alert.severity == "critical"
+    assert "Classic Cola Can 330ml (sku_bev_cola_330)" in alert.message
+    assert "shelf_bev_1 is out of stock" in alert.message
+
+
+def test_stock_low_with_sku_and_facings_produces_sku_specific_alert(
+    alert_engine: AlertEngine,
+) -> None:
+    """Stock low event with SKU details and facing count includes remaining facings in message."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    event = make_stock_event("shelf_snack_1", "low", confidence=0.80, ts=t0)
+
+    alert = alert_engine.process_stock_event(
+        event,
+        sku_name="Artisan Potato Chips 50g",
+        sku_id="sku_snack_chips_gold",
+        facing_count=2,
+    )
+
+    assert alert is not None
+    assert alert.severity == "warning"
+    assert "Artisan Potato Chips 50g (sku_snack_chips_gold)" in alert.message
+    assert "2 facings left" in alert.message
+
+
+def test_stock_sku_alert_escalation_to_out_of_stock(alert_engine: AlertEngine) -> None:
+    """SKU alert escalates from low stock warning to critical out-of-stock."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 5, 0, tzinfo=UTC)
+    low_event = make_stock_event("shelf_elec_1", "low", confidence=0.85, ts=t0)
+    empty_event = make_stock_event("shelf_elec_1", "empty", confidence=0.90, ts=t1)
+
+    alert1 = alert_engine.process_stock_event(
+        low_event,
+        sku_name="Braided USB-C Cable 1m",
+        sku_id="sku_elec_cable_usbc",
+        facing_count=1,
+    )
+    assert alert1 is not None
+    assert alert1.severity == "warning"
+
+    alert2 = alert_engine.process_stock_event(
+        empty_event,
+        sku_name="Braided USB-C Cable 1m",
+        sku_id="sku_elec_cable_usbc",
+    )
+    assert alert2 is not None
+    assert alert2.severity == "critical"
+    assert alert2.alert_id == alert1.alert_id
+    assert "is out of stock" in alert2.message

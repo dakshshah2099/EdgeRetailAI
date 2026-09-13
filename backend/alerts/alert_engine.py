@@ -30,12 +30,29 @@ class AlertEngine:
         # Mapping of counter_id -> open Alert
         self._open_queue_alerts: dict[str, Alert] = {}
 
-    def process_stock_event(self, event: StockEvent) -> Alert | None:
+    def process_stock_event(
+        self,
+        event: StockEvent,
+        sku_name: str | None = None,
+        sku_id: str | None = None,
+        facing_count: int | None = None,
+    ) -> Alert | None:
         """Returns a new Alert if this event causes a low_stock condition
         to newly open (not already open for this shelf_id), or escalates
         an existing warning alert to critical if status drops to empty."""
         if event.confidence < self.low_stock_threshold:
             return None
+
+        sku_label = (
+            f"{sku_name} ({sku_id})"
+            if sku_name and sku_id
+            else (sku_name or sku_id or f"Shelf {event.shelf_id}")
+        )
+        facing_suffix = (
+            f" ({facing_count} facings left)"
+            if facing_count is not None and event.status == "low"
+            else ""
+        )
 
         if event.shelf_id in self._open_stock_alerts:
             open_alert = self._open_stock_alerts[event.shelf_id]
@@ -46,7 +63,11 @@ class AlertEngine:
                     alert_type=open_alert.alert_type,
                     severity="critical",
                     zone_id=open_alert.zone_id,
-                    message=f"Shelf {event.shelf_id} is out of stock",
+                    message=(
+                        f"{sku_label} on {event.shelf_id} is out of stock"
+                        if (sku_name or sku_id)
+                        else f"Shelf {event.shelf_id} is out of stock"
+                    ),
                     created_at=open_alert.created_at,
                     resolved_at=None,
                 )
@@ -57,10 +78,18 @@ class AlertEngine:
 
         if event.status == "empty":
             severity: Literal["warning", "critical"] = "critical"
-            message = f"Shelf {event.shelf_id} is out of stock"
+            message = (
+                f"{sku_label} on {event.shelf_id} is out of stock"
+                if (sku_name or sku_id)
+                else f"Shelf {event.shelf_id} is out of stock"
+            )
         elif event.status == "low":
             severity = "warning"
-            message = f"Shelf {event.shelf_id} is low on stock"
+            message = (
+                f"{sku_label} on {event.shelf_id} is low on stock{facing_suffix}"
+                if (sku_name or sku_id)
+                else f"Shelf {event.shelf_id} is low on stock"
+            )
         else:
             return None
 

@@ -15,6 +15,7 @@
     fetchKPIFootfall,
     fetchKPIQueue,
     fetchKPIStock,
+    fetchKPISKU,
     fetchAlerts,
     fetchHeatmap,
     fetchSystemEnv,
@@ -47,6 +48,7 @@
   let footfallData = null;
   let queueData = [];
   let stockData = [];
+  let skuReport = null;
   let alertsData = [];
   let heatmapData = null;
 
@@ -137,7 +139,7 @@
     };
 
     try {
-      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv] = await Promise.allSettled([
+      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku] = await Promise.allSettled([
         checkHealth(),
         fetchKPIFootfall({ ...params, group_by: groupBy }),
         fetchKPIQueue(),
@@ -145,6 +147,7 @@
         fetchAlerts({ status: alertFilter }),
         fetchHeatmap(params),
         fetchSystemEnv(),
+        fetchKPISKU(),
       ]);
 
       isConnected = healthy.status === "fulfilled" && healthy.value;
@@ -153,6 +156,7 @@
       if (stock.status === "fulfilled") stockData = stock.value;
       if (alerts.status === "fulfilled") alertsData = alerts.value;
       if (heatmap.status === "fulfilled") heatmapData = heatmap.value;
+      if (sku.status === "fulfilled") skuReport = sku.value;
       if (sysEnv.status === "fulfilled") {
         envVariables = sysEnv.value.variables;
       }
@@ -437,7 +441,7 @@
         {:else if activeTab === "queues"}
           <QueueMonitor queueEvents={queueData} congestionThreshold={4} />
         {:else if activeTab === "stock"}
-          <StockInventory stockEvents={stockData} />
+          <StockInventory stockEvents={stockData} {skuReport} />
         {:else if activeTab === "alerts"}
           <AlertsFeed 
             alerts={alertsData} 

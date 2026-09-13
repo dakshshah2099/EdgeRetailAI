@@ -19,6 +19,28 @@
     queue_congestion: { label: 'QUEUE CONGESTION', border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700' },
     dwell_anomaly: { label: 'DWELL ANOMALY', border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700' }
   };
+
+  function parseSKUAlert(message) {
+    if (!message) return null;
+    const match = message.match(/^(.*?)\s+\((sku_[a-zA-Z0-9_]+)\)\s+on\s+(.*?)\s+is\s+(.*)$/);
+    if (!match) return null;
+    return {
+      name: match[1],
+      skuId: match[2],
+      shelfId: match[3],
+      condition: match[4]
+    };
+  }
+
+  function getBadge(alert, skuInfo) {
+    if (skuInfo) {
+      if (alert.severity === 'critical' || skuInfo.condition.includes('out of stock')) {
+        return { label: 'SKU DEPLETED', border: 'border-rose-300', bg: 'bg-rose-50', text: 'text-rose-800' };
+      }
+      return { label: 'SKU LOW STOCK', border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-800' };
+    }
+    return alertTypeBadges[alert.alert_type] || { label: alert.alert_type, border: 'border-slate-200', bg: 'bg-slate-50', text: 'text-slate-700' };
+  }
 </script>
 
 <div class="flex flex-col h-full bg-white border border-slate-200 rounded-md shadow-xs">
@@ -71,20 +93,42 @@
       </div>
     {:else}
       {#each alerts as alert (alert.id || alert.timestamp)}
-        {@const badge = alertTypeBadges[alert.alert_type] || { label: alert.alert_type, border: 'border-slate-200', bg: 'bg-slate-50', text: 'text-slate-700' }}
+        {@const skuInfo = parseSKUAlert(alert.message)}
+        {@const badge = getBadge(alert, skuInfo)}
         <div class="p-2.5 rounded-md border transition-colors bg-white {alert.resolved_at ? 'border-slate-100 opacity-60' : 'border-slate-200 hover:border-slate-300 shadow-xs'}">
-          <div class="flex items-center justify-between gap-2 mb-1">
-            <span class="px-1.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider rounded border {badge.bg} {badge.border} {badge.text}">
-              {badge.label}
-            </span>
+          <div class="flex items-center justify-between gap-2 mb-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="px-1.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider rounded border {badge.bg} {badge.border} {badge.text}">
+                {badge.label}
+              </span>
+              {#if skuInfo}
+                <span class="px-1.5 py-0.5 text-[10px] font-mono bg-sky-50 text-sky-700 border border-sky-200 rounded font-semibold">
+                  {skuInfo.skuId}
+                </span>
+              {/if}
+            </div>
             <span class="text-xs font-mono text-slate-400">
               {formatTimestamp(alert.timestamp)}
             </span>
           </div>
 
-          <p class="text-xs text-slate-700 leading-relaxed font-sans mb-1.5">
-            {alert.message}
-          </p>
+          {#if skuInfo}
+            <div class="mb-1.5">
+              <div class="text-xs font-bold text-slate-900 leading-snug">
+                {skuInfo.name}
+              </div>
+              <p class="text-xs text-slate-600 font-sans mt-0.5">
+                Location: <code class="font-mono text-slate-800 bg-slate-100 px-1 py-0.5 rounded">{skuInfo.shelfId}</code> •
+                <strong class="{alert.severity === 'critical' ? 'text-rose-700' : 'text-amber-700'} uppercase">
+                  {skuInfo.condition}
+                </strong>
+              </p>
+            </div>
+          {:else}
+            <p class="text-xs text-slate-700 leading-relaxed font-sans mb-1.5">
+              {alert.message}
+            </p>
+          {/if}
 
           <div class="flex items-center justify-between text-xs font-mono text-slate-500 pt-1 border-t border-slate-100">
             <span>Zone: <strong class="text-slate-700">{alert.zone_id || 'N/A'}</strong></span>

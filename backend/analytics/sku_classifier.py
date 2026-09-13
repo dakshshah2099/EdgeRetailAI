@@ -159,6 +159,13 @@ class SKUSegregator:
             category=ref.category,
         )
 
+    def get_sku_for_zone(self, zone_id: str) -> SKUProfile | None:
+        """Return expected SKU profile assigned to a specific shelf zone."""
+        sku_id = self._zone_expected_sku.get(zone_id)
+        if sku_id is None:
+            return None
+        return self.get_sku(sku_id)
+
     def extract_histogram(self, crop_bgr: npt.NDArray[np.uint8]) -> npt.NDArray[np.float32]:
         """Compute normalized 2D Hue-Saturation color histogram (8x8 bins)."""
         if crop_bgr.size == 0 or crop_bgr.shape[0] < 4 or crop_bgr.shape[1] < 4:
