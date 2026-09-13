@@ -1,15 +1,18 @@
 <script>
-  import { onMount } from 'svelte';
+  let {
+    heatmapData = null,
+    isLoading = false
+  } = $props();
 
-  export let heatmapData = null;
-  export let isLoading = false;
+  let canvas = $state(null);
+  let hoveredCell = $state(null);
+  let cachedCtx = null;
 
-  let canvas;
-  let hoveredCell = null;
-
-  $: if (canvas && heatmapData && heatmapData.grid) {
-    drawHeatmap();
-  }
+  $effect(() => {
+    if (canvas && heatmapData && heatmapData.grid) {
+      drawHeatmap();
+    }
+  });
 
   function getHeatColor(val, max) {
     if (val <= 0 || max <= 0) return '#f8fafc';
@@ -32,7 +35,11 @@
 
   function drawHeatmap() {
     if (!canvas || !heatmapData || !heatmapData.grid) return;
-    const ctx = canvas.getContext('2d');
+    if (!cachedCtx || cachedCtx.canvas !== canvas) {
+      cachedCtx = canvas.getContext('2d');
+    }
+    const ctx = cachedCtx;
+    if (!ctx) return;
     const { grid, rows, cols } = heatmapData;
 
     if (!rows || !cols || !grid.length) return;
@@ -129,11 +136,11 @@
       width={640}
       height={480}
       class="w-full h-full object-contain cursor-crosshair touch-none"
-      on:mousemove={handleMouseMove}
-      on:mouseleave={handleMouseLeave}
-      on:touchstart={handleTouchMove}
-      on:touchmove={handleTouchMove}
-      on:touchend={handleMouseLeave}
+      onmousemove={handleMouseMove}
+      onmouseleave={handleMouseLeave}
+      ontouchstart={handleTouchMove}
+      ontouchmove={handleTouchMove}
+      ontouchend={handleMouseLeave}
     ></canvas>
 
     {#if isLoading}

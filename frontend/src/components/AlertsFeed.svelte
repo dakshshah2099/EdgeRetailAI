@@ -1,7 +1,9 @@
 <script>
-  export let alerts = [];
-  export let activeFilter = 'open';
-  export let onFilterChange = (status) => {};
+  let {
+    alerts = [],
+    activeFilter = 'open',
+    onFilterChange = (status) => {}
+  } = $props();
 
   function formatTimestamp(isoStr) {
     if (!isoStr) return '';
@@ -59,21 +61,21 @@
       <button 
         type="button"
         class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'open' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
-        on:click={() => onFilterChange('open')}
+        onclick={() => onFilterChange('open')}
       >
         OPEN
       </button>
       <button 
         type="button"
         class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'resolved' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
-        on:click={() => onFilterChange('resolved')}
+        onclick={() => onFilterChange('resolved')}
       >
         RESOLVED
       </button>
       <button 
         type="button"
         class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'all' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
-        on:click={() => onFilterChange('all')}
+        onclick={() => onFilterChange('all')}
       >
         ALL
       </button>
@@ -92,7 +94,7 @@
         <span class="text-slate-400 text-xs mt-0.5">All monitored store zones nominal</span>
       </div>
     {:else}
-      {#each alerts as alert (alert.id || alert.timestamp)}
+      {#each alerts as alert (alert.id ?? `${alert.timestamp}_${alert.zone_id}`)}
         {@const skuInfo = parseSKUAlert(alert.message)}
         {@const badge = getBadge(alert, skuInfo)}
         <div class="p-2.5 rounded-md border transition-colors bg-white {alert.resolved_at ? 'border-slate-100 opacity-60' : 'border-slate-200 hover:border-slate-300 shadow-xs'}">

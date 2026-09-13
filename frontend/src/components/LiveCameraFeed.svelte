@@ -1,50 +1,54 @@
 <script>
-  import { onMount, onDestroy } from "svelte";
   import { fetchSystemZones, updateSystemZones } from "../lib/api.js";
 
-  export let isConnected = true;
+  let { isConnected = true } = $props();
 
-  let overlayZones = true;
-  let overlayDetections = true;
-  let targetFps = typeof window !== "undefined"
-    ? parseInt(localStorage.getItem("preferred_stream_fps") || "15", 10) || 15
-    : 15;
+  let overlayZones = $state(true);
+  let overlayDetections = $state(true);
+  let targetFps = $state(
+    typeof window !== "undefined"
+      ? parseInt(localStorage.getItem("preferred_stream_fps") || "15", 10) || 15
+      : 15
+  );
 
-  $: if (typeof window !== "undefined" && targetFps) {
-    localStorage.setItem("preferred_stream_fps", targetFps.toString());
-  }
+  $effect(() => {
+    if (typeof window !== "undefined" && targetFps) {
+      localStorage.setItem("preferred_stream_fps", targetFps.toString());
+    }
+  });
 
-  let streamTimestamp = Date.now();
-  let isStreamLoading = true;
-  let isStreamError = false;
-  let videoContainer;
-  let isFullscreen = false;
+  let streamTimestamp = $state(Date.now());
+  let isStreamLoading = $state(true);
+  let isStreamError = $state(false);
+  let videoContainer = $state(null);
+  let isFullscreen = $state(false);
 
   // Visual Zone Calibration
-  let isEditingZones = false;
-  let zones = [];
-  let selectedZoneIdx = 0;
-  let activeDragHandle = null; // { zoneIdx, ptIdx }
-  let isSavingZones = false;
-  let zoneStatusMsg = "";
-  let isZoneError = false;
+  let isEditingZones = $state(false);
+  let zones = $state([]);
+  let selectedZoneIdx = $state(0);
+  let activeDragHandle = $state(null); // { zoneIdx, ptIdx }
+  let isSavingZones = $state(false);
+  let zoneStatusMsg = $state("");
+  let isZoneError = $state(false);
 
   // Viewport dimensions & cursor tracker
-  let viewWidth = 640;
-  let viewHeight = 480;
-  let cursorX = 0;
-  let cursorY = 0;
+  let viewWidth = $state(640);
+  let viewHeight = $state(480);
+  let cursorX = $state(0);
+  let cursorY = $state(0);
 
   // CCTV Live UTC Watermark
-  let camClock = "";
-  let clockTimer = null;
+  let camClock = $state("");
 
   function updateClock() {
     const now = new Date();
     camClock = now.toISOString().replace("T", " ").slice(0, 19) + " UTC";
   }
 
-  $: streamUrl = `/video/stream?overlay_zones=${!isEditingZones && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`;
+  let streamUrl = $derived(
+    `/video/stream?overlay_zones=${!isEditingZones && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`
+  );
 
   const zoneColorMap = {
     entry_exit: {
@@ -189,31 +193,27 @@
     if (!activeDragHandle) return;
 
     const { zoneIdx, ptIdx } = activeDragHandle;
-    const nextZones = JSON.parse(JSON.stringify(zones));
-    nextZones[zoneIdx].polygon[ptIdx] = [cursorX, cursorY];
-    zones = nextZones;
+    zones[zoneIdx].polygon[ptIdx] = [cursorX, cursorY];
   }
 
   function handleSvgMouseUp() {
     activeDragHandle = null;
   }
 
-  onMount(() => {
+  $effect(() => {
     loadZones();
     updateClock();
-    clockTimer = setInterval(updateClock, 1000);
+    const clockTimer = setInterval(updateClock, 1000);
 
     const handleFsChange = () => {
       isFullscreen = !!document.fullscreenElement;
     };
     document.addEventListener("fullscreenchange", handleFsChange);
+
     return () => {
+      clearInterval(clockTimer);
       document.removeEventListener("fullscreenchange", handleFsChange);
     };
-  });
-
-  onDestroy(() => {
-    if (clockTimer) clearInterval(clockTimer);
   });
 </script>
 
@@ -248,7 +248,7 @@
         <button 
           type="button"
           class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-sky-300 bg-sky-50 text-sky-800 font-semibold cursor-pointer transition-colors"
-          on:click={() => { overlayZones = false; refreshStream(); }}
+          onclick={() => { overlayZones = false; refreshStream(); }}
           title="Toggle ROI zone overlays on video stream"
         >
           <span class="w-2 h-2 rounded-full bg-sky-500"></span>
@@ -258,7 +258,7 @@
         <button 
           type="button"
           class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
-          on:click={() => { overlayZones = true; refreshStream(); }}
+          onclick={() => { overlayZones = true; refreshStream(); }}
           title="Toggle ROI zone overlays on video stream"
         >
           <span class="w-2 h-2 rounded-full bg-slate-400"></span>
@@ -270,7 +270,7 @@
         <button 
           type="button"
           class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-emerald-300 bg-emerald-50 text-emerald-800 font-semibold cursor-pointer transition-colors"
-          on:click={() => { overlayDetections = false; refreshStream(); }}
+          onclick={() => { overlayDetections = false; refreshStream(); }}
           title="Toggle YOLO bounding box overlays on video stream"
         >
           <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -280,7 +280,7 @@
         <button 
           type="button"
           class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
-          on:click={() => { overlayDetections = true; refreshStream(); }}
+          onclick={() => { overlayDetections = true; refreshStream(); }}
           title="Toggle YOLO bounding box overlays on video stream"
         >
           <span class="w-2 h-2 rounded-full bg-slate-400"></span>
@@ -293,7 +293,7 @@
         <button 
           type="button" 
           class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 transition-colors cursor-pointer"
-          on:click={startZoneEdit}
+          onclick={startZoneEdit}
           title="Calibrate detection polygons interactively"
         >
           <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -309,21 +309,21 @@
         <button 
           type="button" 
           class="px-2.5 py-1 text-xs font-mono bg-sky-50 text-sky-800 border border-sky-200 rounded hover:bg-sky-100 font-semibold cursor-pointer"
-          on:click={addZone}
+          onclick={addZone}
         >
           + NEW ZONE
         </button>
         <button 
           type="button" 
           class="px-2.5 py-1 text-xs font-mono bg-slate-100 text-slate-700 border border-slate-200 rounded hover:bg-slate-200 cursor-pointer"
-          on:click={cancelZoneEdit}
+          onclick={cancelZoneEdit}
         >
           CANCEL
         </button>
         <button 
           type="button" 
           class="px-2.5 py-1 text-xs font-mono bg-sky-600 text-white rounded hover:bg-sky-700 font-semibold disabled:opacity-50 cursor-pointer"
-          on:click={saveZones} 
+          onclick={saveZones} 
           disabled={isSavingZones}
         >
           {isSavingZones ? 'SAVING...' : 'SAVE ZONES'}
@@ -339,7 +339,8 @@
           max="60" 
           class="w-10 bg-transparent text-slate-900 font-semibold focus:outline-none"
           bind:value={targetFps} 
-          on:change={refreshStream}
+          onchange={refreshStream}
+          aria-label="Stream target frames per second"
         />
       </div>
 
@@ -347,11 +348,12 @@
       <button 
         type="button" 
         class="p-1.5 rounded text-slate-600 hover:text-sky-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-        on:click={takeSnapshot} 
+        onclick={takeSnapshot} 
         title="Capture JPEG Snapshot"
+        aria-label="Capture JPEG Snapshot"
       >
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2v26a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
           <circle cx="12" cy="13" r="4"/>
         </svg>
       </button>
@@ -359,8 +361,9 @@
       <button 
         type="button" 
         class="p-1.5 rounded text-slate-600 hover:text-sky-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-        on:click={refreshStream} 
+        onclick={refreshStream} 
         title="Reconnect Video Stream"
+        aria-label="Reconnect Video Stream"
       >
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="23 4 23 10 17 10"/>
@@ -371,8 +374,9 @@
       <button 
         type="button" 
         class="p-1.5 rounded text-slate-600 hover:text-sky-700 hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
-        on:click={toggleFullscreen} 
+        onclick={toggleFullscreen} 
         title="Toggle Fullscreen"
+        aria-label="Toggle Fullscreen"
       >
         {#if isFullscreen}
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -406,8 +410,8 @@
       src={streamUrl} 
       alt="Edge AI Live Camera Feed" 
       class="w-full h-full object-contain select-none"
-      on:load={handleImageLoad}
-      on:error={handleImageError}
+      onload={handleImageLoad}
+      onerror={handleImageError}
     />
 
     <!-- Top Watermark & CCTV Timecode Overlay -->
@@ -430,18 +434,22 @@
 
     <!-- Interactive SVG ROI polygon editor in Calibration mode -->
     {#if isEditingZones}
-      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <svg 
         class="absolute inset-0 w-full h-full cursor-crosshair select-none z-20" 
         viewBox="0 0 {viewWidth} {viewHeight}"
-        on:mousemove={handleSvgMouseMove}
-        on:mouseup={handleSvgMouseUp}
-        on:mouseleave={handleSvgMouseUp}
+        role="region"
+        aria-label="Zone calibration canvas"
+        onmousemove={handleSvgMouseMove}
+        onmouseup={handleSvgMouseUp}
+        onmouseleave={handleSvgMouseUp}
       >
         {#each zones as zone, zIdx}
           {@const isSel = zIdx === selectedZoneIdx}
           {@const theme = getZoneTheme(zone.zone_type)}
           {@const ptsStr = zone.polygon.map((p) => p.join(',')).join(' ')}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
           <polygon
             points={ptsStr}
             stroke={theme.stroke}
@@ -449,7 +457,7 @@
             stroke-dasharray={isSel ? '4 2' : 'none'}
             fill={theme.fill}
             class="transition-all cursor-pointer"
-            on:mousedown={() => selectedZoneIdx = zIdx}
+            onmousedown={() => selectedZoneIdx = zIdx}
           />
           <text
             x={zone.polygon[0][0]}
@@ -461,13 +469,14 @@
 
           {#if isSel}
             {#each zone.polygon as pt, ptIdx}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <circle
                 cx={pt[0]}
                 cy={pt[1]}
                 r="6"
                 fill={theme.stroke}
                 class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform"
-                on:mousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
+                onmousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
               />
             {/each}
           {/if}
@@ -496,7 +505,7 @@
         <button 
           type="button" 
           class="mt-2 px-3 py-1 bg-slate-800 text-slate-200 border border-slate-700 rounded hover:bg-slate-700 cursor-pointer"
-          on:click={refreshStream}
+          onclick={refreshStream}
         >
           RETRY CONNECTION
         </button>
@@ -573,17 +582,17 @@
         </div>
 
         <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <button type="button" class="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 rounded hover:bg-slate-100 cursor-pointer" on:click={addZone}>
+          <button type="button" class="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 rounded hover:bg-slate-100 cursor-pointer" onclick={addZone}>
             + Add Zone
           </button>
-          <button type="button" class="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 rounded hover:bg-rose-100 font-semibold cursor-pointer" on:click={() => removeZone(selectedZoneIdx)}>
+          <button type="button" class="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 rounded hover:bg-rose-100 font-semibold cursor-pointer" onclick={() => removeZone(selectedZoneIdx)}>
             Delete
           </button>
         </div>
       {:else}
         <div class="flex items-center justify-between w-full">
           <span class="text-slate-500">No detection zones configured.</span>
-          <button type="button" class="px-2.5 py-1 bg-sky-600 text-white rounded hover:bg-sky-700 cursor-pointer" on:click={addZone}>
+          <button type="button" class="px-2.5 py-1 bg-sky-600 text-white rounded hover:bg-sky-700 cursor-pointer" onclick={addZone}>
             + Create Zone
           </button>
         </div>

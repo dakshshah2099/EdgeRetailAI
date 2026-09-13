@@ -1,6 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-export async function fetchKPIFootfall(params = {}) {
+export async function fetchKPIFootfall(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.zone_id) search.set('zone_id', params.zone_id);
   if (params.since) search.set('since', params.since);
@@ -8,69 +8,69 @@ export async function fetchKPIFootfall(params = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/footfall${query}`);
+  const res = await fetch(`${API_BASE}/kpi/footfall${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Footfall KPI error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchKPIQueue(params = {}) {
+export async function fetchKPIQueue(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.counter_id) search.set('counter_id', params.counter_id);
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/queue${query}`);
+  const res = await fetch(`${API_BASE}/kpi/queue${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Queue KPI error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchKPIStock(params = {}) {
+export async function fetchKPIStock(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.shelf_id) search.set('shelf_id', params.shelf_id);
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/stock${query}`);
+  const res = await fetch(`${API_BASE}/kpi/stock${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Stock KPI error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchKPISKU() {
-  const res = await fetch(`${API_BASE}/kpi/sku`);
+export async function fetchKPISKU(params = {}, options = {}) {
+  const res = await fetch(`${API_BASE}/kpi/sku`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`SKU KPI error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchSKUCatalog() {
-  const res = await fetch(`${API_BASE}/kpi/sku/catalog`);
+export async function fetchSKUCatalog(params = {}, options = {}) {
+  const res = await fetch(`${API_BASE}/kpi/sku/catalog`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`SKU catalog error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchAlerts(params = {}) {
+export async function fetchAlerts(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.status) search.set('status', params.status);
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/alerts${query}`);
+  const res = await fetch(`${API_BASE}/alerts${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Alerts error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchAlertAudit(params = {}) {
+export async function fetchAlertAudit(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.zone_id) search.set('zone_id', params.zone_id);
   if (params.alert_id) search.set('alert_id', params.alert_id);
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/alerts/audit${query}`);
+  const res = await fetch(`${API_BASE}/alerts/audit${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Alert audit error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchHeatmap(params = {}) {
+export async function fetchHeatmap(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.zone_id) search.set('zone_id', params.zone_id);
   if (params.since) search.set('since', params.since);
@@ -80,22 +80,23 @@ export async function fetchHeatmap(params = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/heatmap${query}`);
+  const res = await fetch(`${API_BASE}/heatmap${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Heatmap error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchSystemEnv() {
-  const res = await fetch(`${API_BASE}/system/env`);
+export async function fetchSystemEnv(options = {}) {
+  const res = await fetch(`${API_BASE}/system/env`, { signal: options.signal });
   if (!res.ok) throw new Error(`System env error: ${res.statusText}`);
   return res.json();
 }
 
-export async function updateSystemEnv(variables) {
+export async function updateSystemEnv(variables, options = {}) {
   const res = await fetch(`${API_BASE}/system/env`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ variables }),
+    signal: options.signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -104,25 +105,27 @@ export async function updateSystemEnv(variables) {
   return res.json();
 }
 
-export async function toggleDebugMode() {
+export async function toggleDebugMode(options = {}) {
   const res = await fetch(`${API_BASE}/system/toggle-debug`, {
     method: 'POST',
+    signal: options.signal,
   });
   if (!res.ok) throw new Error(`Toggle debug error: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchSystemZones() {
-  const res = await fetch(`${API_BASE}/system/zones`);
+export async function fetchSystemZones(options = {}) {
+  const res = await fetch(`${API_BASE}/system/zones`, { signal: options.signal });
   if (!res.ok) throw new Error(`Fetch zones error: ${res.statusText}`);
   return res.json();
 }
 
-export async function updateSystemZones(zones) {
+export async function updateSystemZones(zones, options = {}) {
   const res = await fetch(`${API_BASE}/system/zones`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ zones }),
+    signal: options.signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -131,9 +134,10 @@ export async function updateSystemZones(zones) {
   return res.json();
 }
 
-export async function checkHealth() {
+export async function checkHealth(options = {}) {
   try {
-    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
+    const signal = options.signal || AbortSignal.timeout(3000);
+    const res = await fetch(`${API_BASE}/health`, { signal });
     return res.ok;
   } catch {
     return false;

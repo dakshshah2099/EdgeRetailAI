@@ -1,7 +1,9 @@
 <script>
-  export let footfallData = null;
-  export let groupBy = 'hour';
-  export let onGroupByChange = (val) => {};
+  let {
+    footfallData = null,
+    groupBy = 'hour',
+    onGroupByChange = (val) => {}
+  } = $props();
 
   function formatBucketTime(isoStr) {
     if (!isoStr) return '';
@@ -40,22 +42,22 @@
     <div class="flex items-center bg-slate-100 border border-slate-200 rounded-md p-0.5">
       <button 
         type="button"
-        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'none' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
-        on:click={() => onGroupByChange('none')}
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'none' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
+        onclick={() => onGroupByChange('none')}
       >
         SUMMARY
       </button>
       <button 
         type="button"
-        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'hour' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
-        on:click={() => onGroupByChange('hour')}
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'hour' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
+        onclick={() => onGroupByChange('hour')}
       >
         HOURLY
       </button>
       <button 
         type="button"
-        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'day' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'}"
-        on:click={() => onGroupByChange('day')}
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {groupBy === 'day' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
+        onclick={() => onGroupByChange('day')}
       >
         DAILY
       </button>
@@ -106,7 +108,7 @@
         </div>
 
         <div class="flex items-end gap-1.5 sm:gap-2 h-44 pt-4 border-b border-slate-200 overflow-x-auto touch-pan-x">
-          {#each footfallData.buckets as bucket}
+          {#each footfallData.buckets as bucket (bucket.bucket)}
             <div class="flex-1 min-w-[28px] max-w-[48px] h-full flex flex-col justify-end items-center gap-1 group relative">
               <div class="w-full flex items-end justify-center gap-0.5 h-full">
                 <!-- Enters Bar -->

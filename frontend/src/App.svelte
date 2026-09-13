@@ -1,5 +1,4 @@
 <script>
-  import { onMount, onDestroy } from "svelte";
   import page from "page";
   import Header from "./components/Header.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -23,37 +22,36 @@
   } from "./lib/api.js";
 
   // App State
-  let isConnected = false;
-  let isRefreshing = false;
-  let lastUpdated = new Date();
-  let autoRefresh = true;
-  let refreshIntervalSec = 3;
-  let refreshTimer = null;
-  let isSidebarCollapsed = false;
-  let isMobileSidebarOpen = false;
+  let isConnected = $state(false);
+  let isRefreshing = $state(false);
+  let lastUpdated = $state(new Date());
+  let autoRefresh = $state(true);
+  let refreshIntervalSec = $state(3);
+  let isSidebarCollapsed = $state(false);
+  let isMobileSidebarOpen = $state(false);
 
   // Settings & System Env
-  let envVariables = {};
+  let envVariables = $state({});
 
   // Filters
-  let selectedTimeRange = "all";
-  let selectedZone = "";
-  let groupBy = "hour";
-  let alertFilter = "open";
+  let selectedTimeRange = $state("all");
+  let selectedZone = $state("");
+  let groupBy = $state("hour");
+  let alertFilter = $state("open");
 
   // Camera Feed Page Subpanel Tab
-  let cameraSideTab = "alerts"; // 'alerts' | 'telemetry'
+  let cameraSideTab = $state("alerts"); // 'alerts' | 'telemetry'
 
-  // Data Store
-  let footfallData = null;
-  let queueData = [];
-  let stockData = [];
-  let skuReport = null;
-  let alertsData = [];
-  let heatmapData = null;
+  // Large API Data Store using $state.raw for maximum performance without proxy overhead
+  let footfallData = $state.raw(null);
+  let queueData = $state.raw([]);
+  let stockData = $state.raw([]);
+  let skuReport = $state.raw(null);
+  let alertsData = $state.raw([]);
+  let heatmapData = $state.raw(null);
 
   // Active Route Identifier
-  let activeTab = "camera"; // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'settings'
+  let activeTab = $state("camera"); // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'alerts' | 'settings'
 
   const validRoutes = ["camera", "heatmap", "footfall", "queues", "stock", "alerts", "settings"];
 
@@ -95,10 +93,6 @@
     },
   };
 
-  $: if (typeof document !== "undefined" && routeMeta[activeTab]) {
-    document.title = `${routeMeta[activeTab].title} — EdgeRetail AI`;
-  }
-
   function setupRouting() {
     page("/", () => {
       activeTab = "camera";
@@ -130,8 +124,16 @@
     return null;
   }
 
+  let activeAbortController = null;
+
   async function loadAllData() {
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    const ac = new AbortController();
+    activeAbortController = ac;
     isRefreshing = true;
+
     const since = getSinceISO(selectedTimeRange);
     const params = {
       zone_id: selectedZone || null,
@@ -140,15 +142,17 @@
 
     try {
       const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku] = await Promise.allSettled([
-        checkHealth(),
-        fetchKPIFootfall({ ...params, group_by: groupBy }),
-        fetchKPIQueue(),
-        fetchKPIStock(),
-        fetchAlerts({ status: alertFilter }),
-        fetchHeatmap(params),
-        fetchSystemEnv(),
-        fetchKPISKU(),
+        checkHealth({ signal: ac.signal }),
+        fetchKPIFootfall({ ...params, group_by: groupBy }, { signal: ac.signal }),
+        fetchKPIQueue(params, { signal: ac.signal }),
+        fetchKPIStock(params, { signal: ac.signal }),
+        fetchAlerts({ status: alertFilter }, { signal: ac.signal }),
+        fetchHeatmap(params, { signal: ac.signal }),
+        fetchSystemEnv({ signal: ac.signal }),
+        fetchKPISKU(params, { signal: ac.signal }),
       ]);
+
+      if (ac.signal.aborted) return;
 
       isConnected = healthy.status === "fulfilled" && healthy.value;
       if (footfall.status === "fulfilled") footfallData = footfall.value;
@@ -163,10 +167,13 @@
 
       lastUpdated = new Date();
     } catch (err) {
+      if (ac.signal.aborted) return;
       console.error("Failed to load dashboard data:", err);
       isConnected = false;
     } finally {
-      isRefreshing = false;
+      if (!ac.signal.aborted) {
+        isRefreshing = false;
+      }
     }
   }
 
@@ -179,36 +186,38 @@
     loadAllData();
   }
 
-  function setupPolling() {
-    if (refreshTimer) clearInterval(refreshTimer);
+  // Reactive polling interval with automatic cleanup
+  $effect(() => {
     if (autoRefresh && refreshIntervalSec > 0) {
-      refreshTimer = setInterval(() => {
+      const timer = setInterval(() => {
         loadAllData();
       }, refreshIntervalSec * 1000);
+      return () => clearInterval(timer);
     }
-  }
-
-  $: autoRefresh, refreshIntervalSec, setupPolling();
-
-  onMount(() => {
-    setupRouting();
-    loadAllData();
-    setupPolling();
   });
 
-  onDestroy(() => {
-    page.stop();
-    if (refreshTimer) clearInterval(refreshTimer);
+  // Initial mount lifecycle
+  $effect(() => {
+    setupRouting();
+    loadAllData();
+    return () => {
+      page.stop();
+      if (activeAbortController) activeAbortController.abort();
+    };
   });
 
   // Derived KPI metrics
-  $: occupancy = footfallData ? footfallData.net_occupancy : 0;
-  $: totalEnters = footfallData ? footfallData.total_enters : 0;
-  $: totalExits = footfallData ? footfallData.total_exits : 0;
-  $: maxQueueLength = queueData.length ? Math.max(...queueData.map((q) => q.queue_length)) : 0;
-  $: lowStockShelves = stockData.filter((s) => s.status === "empty" || s.status === "low").length;
-  $: openAlertsCount = alertsData.filter((a) => !a.resolved_at).length;
+  let occupancy = $derived(footfallData ? footfallData.net_occupancy : 0);
+  let totalEnters = $derived(footfallData ? footfallData.total_enters : 0);
+  let totalExits = $derived(footfallData ? footfallData.total_exits : 0);
+  let maxQueueLength = $derived(queueData.length ? Math.max(...queueData.map((q) => q.queue_length)) : 0);
+  let lowStockShelves = $derived(stockData.filter((s) => s.status === "empty" || s.status === "low").length);
+  let openAlertsCount = $derived(alertsData.filter((a) => !a.resolved_at).length);
 </script>
+
+<svelte:head>
+  <title>{routeMeta[activeTab]?.title || "Dashboard"} — EdgeRetail AI</title>
+</svelte:head>
 
 <div class="h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 flex font-sans">
   <!-- Left Persistent Navigation Sidebar / Mobile Off-Canvas Drawer -->
@@ -316,14 +325,14 @@
                   <button
                     type="button"
                     class="flex-1 py-1 px-2 text-xs font-mono rounded bg-sky-50 text-sky-900 border border-sky-300 font-semibold cursor-pointer transition-colors"
-                    on:click={() => cameraSideTab = "alerts"}
+                    onclick={() => cameraSideTab = "alerts"}
                   >
                     INCIDENTS ({openAlertsCount})
                   </button>
                   <button
                     type="button"
                     class="flex-1 py-1 px-2 text-xs font-mono rounded text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent cursor-pointer transition-colors"
-                    on:click={() => cameraSideTab = "telemetry"}
+                    onclick={() => cameraSideTab = "telemetry"}
                   >
                     STREAM TELEMETRY
                   </button>
@@ -331,14 +340,14 @@
                   <button
                     type="button"
                     class="flex-1 py-1 px-2 text-xs font-mono rounded text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent cursor-pointer transition-colors"
-                    on:click={() => cameraSideTab = "alerts"}
+                    onclick={() => cameraSideTab = "alerts"}
                   >
                     INCIDENTS ({openAlertsCount})
                   </button>
                   <button
                     type="button"
                     class="flex-1 py-1 px-2 text-xs font-mono rounded bg-sky-50 text-sky-900 border border-sky-300 font-semibold cursor-pointer transition-colors"
-                    on:click={() => cameraSideTab = "telemetry"}
+                    onclick={() => cameraSideTab = "telemetry"}
                   >
                     STREAM TELEMETRY
                   </button>
@@ -410,7 +419,7 @@
                     <button
                       type="button"
                       class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 cursor-pointer transition-colors"
-                      on:click={() => navigateTo("settings")}
+                      onclick={() => navigateTo("settings")}
                     >
                       Open Config →
                     </button>

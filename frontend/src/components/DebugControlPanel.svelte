@@ -1,22 +1,26 @@
 <script>
   import { updateSystemEnv } from '../lib/api.js';
 
-  export let envVariables = {};
-  export let onSave = () => {};
+  let {
+    envVariables = {},
+    onSave = () => {}
+  } = $props();
 
-  let editVars = {};
-  let isDirty = false;
-  let isSaving = false;
-  let statusMessage = '';
-  let isError = false;
-  let newKey = '';
-  let newVal = '';
-  let showPassword = false;
+  let editVars = $state({});
+  let isDirty = $state(false);
+  let isSaving = $state(false);
+  let statusMessage = $state('');
+  let isError = $state(false);
+  let newKey = $state('');
+  let newVal = $state('');
+  let showPassword = $state(false);
 
   // Only sync from server when user does not have active unsaved edits
-  $: if (!isDirty && envVariables) {
-    editVars = { ...envVariables };
-  }
+  $effect(() => {
+    if (!isDirty && envVariables) {
+      editVars = { ...envVariables };
+    }
+  });
 
   function handleInputChange(key, val) {
     editVars = { ...editVars, [key]: val };
@@ -92,7 +96,7 @@
         <button 
           type="button"
           class="px-3 py-1.5 text-xs font-medium rounded-md bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors disabled:opacity-50"
-          on:click={resetEdits} 
+          onclick={resetEdits} 
           disabled={isSaving}
         >
           Discard
@@ -101,7 +105,7 @@
       <button 
         type="button"
         class="px-3 py-1.5 text-xs font-medium rounded-md bg-sky-600 hover:bg-sky-700 text-white cursor-pointer transition-colors shadow-xs disabled:opacity-50"
-        on:click={handleSave} 
+        onclick={handleSave} 
         disabled={isSaving}
       >
         {isSaving ? 'Saving...' : 'Save to .env'}
@@ -130,7 +134,7 @@
           max="0.95" 
           step="0.05"
           value={editVars['DETECTION_CONFIDENCE_THRESHOLD'] || '0.50'}
-          on:input={(e) => handleInputChange('DETECTION_CONFIDENCE_THRESHOLD', e.target.value)}
+          oninput={(e) => handleInputChange('DETECTION_CONFIDENCE_THRESHOLD', e.target.value)}
           class="w-full accent-sky-600 cursor-pointer"
         />
       </div>
@@ -146,7 +150,7 @@
           max="0.95" 
           step="0.05"
           value={editVars['LOW_STOCK_CONFIDENCE_THRESHOLD'] || '0.60'}
-          on:input={(e) => handleInputChange('LOW_STOCK_CONFIDENCE_THRESHOLD', e.target.value)}
+          oninput={(e) => handleInputChange('LOW_STOCK_CONFIDENCE_THRESHOLD', e.target.value)}
           class="w-full accent-sky-600 cursor-pointer"
         />
       </div>
@@ -162,7 +166,7 @@
           max="15" 
           step="1"
           value={editVars['QUEUE_CONGESTION_LENGTH'] || '4'}
-          on:input={(e) => handleInputChange('QUEUE_CONGESTION_LENGTH', e.target.value)}
+          oninput={(e) => handleInputChange('QUEUE_CONGESTION_LENGTH', e.target.value)}
           class="w-full accent-sky-600 cursor-pointer"
         />
       </div>
@@ -181,7 +185,7 @@
           class="bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
           placeholder="admin" 
           value={editVars['RTSP_USERNAME'] || ''}
-          on:input={(e) => handleInputChange('RTSP_USERNAME', e.target.value)}
+          oninput={(e) => handleInputChange('RTSP_USERNAME', e.target.value)}
         />
       </div>
 
@@ -194,12 +198,12 @@
             class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1.5 pr-12 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
             placeholder="••••••••" 
             value={editVars['RTSP_PASSWORD'] || ''}
-            on:input={(e) => handleInputChange('RTSP_PASSWORD', e.target.value)}
+            oninput={(e) => handleInputChange('RTSP_PASSWORD', e.target.value)}
           />
           <button 
             type="button" 
             class="absolute right-2 text-xs font-mono text-slate-500 hover:text-slate-800 cursor-pointer" 
-            on:click={() => showPassword = !showPassword}
+            onclick={() => showPassword = !showPassword}
             title={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? 'HIDE' : 'SHOW'}
@@ -217,21 +221,21 @@
       <button 
         type="button"
         class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-        on:click={() => setPreset('CAMERA_SOURCE', 'rtsp://192.168.1.100:8080/h264_pcm.sdp')}
+        onclick={() => setPreset('CAMERA_SOURCE', 'rtsp://192.168.1.100:8080/h264_pcm.sdp')}
       >
         Phone RTSP
       </button>
       <button 
         type="button"
         class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-        on:click={() => setPreset('CAMERA_SOURCE', '0')}
+        onclick={() => setPreset('CAMERA_SOURCE', '0')}
       >
         Webcam (0)
       </button>
       <button 
         type="button"
         class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-        on:click={() => setPreset('CAMERA_SOURCE', 'tests/fixtures/demo_store_walkthrough.mp4')}
+        onclick={() => setPreset('CAMERA_SOURCE', 'tests/fixtures/demo_store_walkthrough.mp4')}
       >
         Demo Video
       </button>
@@ -254,7 +258,7 @@
             type="button"
             class="sm:hidden text-slate-500 hover:text-rose-700 p-1 cursor-pointer" 
             title="Delete variable" 
-            on:click={() => removeVariable(key)}
+            onclick={() => removeVariable(key)}
           >
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M18 6L6 18M6 6l12 12"/>
@@ -266,7 +270,7 @@
             type={key === 'RTSP_PASSWORD' && !showPassword ? 'password' : 'text'} 
             class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
             value={val}
-            on:input={(e) => handleInputChange(key, e.target.value)}
+            oninput={(e) => handleInputChange(key, e.target.value)}
             placeholder="Value..."
           />
         </div>
@@ -275,7 +279,7 @@
             type="button"
             class="text-slate-500 hover:text-rose-700 p-1 rounded hover:bg-slate-100 transition-colors cursor-pointer" 
             title="Delete variable" 
-            on:click={() => removeVariable(key)}
+            onclick={() => removeVariable(key)}
           >
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M18 6L6 18M6 6l12 12"/>
@@ -293,7 +297,7 @@
           class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
           placeholder="NEW_VAR_NAME" 
           bind:value={newKey}
-          on:keydown={(e) => e.key === 'Enter' && addVariable()}
+          onkeydown={(e) => e.key === 'Enter' && addVariable()}
         />
       </div>
       <div class="flex-1">
@@ -302,14 +306,14 @@
           class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
           placeholder="Value..." 
           bind:value={newVal}
-          on:keydown={(e) => e.key === 'Enter' && addVariable()}
+          onkeydown={(e) => e.key === 'Enter' && addVariable()}
         />
       </div>
       <div class="flex sm:w-10 justify-end sm:justify-center">
         <button 
           type="button" 
           class="px-3 py-1 bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-md text-xs font-medium cursor-pointer transition-colors disabled:opacity-50" 
-          on:click={addVariable} 
+          onclick={addVariable} 
           disabled={!newKey.trim()}
         >
           Add

@@ -1,6 +1,8 @@
 <script>
-  export let stockEvents = [];
-  export let skuReport = null;
+  let {
+    stockEvents = [],
+    skuReport = null
+  } = $props();
 
   function formatTime(isoStr) {
     if (!isoStr) return '';
@@ -14,9 +16,11 @@
     zone_shelf_electronics: { name: 'Braided USB-C Cable 1m', brand: 'VoltTech', skuId: 'sku_elec_cable_usbc', category: 'Electronics' }
   };
 
-  $: skuByShelf = (skuReport && skuReport.items)
-    ? Object.fromEntries(skuReport.items.map(item => [item.shelf_id, item]))
-    : {};
+  let skuByShelf = $derived(
+    (skuReport && skuReport.items)
+      ? Object.fromEntries(skuReport.items.map(item => [item.shelf_id, item]))
+      : {}
+  );
 
   function getStatusBadge(status) {
     switch (status) {
@@ -51,12 +55,12 @@
   }
 
   // Combine shelves from stockEvents and skuReport items
-  $: allShelfIds = Array.from(new Set([
+  let allShelfIds = $derived(Array.from(new Set([
     ...stockEvents.map(s => s.shelf_id),
     ...(skuReport && skuReport.items ? skuReport.items.map(i => i.shelf_id) : [])
-  ]));
+  ])));
 
-  $: cardsData = allShelfIds.map(shelfId => {
+  let cardsData = $derived(allShelfIds.map(shelfId => {
     const sEv = stockEvents.find(s => s.shelf_id === shelfId);
     const skuItem = skuByShelf[shelfId];
     const fallback = fallbackSKUs[shelfId] || { name: 'Retail SKU Item', brand: 'Generic', skuId: `sku_${shelfId}`, category: 'General' };
@@ -81,9 +85,9 @@
       facingCount,
       fillPct
     };
-  });
+  }));
 
-  $: lowOrEmptyCount = cardsData.filter(c => c.status === 'empty' || c.status === 'low').length;
+  let lowOrEmptyCount = $derived(cardsData.filter(c => c.status === 'empty' || c.status === 'low').length);
 </script>
 
 <div class="bg-white border border-slate-200 rounded-md p-3 sm:p-4 flex flex-col gap-3 shadow-xs">

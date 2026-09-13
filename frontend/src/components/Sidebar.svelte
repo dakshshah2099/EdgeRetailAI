@@ -1,13 +1,15 @@
 <script>
-  export let activeTab = "camera";
-  export let queueCount = 0;
-  export let stockCount = 0;
-  export let alertsCount = 0;
-  export let isCollapsed = false;
-  export let isMobileOpen = false;
-  export let onSelectTab = (tab) => {};
-  export let onToggleCollapse = () => {};
-  export let onCloseMobile = () => {};
+  let {
+    activeTab = "camera",
+    queueCount = 0,
+    stockCount = 0,
+    alertsCount = 0,
+    isCollapsed = false,
+    isMobileOpen = false,
+    onSelectTab = (tab) => {},
+    onToggleCollapse = () => {},
+    onCloseMobile = () => {}
+  } = $props();
 
   function handleTabClick(tab) {
     onSelectTab(tab);
@@ -21,7 +23,7 @@
     type="button"
     aria-label="Close navigation sidebar"
     class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden cursor-pointer"
-    on:click={onCloseMobile}
+    onclick={onCloseMobile}
   ></button>
 {/if}
 
@@ -49,7 +51,7 @@
     <button
       type="button"
       class="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 md:hidden cursor-pointer"
-      on:click={onCloseMobile}
+      onclick={onCloseMobile}
       title="Close navigation"
     >
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -75,7 +77,7 @@
             <a
               href="#!/camera"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('camera'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('camera'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="23 7 16 12 23 17 23 7"/>
@@ -93,7 +95,7 @@
             <a
               href="#!/camera"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('camera'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('camera'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="23 7 16 12 23 17 23 7"/>
@@ -122,7 +124,7 @@
             <a
               href="#!/heatmap"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('heatmap'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('heatmap'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -136,7 +138,7 @@
             <a
               href="#!/heatmap"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('heatmap'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('heatmap'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -170,7 +172,7 @@
             <a
               href="#!/footfall"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('footfall'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('footfall'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
@@ -184,7 +186,7 @@
             <a
               href="#!/footfall"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('footfall'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('footfall'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
@@ -208,7 +210,7 @@
             <a
               href="#!/queues"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('queues'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('queues'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -229,7 +231,7 @@
             <a
               href="#!/queues"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('queues'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('queues'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -261,7 +263,7 @@
             <a
               href="#!/stock"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('stock'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('stock'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -283,7 +285,7 @@
             <a
               href="#!/stock"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('stock'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('stock'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
@@ -326,7 +328,7 @@
             <a
               href="#!/alerts"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('alerts'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('alerts'); }}
             >
               <svg class="w-4 h-4 shrink-0 {alertsCount > 0 ? 'text-rose-600' : 'text-sky-800'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -347,7 +349,7 @@
             <a
               href="#!/alerts"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('alerts'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('alerts'); }}
             >
               <svg class="w-4 h-4 shrink-0 {alertsCount > 0 ? 'text-rose-600' : 'text-slate-500'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -381,7 +383,7 @@
             <a
               href="#!/settings"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-semibold bg-sky-50 text-sky-900 border border-sky-300 shadow-xs transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('settings'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('settings'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-sky-800" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
@@ -395,7 +397,7 @@
             <a
               href="#!/settings"
               class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
-              on:click={(e) => { e.preventDefault(); handleTabClick('settings'); }}
+              onclick={(e) => { e.preventDefault(); handleTabClick('settings'); }}
             >
               <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
@@ -444,7 +446,7 @@
       <button
         type="button"
         class="w-full flex items-center {isCollapsed ? 'justify-center p-1.5' : 'justify-between px-2 py-1'} rounded text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 border border-slate-200 transition-colors cursor-pointer"
-        on:click={onToggleCollapse}
+        onclick={onToggleCollapse}
         title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
       >
         {#if !isCollapsed}

@@ -1,17 +1,35 @@
 <script>
-  export let isConnected = true;
-  export let lastUpdated = new Date();
-  export let isRefreshing = false;
-  export let autoRefresh = true;
-  export let refreshInterval = 3;
-  export let selectedTimeRange = 'all';
-  export let selectedZone = '';
-  export let onRefresh = () => {};
-  export let onToggleMobileMenu = () => {};
+  let {
+    isConnected = true,
+    lastUpdated = new Date(),
+    isRefreshing = false,
+    autoRefresh = $bindable(true),
+    refreshInterval = $bindable(3),
+    selectedTimeRange = $bindable('all'),
+    selectedZone = $bindable(''),
+    onRefresh = () => {},
+    onToggleMobileMenu = () => {}
+  } = $props();
+
+  let zoneDebounceTimer = null;
 
   function formatTime(date) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
+
+  function handleZoneInput(e) {
+    selectedZone = e.target.value;
+    if (zoneDebounceTimer) clearTimeout(zoneDebounceTimer);
+    zoneDebounceTimer = setTimeout(() => {
+      onRefresh();
+    }, 300);
+  }
+
+  $effect(() => {
+    return () => {
+      if (zoneDebounceTimer) clearTimeout(zoneDebounceTimer);
+    };
+  });
 </script>
 
 <header class="bg-white border-b border-slate-200 text-slate-900 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 flex-wrap select-none sticky top-0 z-30 shadow-xs shrink-0">
@@ -20,7 +38,7 @@
     <button
       type="button"
       class="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 md:hidden flex items-center justify-center cursor-pointer shadow-xs"
-      on:click={onToggleMobileMenu}
+      onclick={onToggleMobileMenu}
       aria-label="Open navigation menu"
       title="Open navigation menu"
     >
@@ -43,7 +61,8 @@
       <select 
         class="bg-transparent text-slate-800 font-mono text-xs focus:outline-none cursor-pointer"
         bind:value={selectedTimeRange} 
-        on:change={onRefresh}
+        onchange={onRefresh}
+        aria-label="Filter by time range"
       >
         <option value="all">ALL TIME</option>
         <option value="1h">1 HOUR</option>
@@ -59,8 +78,9 @@
         type="text" 
         placeholder="ALL ZONES" 
         class="bg-transparent text-slate-800 font-mono text-xs focus:outline-none w-20 sm:w-24 placeholder-slate-400"
-        bind:value={selectedZone} 
-        on:input={onRefresh}
+        value={selectedZone} 
+        oninput={handleZoneInput}
+        aria-label="Filter by zone ID"
       />
     </div>
 
@@ -91,6 +111,7 @@
         class="bg-transparent text-slate-700 text-xs focus:outline-none cursor-pointer ml-1"
         bind:value={refreshInterval}
         disabled={!autoRefresh}
+        aria-label="Auto refresh interval in seconds"
       >
         <option value={1}>1s</option>
         <option value={3}>3s</option>
@@ -102,8 +123,9 @@
         type="button" 
         class="ml-1 p-1 text-slate-500 hover:text-sky-600 transition-colors"
         class:animate-spin={isRefreshing}
-        on:click={onRefresh}
+        onclick={onRefresh}
         title="Force Refresh Data"
+        aria-label="Force Refresh Data"
       >
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="23 4 23 10 17 10"/>

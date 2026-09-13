@@ -1,6 +1,8 @@
 <script>
-  export let queueEvents = [];
-  export let congestionThreshold = 4;
+  let {
+    queueEvents = [],
+    congestionThreshold = 4
+  } = $props();
 
   function formatTime(isoStr) {
     if (!isoStr) return '';
