@@ -108,8 +108,11 @@
         </div>
 
         <div class="flex items-end gap-1.5 sm:gap-2 h-44 pt-4 border-b border-slate-200 overflow-x-auto touch-pan-x">
-          {#each footfallData.buckets as bucket (bucket.bucket)}
-            <div class="flex-1 min-w-[28px] max-w-[48px] h-full flex flex-col justify-end items-center gap-1 group relative">
+          {#each footfallData.buckets as bucket, idx (bucket.bucket_start ?? bucket.bucket ?? idx)}
+            <div 
+              class="flex-1 min-w-[28px] max-w-[48px] h-full flex flex-col justify-end items-center gap-1 group relative cursor-pointer"
+              title="{formatBucketTime(bucket.bucket_start ?? bucket.bucket)}: +{bucket.enters} In / -{bucket.exits} Out (Net: {bucket.net ?? (bucket.enters - bucket.exits)})"
+            >
               <div class="w-full flex items-end justify-center gap-0.5 h-full">
                 <!-- Enters Bar -->
                 <div 
@@ -125,11 +128,19 @@
                 ></div>
               </div>
               <span class="text-xs font-mono text-slate-500 transform -rotate-45 origin-top-left mt-1 whitespace-nowrap">
-                {formatBucketTime(bucket.bucket)}
+                {formatBucketTime(bucket.bucket_start ?? bucket.bucket)}
               </span>
             </div>
           {/each}
         </div>
+      </div>
+    {:else}
+      <div class="bg-slate-50 border border-slate-200 rounded-md p-6 text-center text-slate-400 font-mono text-xs">
+        {#if groupBy === 'none'}
+          <span>Summary aggregation mode active. Select <strong>HOURLY</strong> or <strong>DAILY</strong> above to display directional distribution bars.</span>
+        {:else}
+          <span>No historical traffic buckets found for the selected time window.</span>
+        {/if}
       </div>
     {/if}
   {/if}
