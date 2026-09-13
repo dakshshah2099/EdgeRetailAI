@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from api.dependencies import get_repository
 from api.main import app
-from core.schemas import Alert
+from core.schemas import Alert, AuditLogEntry
 from storage.repository import EventRepository
 
 
@@ -161,3 +161,60 @@ def test_alerts_limit(client: TestClient, test_repo: EventRepository) -> None:
     resp = client.get("/alerts?limit=3")
     assert resp.status_code == 200
     assert len(resp.json()) == 3
+
+
+def test_alerts_audit_endpoint(client: TestClient, test_repo: EventRepository) -> None:
+    now = datetime.now(UTC)
+    entry_1 = AuditLogEntry(
+        log_id="log_01",
+        timestamp=now,
+        event_type="breach_opened",
+        alert_id="alt_01",
+        alert_type="low_stock",
+        severity="warning",
+        zone_id="shelf_1",
+        sku_id="sku_chips",
+        message="Low stock on shelf_1 (1 facings left)",
+        facings=1,
+        cleared_reason=None,
+    )
+    entry_2 = AuditLogEntry(
+        log_id="log_02",
+        timestamp=now + timedelta(seconds=5),
+        event_type="auto_cleared",
+        alert_id="alt_01",
+        alert_type="low_stock",
+        severity="warning",
+        zone_id="shelf_1",
+        sku_id=None,
+        message="Auto-cleared: Low stock on shelf_1",
+        facings=3,
+        cleared_reason="Facing count 3 > threshold 2",
+    )
+    test_repo.save_audit_event(entry_1)
+    test_repo.save_audit_event(entry_2)
+
+    # 1. Fetch all audit logs
+    resp = client.get("/alerts/audit")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 2
+    assert data[0]["log_id"] == "log_02"
+    assert data[0]["event_type"] == "auto_cleared"
+    assert data[0]["facings"] == 3
+    assert data[0]["cleared_reason"] == "Facing count 3 > threshold 2"
+
+    # 2. Filter by alert_id
+    resp_alert = client.get("/alerts/audit?alert_id=alt_01")
+    assert resp_alert.status_code == 200
+    assert len(resp_alert.json()) == 2
+
+    # 3. Filter by zone_id
+    resp_zone = client.get("/alerts/audit?zone_id=shelf_1")
+    assert resp_zone.status_code == 200
+    assert len(resp_zone.json()) == 2
+
+    # 4. Filter with limit
+    resp_limit = client.get("/alerts/audit?limit=1")
+    assert resp_limit.status_code == 200
+    assert len(resp_limit.json()) == 1

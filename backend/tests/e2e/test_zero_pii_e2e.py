@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from core.schemas import Alert, DetectionEvent, DwellEvent, QueueEvent, StockEvent
+from core.schemas import Alert, AuditLogEntry, DetectionEvent, DwellEvent, QueueEvent, StockEvent
 from storage.db import get_connection
 from storage.repository import EventRepository
 
@@ -213,6 +213,7 @@ def test_api_responses_contain_zero_pii(
         "/alerts?status=all",
         "/alerts?status=open",
         "/alerts?status=resolved",
+        "/alerts/audit",
         "/heatmap",
         "/system/zones",
     ]
@@ -236,6 +237,7 @@ def test_pydantic_contracts_forbid_raw_frames() -> None:
         QueueEvent,
         StockEvent,
         Alert,
+        AuditLogEntry,
     )
     for model_cls in models:
         for field_name, field_info in model_cls.model_fields.items():

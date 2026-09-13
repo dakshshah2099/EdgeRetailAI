@@ -66,6 +66,23 @@ _SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_alerts_resolved ON alerts(resolved_at);",
     "CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at);",
+    """
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        log_id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        alert_id TEXT NOT NULL,
+        alert_type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        zone_id TEXT,
+        sku_id TEXT,
+        message TEXT NOT NULL,
+        facings INTEGER,
+        cleared_reason TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(timestamp);",
+    "CREATE INDEX IF NOT EXISTS idx_audit_logs_alert ON audit_logs(alert_id);",
 ]
 
 

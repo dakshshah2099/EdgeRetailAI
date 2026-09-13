@@ -58,6 +58,18 @@ export async function fetchAlerts(params = {}) {
   return res.json();
 }
 
+export async function fetchAlertAudit(params = {}) {
+  const search = new URLSearchParams();
+  if (params.zone_id) search.set('zone_id', params.zone_id);
+  if (params.alert_id) search.set('alert_id', params.alert_id);
+  if (params.limit) search.set('limit', String(params.limit));
+
+  const query = search.toString() ? `?${search.toString()}` : '';
+  const res = await fetch(`${API_BASE}/alerts/audit${query}`);
+  if (!res.ok) throw new Error(`Alert audit error: ${res.statusText}`);
+  return res.json();
+}
+
 export async function fetchHeatmap(params = {}) {
   const search = new URLSearchParams();
   if (params.zone_id) search.set('zone_id', params.zone_id);

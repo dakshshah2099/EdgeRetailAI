@@ -2,7 +2,7 @@ import math
 import uuid
 from typing import Literal
 
-from core.schemas import Alert, QueueEvent, StockEvent
+from core.schemas import Alert, AuditLogEntry, QueueEvent, StockEvent
 
 
 class AlertEngine:
@@ -31,6 +31,14 @@ class AlertEngine:
         self._open_stock_alerts: dict[str, Alert] = {}
         # Mapping of counter_id -> open Alert
         self._open_queue_alerts: dict[str, Alert] = {}
+        # In-memory audit trail of breach and clearance events
+        self._audit_log: list[AuditLogEntry] = []
+
+    def pop_pending_audit_events(self) -> list[AuditLogEntry]:
+        """Drain and return accumulated audit entries."""
+        events = self._audit_log
+        self._audit_log = []
+        return events
 
     def process_stock_event(
         self,
@@ -74,6 +82,21 @@ class AlertEngine:
                     resolved_at=None,
                 )
                 self._open_stock_alerts[event.shelf_id] = escalated
+                self._audit_log.append(
+                    AuditLogEntry(
+                        log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                        timestamp=event.timestamp,
+                        event_type="breach_escalated",
+                        alert_id=escalated.alert_id,
+                        alert_type=escalated.alert_type,
+                        severity=escalated.severity,
+                        zone_id=escalated.zone_id,
+                        sku_id=sku_id,
+                        message=escalated.message,
+                        facings=facing_count,
+                        cleared_reason=None,
+                    )
+                )
                 return escalated
             # Already open and not escalating: debounce
             return None
@@ -105,6 +128,21 @@ class AlertEngine:
             resolved_at=None,
         )
         self._open_stock_alerts[event.shelf_id] = alert
+        self._audit_log.append(
+            AuditLogEntry(
+                log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                timestamp=event.timestamp,
+                event_type="breach_opened",
+                alert_id=alert.alert_id,
+                alert_type=alert.alert_type,
+                severity=alert.severity,
+                zone_id=alert.zone_id,
+                sku_id=sku_id,
+                message=alert.message,
+                facings=facing_count,
+                cleared_reason=None,
+            )
+        )
         return alert
 
     def process_queue_event(self, event: QueueEvent) -> Alert | None:
@@ -140,6 +178,21 @@ class AlertEngine:
                     resolved_at=None,
                 )
                 self._open_queue_alerts[event.counter_id] = escalated
+                self._audit_log.append(
+                    AuditLogEntry(
+                        log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                        timestamp=event.timestamp,
+                        event_type="breach_escalated",
+                        alert_id=escalated.alert_id,
+                        alert_type=escalated.alert_type,
+                        severity=escalated.severity,
+                        zone_id=escalated.zone_id,
+                        sku_id=None,
+                        message=escalated.message,
+                        facings=None,
+                        cleared_reason=None,
+                    )
+                )
                 return escalated
 
             # Escalate predictive warning -> active actual congestion alert
@@ -160,6 +213,21 @@ class AlertEngine:
                     resolved_at=None,
                 )
                 self._open_queue_alerts[event.counter_id] = updated
+                self._audit_log.append(
+                    AuditLogEntry(
+                        log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                        timestamp=event.timestamp,
+                        event_type="breach_escalated",
+                        alert_id=updated.alert_id,
+                        alert_type=updated.alert_type,
+                        severity=updated.severity,
+                        zone_id=updated.zone_id,
+                        sku_id=None,
+                        message=updated.message,
+                        facings=None,
+                        cleared_reason=None,
+                    )
+                )
                 return updated
 
             # Already open and not escalating: debounce
@@ -189,6 +257,21 @@ class AlertEngine:
             resolved_at=None,
         )
         self._open_queue_alerts[event.counter_id] = alert
+        self._audit_log.append(
+            AuditLogEntry(
+                log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                timestamp=event.timestamp,
+                event_type="breach_opened",
+                alert_id=alert.alert_id,
+                alert_type=alert.alert_type,
+                severity=alert.severity,
+                zone_id=alert.zone_id,
+                sku_id=None,
+                message=alert.message,
+                facings=None,
+                cleared_reason=None,
+            )
+        )
         return alert
 
     def check_resolutions(
@@ -215,15 +298,28 @@ class AlertEngine:
                 open_alert = self._open_stock_alerts[shelf_id]
                 facing_count = latest_facings.get(shelf_id) if latest_facings is not None else None
 
+                cleared_reason: str | None = None
                 if facing_count is not None:
                     if open_alert.severity == "critical":
                         is_cleared = facing_count > 0
+                        if is_cleared:
+                            cleared_reason = f"Facing count {facing_count} > 0"
                     else:
                         is_cleared = facing_count > self.low_stock_facings_threshold
+                        if is_cleared:
+                            cleared_reason = (
+                                f"Facing count {facing_count} > "
+                                f"threshold {self.low_stock_facings_threshold}"
+                            )
                 else:
                     is_cleared = (
                         stock_ev.status == "ok" and stock_ev.confidence >= self.low_stock_threshold
                     )
+                    if is_cleared:
+                        cleared_reason = (
+                            f"Stock status 'ok' with confidence {stock_ev.confidence:.2f} >= "
+                            f"{self.low_stock_threshold:.2f}"
+                        )
 
                 if is_cleared:
                     popped = self._open_stock_alerts.pop(shelf_id)
@@ -237,6 +333,21 @@ class AlertEngine:
                         resolved_at=stock_ev.timestamp,
                     )
                     resolved.append(resolved_alert)
+                    self._audit_log.append(
+                        AuditLogEntry(
+                            log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                            timestamp=stock_ev.timestamp,
+                            event_type="auto_cleared",
+                            alert_id=resolved_alert.alert_id,
+                            alert_type=resolved_alert.alert_type,
+                            severity=resolved_alert.severity,
+                            zone_id=resolved_alert.zone_id,
+                            sku_id=None,
+                            message=f"Auto-cleared: {resolved_alert.message}",
+                            facings=facing_count,
+                            cleared_reason=cleared_reason,
+                        )
+                    )
 
         # Check queue alert resolutions
         for counter_id in list(self._open_queue_alerts.keys()):
@@ -258,6 +369,25 @@ class AlertEngine:
                         resolved_at=queue_ev.timestamp,
                     )
                     resolved.append(resolved_alert)
+                    cleared_reason = (
+                        f"Queue length {queue_ev.queue_length} < "
+                        f"threshold {self.queue_congestion_length}"
+                    )
+                    self._audit_log.append(
+                        AuditLogEntry(
+                            log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                            timestamp=queue_ev.timestamp,
+                            event_type="auto_cleared",
+                            alert_id=resolved_alert.alert_id,
+                            alert_type=resolved_alert.alert_type,
+                            severity=resolved_alert.severity,
+                            zone_id=resolved_alert.zone_id,
+                            sku_id=None,
+                            message=f"Auto-cleared: {resolved_alert.message}",
+                            facings=None,
+                            cleared_reason=cleared_reason,
+                        )
+                    )
 
         return resolved
 
@@ -269,3 +399,4 @@ class AlertEngine:
         """Clear all internal tracking states for open alerts."""
         self._open_stock_alerts.clear()
         self._open_queue_alerts.clear()
+        self._audit_log.clear()

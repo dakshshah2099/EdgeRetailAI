@@ -561,3 +561,98 @@ def test_configurable_facing_threshold() -> None:
         latest_facings={"shelf_c": 5},
     )
     assert len(resolved) == 1
+
+
+def test_audit_log_tracking_on_breach_escalation_and_auto_clear(
+    alert_engine: AlertEngine,
+) -> None:
+    """AlertEngine generates operational audit log entries for breaches,
+    escalations, and auto-clear.
+    """
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 2, 0, tzinfo=UTC)
+    t2 = datetime(2026, 8, 29, 10, 5, 0, tzinfo=UTC)
+
+    # 1. Low stock warning breach opened
+    low_event = make_stock_event("shelf_1", "low", confidence=0.85, ts=t0)
+    alert = alert_engine.process_stock_event(
+        low_event,
+        sku_name="Organic Oat Milk 1L",
+        sku_id="sku_dairy_oat_milk",
+        facing_count=1,
+    )
+    assert alert is not None
+
+    pending_1 = alert_engine.pop_pending_audit_events()
+    assert len(pending_1) == 1
+    assert pending_1[0].event_type == "breach_opened"
+    assert pending_1[0].alert_id == alert.alert_id
+    assert pending_1[0].sku_id == "sku_dairy_oat_milk"
+    assert pending_1[0].facings == 1
+    assert pending_1[0].severity == "warning"
+
+    # Queue should now be empty after pop
+    assert len(alert_engine.pop_pending_audit_events()) == 0
+
+    # 2. Escalation warning -> critical
+    empty_event = make_stock_event("shelf_1", "empty", confidence=0.90, ts=t1)
+    escalated = alert_engine.process_stock_event(
+        empty_event,
+        sku_name="Organic Oat Milk 1L",
+        sku_id="sku_dairy_oat_milk",
+        facing_count=0,
+    )
+    assert escalated is not None
+    assert escalated.severity == "critical"
+
+    pending_2 = alert_engine.pop_pending_audit_events()
+    assert len(pending_2) == 1
+    assert pending_2[0].event_type == "breach_escalated"
+    assert pending_2[0].severity == "critical"
+    assert pending_2[0].facings == 0
+
+    # 3. Auto-clear when facings restocked > 0
+    restocked_event = make_stock_event("shelf_1", "ok", confidence=0.92, ts=t2)
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_1": restocked_event},
+        latest_queue_events={},
+        latest_facings={"shelf_1": 4},
+    )
+    assert len(resolved) == 1
+
+    pending_3 = alert_engine.pop_pending_audit_events()
+    assert len(pending_3) == 1
+    assert pending_3[0].event_type == "auto_cleared"
+    assert pending_3[0].alert_id == alert.alert_id
+    assert pending_3[0].facings == 4
+    assert "Facing count 4 > 0" in (pending_3[0].cleared_reason or "")
+    assert len(alert_engine.pop_pending_audit_events()) == 0
+
+
+def test_audit_log_tracking_on_queue_breach_and_clear(alert_engine: AlertEngine) -> None:
+    """Queue congestion breaches and clearances create audit log entries."""
+    t0 = datetime(2026, 8, 29, 11, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 11, 4, 0, tzinfo=UTC)
+
+    # Breach
+    q_breach = make_queue_event("counter_1", queue_length=4, ts=t0)
+    alert = alert_engine.process_queue_event(q_breach)
+    assert alert is not None
+
+    logs = alert_engine.pop_pending_audit_events()
+    assert len(logs) == 1
+    assert logs[0].event_type == "breach_opened"
+    assert logs[0].zone_id == "counter_1"
+
+    # Resolution
+    q_clear = make_queue_event("counter_1", queue_length=1, ts=t1)
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={},
+        latest_queue_events={"counter_1": q_clear},
+    )
+    assert len(resolved) == 1
+
+    logs_resolved = alert_engine.pop_pending_audit_events()
+    assert len(logs_resolved) == 1
+    assert logs_resolved[0].event_type == "auto_cleared"
+    assert "Queue length 1 < threshold 3" in (logs_resolved[0].cleared_reason or "")

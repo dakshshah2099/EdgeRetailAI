@@ -618,7 +618,12 @@ class StreamManager:
                         except Exception as e:
                             logger.error("SKU segregation error: %s", e)
 
-                # 8. Throttle inference loop to target FPS
+                # 8. Flush pending audit trail events to repository
+                with contextlib.suppress(Exception):
+                    for audit_entry in self.alert_engine.pop_pending_audit_events():
+                        repo.save_audit_event(audit_entry)
+
+                # 9. Throttle inference loop to target FPS
                 elapsed = time.monotonic() - inf_start
                 sleep_time = target_interval - elapsed
                 if sleep_time > 0:

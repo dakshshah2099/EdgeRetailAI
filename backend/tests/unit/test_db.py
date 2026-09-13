@@ -20,6 +20,7 @@ def test_init_db_creates_all_expected_tables(tmp_path: Path) -> None:
         "stock_events",
         "queue_events",
         "alerts",
+        "audit_logs",
     }
     assert expected_tables.issubset(tables)
 
@@ -36,7 +37,7 @@ def test_init_db_is_idempotent(tmp_path: Path) -> None:
     tables = [row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_")]
     conn.close()
 
-    assert len(tables) == 5
+    assert len(tables) == 6
 
 
 def test_init_db_creates_parent_directories(tmp_path: Path) -> None:
@@ -65,7 +66,7 @@ def test_structural_no_pii_or_raw_imagery_columns(tmp_path: Path) -> None:
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = [row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_")]
 
-    assert len(tables) == 5
+    assert len(tables) == 6
 
     for table_name in tables:
         cursor.execute(f"PRAGMA table_info({table_name});")

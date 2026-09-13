@@ -1,7 +1,14 @@
 from datetime import datetime
 from pathlib import Path
 
-from core.schemas import Alert, DetectionEvent, DwellEvent, QueueEvent, StockEvent
+from core.schemas import (
+    Alert,
+    AuditLogEntry,
+    DetectionEvent,
+    DwellEvent,
+    QueueEvent,
+    StockEvent,
+)
 from storage.db import get_connection, init_db
 
 
@@ -327,6 +334,87 @@ class EventRepository:
                     else None
                 ),
             )
+        finally:
+            conn.close()
+
+    def save_audit_event(self, entry: AuditLogEntry) -> None:
+        """Insert operational audit log entry for threshold breach or resolution."""
+        conn = get_connection(self.db_path)
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO audit_logs (
+                        log_id, timestamp, event_type, alert_id, alert_type,
+                        severity, zone_id, sku_id, message, facings, cleared_reason
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        entry.log_id,
+                        entry.timestamp.isoformat(),
+                        entry.event_type,
+                        entry.alert_id,
+                        entry.alert_type,
+                        entry.severity,
+                        entry.zone_id,
+                        entry.sku_id,
+                        entry.message,
+                        entry.facings,
+                        entry.cleared_reason,
+                    ),
+                )
+        finally:
+            conn.close()
+
+    def get_audit_events(
+        self,
+        limit: int = 100,
+        zone_id: str | None = None,
+        alert_id: str | None = None,
+    ) -> list[AuditLogEntry]:
+        """Query recent operational audit trail logs with optional filters."""
+        conn = get_connection(self.db_path)
+        try:
+            cursor = conn.cursor()
+            query = """
+                SELECT log_id, timestamp, event_type, alert_id, alert_type,
+                       severity, zone_id, sku_id, message, facings, cleared_reason
+                FROM audit_logs
+            """
+            conditions: list[str] = []
+            params: list[object] = []
+
+            if zone_id is not None:
+                conditions.append("zone_id = ?")
+                params.append(zone_id)
+            if alert_id is not None:
+                conditions.append("alert_id = ?")
+                params.append(alert_id)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+
+            query += " ORDER BY timestamp DESC LIMIT ?;"
+            params.append(limit)
+
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [
+                AuditLogEntry(
+                    log_id=row["log_id"],
+                    timestamp=datetime.fromisoformat(row["timestamp"]),
+                    event_type=row["event_type"],
+                    alert_id=row["alert_id"],
+                    alert_type=row["alert_type"],
+                    severity=row["severity"],
+                    zone_id=row["zone_id"],
+                    sku_id=row["sku_id"],
+                    message=row["message"],
+                    facings=row["facings"] if row["facings"] is not None else None,
+                    cleared_reason=row["cleared_reason"],
+                )
+                for row in rows
+            ]
         finally:
             conn.close()
 

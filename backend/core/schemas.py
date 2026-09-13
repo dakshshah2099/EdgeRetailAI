@@ -98,6 +98,21 @@ class Alert(BaseModel):
         return self
 
 
+class AuditLogEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    log_id: str
+    timestamp: datetime
+    event_type: Literal["breach_opened", "breach_escalated", "auto_cleared", "resolved"]
+    alert_id: str
+    alert_type: str
+    severity: Literal["info", "warning", "critical"]
+    zone_id: str | None = None
+    sku_id: str | None = None
+    message: str
+    facings: int | None = None
+    cleared_reason: str | None = None
+
+
 class CameraConfig(BaseModel):
     source: str
 

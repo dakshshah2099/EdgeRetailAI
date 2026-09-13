@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from core.schemas import Alert, DetectionEvent, DwellEvent, QueueEvent, StockEvent
+from core.schemas import Alert, AuditLogEntry, DetectionEvent, DwellEvent, QueueEvent, StockEvent
 from storage.repository import EventRepository
 
 
@@ -219,3 +219,58 @@ def test_query_limits_and_filtering(tmp_path: Path) -> None:
     shelf_b_events = repo.get_recent_stock_events(limit=10, shelf_id="shelf_b")
     assert len(shelf_b_events) == 5
     assert all(e.shelf_id == "shelf_b" for e in shelf_b_events)
+
+
+def test_audit_event_save_and_query_roundtrip(tmp_path: Path) -> None:
+    db_path = tmp_path / "retail.db"
+    repo = EventRepository(db_path)
+
+    now = datetime.now(UTC)
+    entry_1 = AuditLogEntry(
+        log_id="audit_01",
+        timestamp=now,
+        event_type="breach_opened",
+        alert_id="alert_101",
+        alert_type="low_stock",
+        severity="warning",
+        zone_id="shelf_snacks",
+        sku_id="sku_chips_01",
+        message="Low stock on shelf_snacks (1 facings left)",
+        facings=1,
+        cleared_reason=None,
+    )
+    entry_2 = AuditLogEntry(
+        log_id="audit_02",
+        timestamp=now + timedelta(seconds=10),
+        event_type="auto_cleared",
+        alert_id="alert_101",
+        alert_type="low_stock",
+        severity="warning",
+        zone_id="shelf_snacks",
+        sku_id=None,
+        message="Auto-cleared: Low stock on shelf_snacks",
+        facings=3,
+        cleared_reason="Facing count 3 > threshold 2",
+    )
+
+    repo.save_audit_event(entry_1)
+    repo.save_audit_event(entry_2)
+
+    # Test all audit events query
+    all_logs = repo.get_audit_events(limit=10)
+    assert len(all_logs) == 2
+    # Ordered by timestamp DESC
+    assert all_logs[0] == entry_2
+    assert all_logs[1] == entry_1
+
+    # Test zone_id filter
+    zone_logs = repo.get_audit_events(limit=10, zone_id="shelf_snacks")
+    assert len(zone_logs) == 2
+
+    # Test non-matching zone_id filter
+    empty_logs = repo.get_audit_events(limit=10, zone_id="non_existent")
+    assert len(empty_logs) == 0
+
+    # Test alert_id filter
+    alert_logs = repo.get_audit_events(limit=10, alert_id="alert_101")
+    assert len(alert_logs) == 2
