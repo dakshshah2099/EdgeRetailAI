@@ -244,6 +244,7 @@ class StreamManager:
 
         self.latest_stock_events: dict[str, StockEvent] = {}
         self.latest_queue_events: dict[str, QueueEvent] = {}
+        self.latest_facings: dict[str, int] = {}
 
     def _ensure_workers_started(self) -> None:
         if self._capture_thread is None or not self._capture_thread.is_alive():
@@ -550,7 +551,9 @@ class StreamManager:
                     # Alert Resolutions check
                     try:
                         resolved_alerts = self.alert_engine.check_resolutions(
-                            self.latest_stock_events, self.latest_queue_events
+                            self.latest_stock_events,
+                            self.latest_queue_events,
+                            latest_facings=self.latest_facings,
                         )
                         for res_alert in resolved_alerts:
                             repo.upsert_alert(res_alert)
@@ -579,6 +582,7 @@ class StreamManager:
                                 )
                                 # SKU-specific stock alerts with facing counts
                                 for item in sku_report.items:
+                                    self.latest_facings[item.shelf_id] = item.facing_count
                                     if item.status in ("low", "empty"):
                                         sku_ev = StockEvent(
                                             event_id=f"sku_ev_{item.shelf_id}_{int(time.time())}",
@@ -602,6 +606,15 @@ class StreamManager:
                                         )
                                         if s_alert:
                                             repo.upsert_alert(s_alert)
+
+                                # Immediate resolution pass with fresh facing counts
+                                resolved_alerts = self.alert_engine.check_resolutions(
+                                    self.latest_stock_events,
+                                    self.latest_queue_events,
+                                    latest_facings=self.latest_facings,
+                                )
+                                for res_alert in resolved_alerts:
+                                    repo.upsert_alert(res_alert)
                         except Exception as e:
                             logger.error("SKU segregation error: %s", e)
 

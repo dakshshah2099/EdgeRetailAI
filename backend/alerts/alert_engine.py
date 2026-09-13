@@ -20,10 +20,12 @@ class AlertEngine:
         low_stock_threshold: float,
         queue_congestion_length: int,
         queue_critical_margin: float = 1.5,
+        low_stock_facings_threshold: int = 2,
     ) -> None:
         self.low_stock_threshold = float(low_stock_threshold)
         self.queue_congestion_length = int(queue_congestion_length)
         self.queue_critical_margin = float(queue_critical_margin)
+        self.low_stock_facings_threshold = int(low_stock_facings_threshold)
 
         # Mapping of shelf_id -> open Alert
         self._open_stock_alerts: dict[str, Alert] = {}
@@ -193,13 +195,16 @@ class AlertEngine:
         self,
         latest_stock_events: dict[str, StockEvent],
         latest_queue_events: dict[str, QueueEvent],
+        latest_facings: dict[str, int] | None = None,
     ) -> list[Alert]:
         """Given the latest known state per shelf_id/counter_id, return
         updated (resolved) Alert objects for any previously-open alert
         whose condition has cleared.
 
-        Resolution requires status == "ok"; low-confidence uncertainty on
-        bad states does not clear an alert.
+        Stock auto-clearing rule:
+        - Out-of-stock (critical): clears when facing_count > 0.
+        - Low-stock (warning): clears when facing_count > low_stock_facings_threshold.
+        - Fallback: clears when stock_ev.status == "ok" and confidence >= low_stock_threshold.
         """
         resolved: list[Alert] = []
 
@@ -207,18 +212,28 @@ class AlertEngine:
         for shelf_id in list(self._open_stock_alerts.keys()):
             if shelf_id in latest_stock_events:
                 stock_ev = latest_stock_events[shelf_id]
-                is_cleared = (
-                    stock_ev.status == "ok" and stock_ev.confidence >= self.low_stock_threshold
-                )
+                open_alert = self._open_stock_alerts[shelf_id]
+                facing_count = latest_facings.get(shelf_id) if latest_facings is not None else None
+
+                if facing_count is not None:
+                    if open_alert.severity == "critical":
+                        is_cleared = facing_count > 0
+                    else:
+                        is_cleared = facing_count > self.low_stock_facings_threshold
+                else:
+                    is_cleared = (
+                        stock_ev.status == "ok" and stock_ev.confidence >= self.low_stock_threshold
+                    )
+
                 if is_cleared:
-                    open_alert = self._open_stock_alerts.pop(shelf_id)
+                    popped = self._open_stock_alerts.pop(shelf_id)
                     resolved_alert = Alert(
-                        alert_id=open_alert.alert_id,
-                        alert_type=open_alert.alert_type,
-                        severity=open_alert.severity,
-                        zone_id=open_alert.zone_id,
-                        message=open_alert.message,
-                        created_at=open_alert.created_at,
+                        alert_id=popped.alert_id,
+                        alert_type=popped.alert_type,
+                        severity=popped.severity,
+                        zone_id=popped.zone_id,
+                        message=popped.message,
+                        created_at=popped.created_at,
                         resolved_at=stock_ev.timestamp,
                     )
                     resolved.append(resolved_alert)

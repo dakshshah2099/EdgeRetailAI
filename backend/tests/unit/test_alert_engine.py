@@ -468,3 +468,96 @@ def test_stock_sku_alert_escalation_to_out_of_stock(alert_engine: AlertEngine) -
     assert alert2.severity == "critical"
     assert alert2.alert_id == alert1.alert_id
     assert "is out of stock" in alert2.message
+
+
+def test_auto_clear_empty_stock_alert_on_facing_count_gt_zero(alert_engine: AlertEngine) -> None:
+    """Empty out-of-stock alert auto-clears as soon as facing count is > 0."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 5, 0, tzinfo=UTC)
+    event = make_stock_event("shelf_bev_1", "empty", confidence=0.90, ts=t0)
+    alert = alert_engine.process_stock_event(
+        event, sku_name="Classic Cola Can 330ml", sku_id="sku_bev_cola_330"
+    )
+    assert alert is not None
+
+    # Facing count still 0: alert stays open
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_bev_1": event},
+        latest_queue_events={},
+        latest_facings={"shelf_bev_1": 0},
+    )
+    assert len(resolved) == 0
+
+    # Facing count becomes 1 (> 0): critical empty alert auto-clears
+    event_restocked = make_stock_event("shelf_bev_1", "low", confidence=0.85, ts=t1)
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_bev_1": event_restocked},
+        latest_queue_events={},
+        latest_facings={"shelf_bev_1": 1},
+    )
+    assert len(resolved) == 1
+    assert resolved[0].alert_id == alert.alert_id
+    assert resolved[0].resolved_at == t1
+
+
+def test_auto_clear_low_stock_alert_on_facing_count_gt_threshold(alert_engine: AlertEngine) -> None:
+    """Low stock warning alert auto-clears when facing count > threshold (default 2)."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 5, 0, tzinfo=UTC)
+    low_event = make_stock_event("shelf_snack_1", "low", confidence=0.80, ts=t0)
+    alert = alert_engine.process_stock_event(
+        low_event,
+        sku_name="Artisan Potato Chips 50g",
+        sku_id="sku_snack_chips_gold",
+        facing_count=1,
+    )
+    assert alert is not None
+
+    # Facing count = 2 (<= threshold 2): does not clear
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_snack_1": low_event},
+        latest_queue_events={},
+        latest_facings={"shelf_snack_1": 2},
+    )
+    assert len(resolved) == 0
+
+    # Facing count = 3 (> threshold 2): auto-clears
+    restocked_event = make_stock_event("shelf_snack_1", "ok", confidence=0.90, ts=t1)
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_snack_1": restocked_event},
+        latest_queue_events={},
+        latest_facings={"shelf_snack_1": 3},
+    )
+    assert len(resolved) == 1
+    assert resolved[0].alert_id == alert.alert_id
+    assert resolved[0].resolved_at == t1
+
+
+def test_configurable_facing_threshold() -> None:
+    """AlertEngine respects custom low_stock_facings_threshold."""
+    engine = AlertEngine(
+        low_stock_threshold=0.60,
+        queue_congestion_length=3,
+        low_stock_facings_threshold=4,
+    )
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 5, 0, tzinfo=UTC)
+
+    event = make_stock_event("shelf_c", "low", confidence=0.85, ts=t0)
+    engine.process_stock_event(event)
+
+    # Facing count = 4 (<= custom threshold 4): not cleared
+    resolved = engine.check_resolutions(
+        latest_stock_events={"shelf_c": event},
+        latest_queue_events={},
+        latest_facings={"shelf_c": 4},
+    )
+    assert len(resolved) == 0
+
+    # Facing count = 5 (> custom threshold 4): auto-cleared
+    resolved = engine.check_resolutions(
+        latest_stock_events={"shelf_c": make_stock_event("shelf_c", "ok", ts=t1)},
+        latest_queue_events={},
+        latest_facings={"shelf_c": 5},
+    )
+    assert len(resolved) == 1
