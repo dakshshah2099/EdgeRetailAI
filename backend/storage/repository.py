@@ -239,6 +239,65 @@ class EventRepository:
         finally:
             conn.close()
 
+    def resolve_all_open_alerts(self, resolved_at: datetime | None = None) -> int:
+        """Resolve all currently open alerts in persistence."""
+        conn = get_connection(self.db_path)
+        from datetime import UTC
+        res_time = (resolved_at or datetime.now(UTC)).isoformat()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE alerts
+                    SET resolved_at = ?
+                    WHERE resolved_at IS NULL;
+                    """,
+                    (res_time,),
+                )
+                return cursor.rowcount
+        finally:
+            conn.close()
+
+    def clean_duplicate_open_alerts(self) -> int:
+        """Resolve older duplicate open alerts, preserving only the newest per zone."""
+        conn = get_connection(self.db_path)
+        try:
+            with conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE alerts
+                    SET resolved_at = created_at
+                    WHERE resolved_at IS NULL
+                      AND alert_id NOT IN (
+                        SELECT alert_id FROM (
+                          SELECT alert_id, ROW_NUMBER() OVER (
+                              PARTITION BY alert_type, zone_id ORDER BY created_at DESC
+                          ) as rn
+                          FROM alerts
+                          WHERE resolved_at IS NULL
+                        ) WHERE rn = 1
+                      );
+                    """
+                )
+                return cursor.rowcount
+        finally:
+            conn.close()
+
+    def clear_detection_events(self) -> int:
+        """Purge detection and dwell events to reset store traffic telemetry to zero."""
+        conn = get_connection(self.db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) FROM detection_events;")
+            row = cursor.fetchone()
+            count = int(row[0]) if row else 0
+            cursor.execute("DELETE FROM detection_events;")
+            cursor.execute("DELETE FROM dwell_events;")
+            conn.commit()
+            return count
+        finally:
+            conn.close()
+
     def get_resolved_alerts(self, limit: int = 100) -> list[Alert]:
         conn = get_connection(self.db_path)
         try:

@@ -414,3 +414,26 @@ def test_stock_filter_shelf_id(client: TestClient, test_repo: EventRepository) -
     resp_empty = client.get("/kpi/stock?shelf_id=shelf_unknown")
     assert resp_empty.status_code == 200
     assert resp_empty.json() == []
+
+
+def test_reset_telemetry(client: TestClient, test_repo: EventRepository) -> None:
+    now = datetime.now(UTC)
+    test_repo.save_detection_event(
+        DetectionEvent(
+            event_id="e1",
+            track_id="t1",
+            timestamp=now,
+            bbox=(0, 0, 10, 10),
+            zone_id="z1",
+            event_type="enter",
+        )
+    )
+    assert len(test_repo.get_recent_detection_events()) == 1
+
+    resp = client.post("/kpi/reset")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["cleared_events"] == 1
+    assert len(test_repo.get_recent_detection_events()) == 0
+

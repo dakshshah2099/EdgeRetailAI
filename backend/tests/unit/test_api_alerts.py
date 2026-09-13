@@ -218,3 +218,38 @@ def test_alerts_audit_endpoint(client: TestClient, test_repo: EventRepository) -
     resp_limit = client.get("/alerts/audit?limit=1")
     assert resp_limit.status_code == 200
     assert len(resp_limit.json()) == 1
+
+
+def test_resolve_all_alerts(client: TestClient, test_repo: EventRepository) -> None:
+    now = datetime.now(UTC)
+    test_repo.save_alert(
+        Alert(
+            alert_id="alt_1",
+            alert_type="low_stock",
+            severity="critical",
+            zone_id="shelf_1",
+            message="Out of stock",
+            created_at=now,
+            resolved_at=None,
+        )
+    )
+    test_repo.save_alert(
+        Alert(
+            alert_id="alt_2",
+            alert_type="queue_congestion",
+            severity="warning",
+            zone_id="checkout_1",
+            message="Queue too long",
+            created_at=now,
+            resolved_at=None,
+        )
+    )
+    assert len(test_repo.get_open_alerts()) == 2
+
+    resp = client.post("/alerts/resolve-all")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["resolved_count"] == 2
+    assert len(test_repo.get_open_alerts()) == 0
+

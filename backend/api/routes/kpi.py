@@ -164,3 +164,11 @@ def register_catalog_sku(req: RegisterSKURequest) -> SKUProfile:
             category=req.category,
         )
     return sku
+
+
+@router.post("/reset")
+def reset_telemetry(repo: RepoDep) -> dict[str, int | str]:
+    """Purge transient detection and dwell events to reset store traffic telemetry to zero."""
+    cleared_count = repo.clear_detection_events()
+    return {"status": "ok", "cleared_events": cleared_count}
+

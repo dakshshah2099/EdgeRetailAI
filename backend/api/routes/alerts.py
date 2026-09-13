@@ -36,3 +36,11 @@ def get_audit_trail(
 ) -> list[AuditLogEntry]:
     """Query recent threshold breach and resolution audit trail events."""
     return repo.get_audit_events(limit=limit, zone_id=zone_id, alert_id=alert_id)
+
+
+@router.post("/resolve-all")
+def resolve_all_alerts(repo: RepoDep) -> dict[str, int | str]:
+    """Resolve all currently open operational alerts in persistence."""
+    count = repo.resolve_all_open_alerts()
+    return {"status": "ok", "resolved_count": count}
+
