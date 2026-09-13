@@ -117,6 +117,10 @@ fi
 SERVICE_TEMPLATE="$WORKDIR/deploy/edgeretailai.service.template"
 TARGET_SERVICE="/etc/systemd/system/edgeretailai.service"
 
+if [ -f "$WORKDIR/deploy/build-frontend.sh" ]; then
+    chmod +x "$WORKDIR/deploy/build-frontend.sh"
+fi
+
 if [ -f "$SERVICE_TEMPLATE" ]; then
     echo "Generating systemd service from template..."
     sed -e "s|\${SERVICE_USER}|$SERVICE_USER|g" \

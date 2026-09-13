@@ -52,13 +52,15 @@ def create_app() -> FastAPI:
     def health_check() -> dict[str, str]:
         return {"status": "ok"}
 
-    # If static frontend build is present, mount it
-    dist_dir = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+    # If static frontend build is present, serve it via app.frontend()
+    frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+    dist_dir = frontend_dir / "dist"
     if not dist_dir.is_dir():
         dist_dir = Path(__file__).resolve().parent.parent.parent / "dashboard" / "dist"
 
     if dist_dir.is_dir():
         application.frontend("/app", directory=dist_dir)
+        application.frontend("/frontend", directory=dist_dir)
         assets_dir = dist_dir / "assets"
         if assets_dir.is_dir():
             application.frontend("/assets", directory=assets_dir)

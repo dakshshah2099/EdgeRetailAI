@@ -1,4 +1,4 @@
-﻿[Unit]
+[Unit]
 Description=EdgeRetailAI Retail Analytics Service
 After=network-online.target
 Wants=network-online.target
@@ -11,6 +11,7 @@ WorkingDirectory=${WORKDIR}/backend
 Environment="PYTHONPATH=${WORKDIR}/backend"
 EnvironmentFile=-${WORKDIR}/.env.pi
 EnvironmentFile=-${WORKDIR}/backend/.env
+ExecStartPre=-/bin/bash ${WORKDIR}/deploy/build-frontend.sh
 ExecStart=${WORKDIR}/backend/.venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
