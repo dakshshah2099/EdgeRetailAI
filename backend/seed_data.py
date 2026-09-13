@@ -354,13 +354,22 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
     print("Generating operational incident alerts...")
     alert_rows.extend(
         [
-            # Open alerts
+            # Open alerts (with SKU-attributed messages)
             (
-                "alert_bakery_empty",
+                "alert_elec_cable_empty",
                 "low_stock",
                 "critical",
-                "zone_shelf_bakery",
-                "Critical out-of-stock: Fresh Bakery Shelf depleted (0 units detected)",
+                "zone_shelf_electronics",
+                "USB-C Cable 1m (sku_elec_cable_usbc) on zone_shelf_electronics is out of stock",
+                (now - timedelta(minutes=15)).isoformat(),
+                None,
+            ),
+            (
+                "alert_bev_coldbrew_low",
+                "low_stock",
+                "warning",
+                "zone_shelf_beverages",
+                "Cold Brew 330ml (sku_bev_coldbrew_330) on zone_shelf_beverages is low on stock",
                 (now - timedelta(minutes=28)).isoformat(),
                 None,
             ),
@@ -370,15 +379,15 @@ def seed_database(db_path: Path, hours: int = 24) -> None:
                 "warning",
                 "zone_queue_checkout_1",
                 "Checkout Lane 1 congested: 4+ customers waiting (est. wait 140s)",
-                (now - timedelta(minutes=14)).isoformat(),
+                (now - timedelta(minutes=8)).isoformat(),
                 None,
             ),
             (
-                "alert_snacks_low",
+                "alert_snacks_chips_low",
                 "low_stock",
                 "warning",
                 "zone_shelf_snacks",
-                "Low inventory alert: Snacks & Confectionery shelf below safety threshold",
+                "Kettle Chips 150g (sku_snk_chips_kettle) on zone_shelf_snacks is low on stock",
                 (now - timedelta(minutes=42)).isoformat(),
                 None,
             ),

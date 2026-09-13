@@ -2,7 +2,9 @@
   let {
     alerts = [],
     activeFilter = 'open',
-    onFilterChange = (status) => {}
+    onFilterChange = (status) => {},
+    onResolveAlert = (id) => {},
+    onResolveAllAlerts = () => {}
   } = $props();
 
   function formatTimestamp(isoStr) {
@@ -54,6 +56,15 @@
       <span class="px-1.5 py-0.5 text-xs font-mono bg-white text-slate-600 rounded border border-slate-200">
         {alerts.length}
       </span>
+      {#if alerts.some(a => !a.resolved_at)}
+        <button 
+          type="button"
+          class="ml-1 px-2 py-0.5 text-[11px] font-mono rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer transition-colors"
+          onclick={onResolveAllAlerts}
+        >
+          RESOLVE ALL
+        </button>
+      {/if}
     </div>
 
     <!-- Filter Buttons -->
@@ -94,7 +105,7 @@
         <span class="text-slate-400 text-xs mt-0.5">All monitored store zones nominal</span>
       </div>
     {:else}
-      {#each alerts as alert (alert.id ?? `${alert.timestamp}_${alert.zone_id}`)}
+      {#each alerts as alert, idx (alert.alert_id ?? alert.id ?? `${alert.created_at || alert.timestamp || idx}_${alert.zone_id || 'z'}_${idx}`)}
         {@const skuInfo = parseSKUAlert(alert.message)}
         {@const badge = getBadge(alert, skuInfo)}
         <div class="p-2.5 rounded-md border transition-colors bg-white {alert.resolved_at ? 'border-slate-100 opacity-60' : 'border-slate-200 hover:border-slate-300 shadow-xs'}">
@@ -110,7 +121,7 @@
               {/if}
             </div>
             <span class="text-xs font-mono text-slate-400">
-              {formatTimestamp(alert.timestamp)}
+              {formatTimestamp(alert.created_at || alert.timestamp)}
             </span>
           </div>
 
@@ -137,7 +148,16 @@
             {#if alert.resolved_at}
               <span class="text-emerald-600 font-semibold">RESOLVED</span>
             {:else}
-              <span class="text-rose-600 font-semibold animate-pulse">ACTIVE</span>
+              <div class="flex items-center gap-2">
+                <span class="text-rose-600 font-semibold animate-pulse">ACTIVE</span>
+                <button
+                  type="button"
+                  class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 text-slate-600 cursor-pointer transition-colors"
+                  onclick={() => onResolveAlert(alert.alert_id || alert.id)}
+                >
+                  Resolve ✓
+                </button>
+              </div>
             {/if}
           </div>
         </div>

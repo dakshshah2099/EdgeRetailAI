@@ -36,14 +36,16 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_camera_source() -> str:
-    """Resolve camera source from .env first, then config.yaml, default to '0'."""
+    """Resolve camera source from os.environ, .env file, then config.yaml, default to '0'."""
+    if os.environ.get("CAMERA_SOURCE"):
+        return os.environ["CAMERA_SOURCE"]
     env_vars = read_env_file()
     if "CAMERA_SOURCE" in env_vars and env_vars["CAMERA_SOURCE"]:
         return env_vars["CAMERA_SOURCE"]
     cfg = get_app_config()
     if cfg and cfg.camera and cfg.camera.source:
         return cfg.camera.source
-    return os.environ.get("CAMERA_SOURCE", "0")
+    return "0"
 
 
 def scale_zones_to_frame(zones: list[ZoneConfig], frame_w: int, frame_h: int) -> list[ZoneConfig]:

@@ -193,3 +193,16 @@ export async function resolveAllAlerts(options = {}) {
   return res.json();
 }
 
+export async function resolveAlert(alertId, options = {}) {
+  const res = await fetch(`${API_BASE}/alerts/${encodeURIComponent(alertId)}/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to resolve alert');
+  }
+  return res.json();
+}
+

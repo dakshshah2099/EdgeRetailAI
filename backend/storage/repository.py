@@ -258,6 +258,25 @@ class EventRepository:
         finally:
             conn.close()
 
+    def resolve_alert(self, alert_id: str, resolved_at: datetime | None = None) -> bool:
+        """Resolve a specific open alert by ID."""
+        conn = get_connection(self.db_path)
+        from datetime import UTC
+        res_time = (resolved_at or datetime.now(UTC)).isoformat()
+        try:
+            with conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE alerts
+                    SET resolved_at = ?
+                    WHERE alert_id = ? AND resolved_at IS NULL;
+                    """,
+                    (res_time, alert_id),
+                )
+                return cursor.rowcount > 0
+        finally:
+            conn.close()
+
     def clean_duplicate_open_alerts(self) -> int:
         """Resolve older duplicate open alerts, preserving only the newest per zone."""
         conn = get_connection(self.db_path)

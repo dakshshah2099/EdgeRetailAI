@@ -148,6 +148,15 @@
         <span class="w-2 h-2 rounded-full bg-sky-600 animate-ping"></span>
         <span>UPDATING SPATIAL MATRIX...</span>
       </div>
+    {:else if !heatmapData || heatmapData.total_points === 0}
+      <div class="absolute inset-0 flex flex-col items-center justify-center font-mono text-xs text-slate-400 gap-2 p-6 text-center bg-slate-50/80 pointer-events-none">
+        <svg class="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </svg>
+        <span class="text-slate-600 font-semibold uppercase">No Shopper Dwell In Selected Window</span>
+        <span class="text-slate-400 text-xs max-w-sm">Switch time range to "All" or seed fresh telemetry to view dwell density.</span>
+      </div>
     {/if}
 
     <!-- Inspection Reticle / Tooltip -->

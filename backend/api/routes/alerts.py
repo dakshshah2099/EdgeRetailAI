@@ -1,6 +1,6 @@
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from api.dependencies import RepoDep
 from core.schemas import Alert, AuditLogEntry
@@ -43,4 +43,16 @@ def resolve_all_alerts(repo: RepoDep) -> dict[str, int | str]:
     """Resolve all currently open operational alerts in persistence."""
     count = repo.resolve_all_open_alerts()
     return {"status": "ok", "resolved_count": count}
+
+
+@router.post("/{alert_id}/resolve")
+def resolve_single_alert(alert_id: str, repo: RepoDep) -> dict[str, Any]:
+    """Resolve a specific open operational alert."""
+    resolved = repo.resolve_alert(alert_id)
+    if not resolved:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Alert {alert_id} not found or already resolved",
+        )
+    return {"status": "ok", "alert_id": alert_id}
 

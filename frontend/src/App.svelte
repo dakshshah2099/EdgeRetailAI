@@ -26,6 +26,7 @@
     checkHealth,
     resetTelemetry,
     resolveAllAlerts,
+    resolveAlert,
   } from "./lib/api.js";
 
   // App State
@@ -225,6 +226,24 @@
     loadAllData();
   }
 
+  async function handleResolveAlert(alertId) {
+    try {
+      await resolveAlert(alertId);
+      await loadAllData();
+    } catch (err) {
+      console.error("Failed to resolve alert:", err);
+    }
+  }
+
+  async function handleResolveAllAlerts() {
+    try {
+      await resolveAllAlerts();
+      await loadAllData();
+    } catch (err) {
+      console.error("Failed to resolve all alerts:", err);
+    }
+  }
+
   // Reactive polling interval with automatic cleanup
   $effect(() => {
     if (autoRefresh && refreshIntervalSec > 0) {
@@ -398,6 +417,8 @@
                   alerts={alertsData} 
                   activeFilter={alertFilter} 
                   onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
+                  onResolveAlert={handleResolveAlert}
+                  onResolveAllAlerts={handleResolveAllAlerts}
                 />
               {:else}
                 <!-- Stream Diagnostics & Telemetry Card -->
@@ -477,6 +498,8 @@
                 alerts={alertsData} 
                 activeFilter={alertFilter} 
                 onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
+                onResolveAlert={handleResolveAlert}
+                onResolveAllAlerts={handleResolveAllAlerts}
               />
             </div>
           </div>
@@ -510,6 +533,8 @@
             alerts={alertsData} 
             activeFilter={alertFilter} 
             onFilterChange={(st) => { alertFilter = st; loadAllData(); }} 
+            onResolveAlert={handleResolveAlert}
+            onResolveAllAlerts={handleResolveAllAlerts}
           />
         {:else if activeTab === "settings"}
           <DebugControlPanel 
