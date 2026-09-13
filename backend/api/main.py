@@ -9,6 +9,9 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from api.routes.alerts import router as alerts_router
 from api.routes.heatmap import router as heatmap_router
 from api.routes.kpi import router as kpi_router
+from api.routes.planogram import router as planogram_router
+from api.routes.reports import router as reports_router
+from api.routes.staff import router as staff_router
 from api.routes.system import router as system_router
 from api.routes.video import router as video_router
 
@@ -43,6 +46,9 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(kpi_router)
+    application.include_router(planogram_router)
+    application.include_router(staff_router)
+    application.include_router(reports_router)
     application.include_router(alerts_router)
     application.include_router(heatmap_router)
     application.include_router(system_router)
