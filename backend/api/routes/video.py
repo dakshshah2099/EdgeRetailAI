@@ -6,7 +6,7 @@ from typing import Annotated
 import cv2
 import numpy as np
 import numpy.typing as npt
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -73,18 +73,26 @@ async def frame_streamer(
     overlay_detections: bool,
     target_fps: int = 15,
     camera_id: str | None = None,
+    request: Request | None = None,
 ) -> AsyncGenerator[bytes, None]:
     """Asynchronous generator yielding multipart/x-mixed-replace JPEG frames purely from memory."""
+    stream_manager.start()
     delay = 1.0 / max(1, min(target_fps, 30))
     src = resolve_camera_source()
     last_fallback_time = 0.0
     cached_fallback_bytes: bytes = b""
 
-    while True:
+    while not stream_manager.is_stopped():
+        if request is not None and await request.is_disconnected():
+            break
+
         try:
             is_conn, cached_bgr, tracked, w, h = stream_manager.get_latest_frame(
                 camera_id=camera_id
             )
+            if stream_manager.is_stopped():
+                break
+
             if is_conn and cached_bgr is not None:
                 eff_overlay_zones = overlay_zones if camera_id != "mosaic" else False
                 eff_overlay_det = overlay_detections if camera_id != "mosaic" else False
@@ -112,6 +120,8 @@ async def frame_streamer(
                     last_fallback_time = now
                 frame_bytes = cached_fallback_bytes
         except Exception as e:
+            if stream_manager.is_stopped():
+                break
             logger.warning("Degraded video stream in frame_streamer: %s", e)
             frame_bytes = cached_fallback_bytes
 
@@ -125,6 +135,9 @@ async def frame_streamer(
                 + frame_bytes
                 + b"\r\n"
             )
+
+        if stream_manager.is_stopped():
+            break
 
         await asyncio.sleep(delay)
 
@@ -161,6 +174,7 @@ def unregister_mesh_camera(camera_id: str) -> dict[str, str]:
 
 @router.get("/stream")
 async def video_stream(
+    request: Request,
     camera_id: Annotated[
         str | None, Query(description="Camera ID filter or 'mosaic' for multi-view grid")
     ] = None,
@@ -177,6 +191,7 @@ async def video_stream(
             overlay_detections=overlay_detections,
             target_fps=fps,
             camera_id=camera_id,
+            request=request,
         ),
         media_type="multipart/x-mixed-replace; boundary=frame",
         headers={

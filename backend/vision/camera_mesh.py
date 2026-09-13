@@ -65,15 +65,14 @@ class CameraNode:
     def stop(self) -> None:
         """Stop capture loop and release camera source."""
         self._shutdown_event.set()
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=1.5)
-        self._thread = None
-
         if self.camera_source:
             with contextlib.suppress(Exception):
                 self.camera_source.close()
             self.camera_source = None
         self.is_connected = False
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=0.5)
+        self._thread = None
 
     def update_frame(
         self, frame: npt.NDArray[np.uint8], width: int | None = None, height: int | None = None
@@ -154,18 +153,20 @@ class CameraNode:
                             self.fps = round(self._frame_count / elapsed, 1)
                             self._frame_count = 0
                             self._fps_start_time = now
-                    time.sleep(0.015)
+                    self._shutdown_event.wait(0.015)
                 else:
                     if now - self.last_frame_time > 3.0:
                         with self._lock:
                             self.is_connected = False
-                    time.sleep(0.1)
+                    self._shutdown_event.wait(0.1)
 
             except Exception as e:
+                if self._shutdown_event.is_set():
+                    break
                 logger.debug("Mesh camera %s capture error: %s", self.camera_id, e)
                 with self._lock:
                     self.is_connected = False
-                time.sleep(0.5)
+                self._shutdown_event.wait(0.5)
 
 
 class CameraMesh:

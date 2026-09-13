@@ -316,7 +316,13 @@ class StreamManager:
                     else:
                         self.camera = USBSource(device_index=formatted_src, loop=True)
 
-                res = self.camera.get_frame()
+                if self._shutdown_event.is_set():
+                    break
+
+                res = self.camera.get_frame() if self.camera else None
+                if self._shutdown_event.is_set():
+                    break
+
                 if res is not None:
                     meta, raw_bgr = res
                     with self._slot_lock:
@@ -338,13 +344,15 @@ class StreamManager:
                     if primary_node and time.monotonic() - self.last_frame_time > 4.0:
                         primary_node.is_connected = False
 
-                    # Throttle sleep when stream is offline/backing off to eliminate CPU/lock burden
-                    time.sleep(0.15)
+                    # Responsive sleep that aborts immediately on shutdown
+                    self._shutdown_event.wait(0.15)
             except Exception as e:
+                if self._shutdown_event.is_set():
+                    break
                 logger.error("Capture loop error: %s", e)
                 with self._slot_lock:
                     self.is_connected = False
-                time.sleep(0.2)
+                self._shutdown_event.wait(0.2)
 
     def _inference_loop(self) -> None:
         last_processed_seq = -1
@@ -629,10 +637,16 @@ class StreamManager:
                 elapsed = time.monotonic() - inf_start
                 sleep_time = target_interval - elapsed
                 if sleep_time > 0:
-                    time.sleep(sleep_time)
+                    self._shutdown_event.wait(sleep_time)
             except Exception as e:
+                if self._shutdown_event.is_set():
+                    break
                 logger.error("Inference loop error: %s", e)
-                time.sleep(0.05)
+                self._shutdown_event.wait(0.05)
+
+    def is_stopped(self) -> bool:
+        """Return whether background processing is shutting down or stopped."""
+        return self._shutdown_event.is_set()
 
     def start(self) -> None:
         """Explicitly start background processing worker threads."""
@@ -641,15 +655,17 @@ class StreamManager:
     def stop(self) -> None:
         """Gracefully stop background threads and release camera resources."""
         self._shutdown_event.set()
-        if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=2.0)
-        if self._inference_thread and self._inference_thread.is_alive():
-            self._inference_thread.join(timeout=2.0)
         if self.camera:
             with contextlib.suppress(Exception):
                 self.camera.close()
             self.camera = None
         camera_mesh.close()
+        if self._capture_thread and self._capture_thread.is_alive():
+            self._capture_thread.join(timeout=0.5)
+        self._capture_thread = None
+        if self._inference_thread and self._inference_thread.is_alive():
+            self._inference_thread.join(timeout=0.5)
+        self._inference_thread = None
 
     def get_latest_frame(
         self,

@@ -1,6 +1,8 @@
+import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,12 +18,35 @@ from api.routes.system import router as system_router
 from api.routes.video import router as video_router
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    yield
+def _install_signal_handlers() -> None:
+    """Install signal handlers to stop stream_manager immediately on SIGINT/SIGTERM."""
     from api.stream_manager import stream_manager
 
-    stream_manager.stop()
+    def _on_signal(signum: int, frame: Any) -> None:
+        stream_manager.stop()
+        orig = _orig_handlers.get(signum)
+        if callable(orig):
+            orig(signum, frame)
+
+    _orig_handlers: dict[int, Any] = {}
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            prev = signal.getsignal(sig)
+            _orig_handlers[sig] = prev
+            signal.signal(sig, _on_signal)
+        except (ValueError, OSError, AttributeError):
+            pass
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    from api.stream_manager import stream_manager
+
+    _install_signal_handlers()
+    try:
+        yield
+    finally:
+        stream_manager.stop()
 
 
 def create_app() -> FastAPI:

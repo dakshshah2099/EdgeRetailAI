@@ -90,12 +90,16 @@ class RTSPSource(CameraSource):
         self._current_backoff = initial_backoff_sec
         self._next_reconnect_time: float = 0.0
         self._cap: cv2.VideoCapture | None = None
+        self._is_closed: bool = False
 
         if not self._non_blocking:
             self._connect()
 
     def _connect(self) -> bool:
         """Attempt connecting to the RTSP stream with low ffmpeg socket timeouts."""
+        if self._is_closed:
+            return False
+
         if self._cap is not None:
             with contextlib.suppress(Exception):
                 self._cap.release()
@@ -125,9 +129,16 @@ class RTSPSource(CameraSource):
         cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self._timeout_msec)
         cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self._timeout_msec)
         if not cap.isOpened():
-            logger.warning(
-                "Failed to open RTSP stream at %s", mask_rtsp_credentials(self.source_url)
-            )
+            if not self._is_closed:
+                logger.warning(
+                    "Failed to open RTSP stream at %s", mask_rtsp_credentials(self.source_url)
+                )
+            with contextlib.suppress(Exception):
+                cap.release()
+            self._cap = None
+            return False
+
+        if self._is_closed:
             with contextlib.suppress(Exception):
                 cap.release()
             self._cap = None
@@ -138,6 +149,9 @@ class RTSPSource(CameraSource):
 
     def _handle_disconnect_and_backoff(self) -> None:
         """Handle stream disconnect, release resource, sleep with backoff, and reconnect."""
+        if self._is_closed:
+            return
+
         logger.warning(
             "RTSP stream %s disconnected or failed to read. Backing off for %.2fs",
             self.source_id,
@@ -154,14 +168,19 @@ class RTSPSource(CameraSource):
                 self._current_backoff * self._backoff_factor, self._max_backoff_sec
             )
         else:
-            time.sleep(self._current_backoff)
+            if not self._is_closed:
+                time.sleep(self._current_backoff)
             self._current_backoff = min(
                 self._current_backoff * self._backoff_factor, self._max_backoff_sec
             )
-            self._connect()
+            if not self._is_closed:
+                self._connect()
 
     def get_frame(self) -> tuple[Frame, npt.NDArray[np.uint8]] | None:
         """Return next available frame from RTSP stream, or None on failure."""
+        if self._is_closed:
+            return None
+
         now = time.monotonic()
         if self._cap is None or not self._cap.isOpened():
             if self._non_blocking and now < self._next_reconnect_time:
@@ -176,12 +195,13 @@ class RTSPSource(CameraSource):
                 if self._cap is None or not self._cap.isOpened():
                     return None
 
-        if self._cap is None or not self._cap.isOpened():
+        if self._cap is None or not self._cap.isOpened() or self._is_closed:
             return None
 
         ret, frame = self._cap.read()
         if not ret or frame is None or frame.size == 0:
-            self._handle_disconnect_and_backoff()
+            if not self._is_closed:
+                self._handle_disconnect_and_backoff()
             return None
 
         # Reset backoff on successful frame read
@@ -199,6 +219,7 @@ class RTSPSource(CameraSource):
 
     def close(self) -> None:
         """Release RTSP stream capture resource."""
+        self._is_closed = True
         if self._cap is not None:
             with contextlib.suppress(Exception):
                 self._cap.release()
