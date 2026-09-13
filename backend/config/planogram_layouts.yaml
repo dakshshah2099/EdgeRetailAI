@@ -1,0 +1,27 @@
+﻿# Planogram Layouts: Operator-defined shelf grid specifications and expected facings
+zone_shelf_beverages:
+  grid_rows: 2
+  grid_cols: 3
+  expected_nonempty_facings:
+    - [0, 0]
+    - [0, 1]
+    - [0, 2]
+    - [1, 0]
+    - [1, 1]
+    - [1, 2]
+
+zone_shelf_snacks:
+  grid_rows: 2
+  grid_cols: 2
+  expected_nonempty_facings:
+    - [0, 0]
+    - [0, 1]
+    - [1, 0]
+
+zone_shelf_electronics:
+  grid_rows: 1
+  grid_cols: 3
+  expected_nonempty_facings:
+    - [0, 0]
+    - [0, 1]
+    - [0, 2]
