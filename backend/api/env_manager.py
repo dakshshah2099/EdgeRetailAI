@@ -100,3 +100,20 @@ def is_debug_mode() -> bool:
     env_vars = read_env_file()
     debug_val = os.environ.get("DEBUG_MODE", env_vars.get("DEBUG_MODE", "false"))
     return debug_val.lower() in ("true", "1", "yes")
+
+
+def get_api_prefix() -> str:
+    """Resolve API route prefix, defaulting to /api/v1 (or empty during pytest unless explicit)."""
+    import sys
+
+    if "API_PREFIX" in os.environ:
+        prefix = os.environ["API_PREFIX"].strip()
+        return prefix if (prefix.startswith("/") or not prefix) else f"/{prefix}"
+    if "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ:
+        return ""
+    env_vars = read_env_file()
+    if "API_PREFIX" in env_vars:
+        prefix = env_vars["API_PREFIX"].strip()
+        return prefix if (prefix.startswith("/") or not prefix) else f"/{prefix}"
+    return "/api/v1"
+

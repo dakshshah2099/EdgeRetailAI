@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
@@ -92,19 +92,40 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    application.include_router(kpi_router)
-    application.include_router(planogram_router)
-    application.include_router(staff_router)
-    application.include_router(reports_router)
-    application.include_router(alerts_router)
-    application.include_router(heatmap_router)
-    application.include_router(system_router)
-    application.include_router(video_router)
-    application.include_router(ws_router)
+    from api.env_manager import get_api_prefix
 
-    @application.get("/health", tags=["system"])
-    def health_check() -> dict[str, str]:
-        return {"status": "ok"}
+    api_prefix = get_api_prefix()
+    if api_prefix:
+        api_router = APIRouter(prefix=api_prefix)
+        api_router.include_router(kpi_router)
+        api_router.include_router(planogram_router)
+        api_router.include_router(staff_router)
+        api_router.include_router(reports_router)
+        api_router.include_router(alerts_router)
+        api_router.include_router(heatmap_router)
+        api_router.include_router(system_router)
+        api_router.include_router(video_router)
+        api_router.include_router(ws_router)
+
+        @api_router.get("/health", tags=["system"])
+        def health_check_prefixed() -> dict[str, str]:
+            return {"status": "ok"}
+
+        application.include_router(api_router)
+    else:
+        application.include_router(kpi_router)
+        application.include_router(planogram_router)
+        application.include_router(staff_router)
+        application.include_router(reports_router)
+        application.include_router(alerts_router)
+        application.include_router(heatmap_router)
+        application.include_router(system_router)
+        application.include_router(video_router)
+        application.include_router(ws_router)
+
+        @application.get("/health", tags=["system"])
+        def health_check() -> dict[str, str]:
+            return {"status": "ok"}
 
     # Mount central multi-store monitoring dashboard at /central
     if os.environ.get("ENABLE_CENTRAL_DASHBOARD", "true").lower() == "true":
@@ -140,7 +161,8 @@ def create_app() -> FastAPI:
                 "status": "ok",
                 "name": "Intelligent Retail Analytics API",
                 "docs": "/docs",
-                "health": "/health",
+                "health": f"{api_prefix}/health" if api_prefix else "/health",
+                "api_prefix": api_prefix,
             }
         )
 
