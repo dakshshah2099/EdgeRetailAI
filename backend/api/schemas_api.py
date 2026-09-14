@@ -41,6 +41,8 @@ class CentralFootfallSummary(BaseModel):
 
 class CentralStoreStatus(BaseModel):
     store_id: str
+    name: str | None = None
+    api_base_url: str | None = None
     reachable: bool
     error: str | None = None
     footfall: CentralFootfallSummary | None = None

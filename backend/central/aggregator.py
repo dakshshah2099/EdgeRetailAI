@@ -21,6 +21,8 @@ class StoreStatus:
     queue_events: list[QueueEvent] | None
     stock_events: list[StockEvent] | None
     error: str | None  # populated if unreachable, explains why
+    name: str | None = None
+    api_base_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,8 @@ def poll_store(
 
         return StoreStatus(
             store_id=config.store_id,
+            name=config.name,
+            api_base_url=config.api_base_url,
             reachable=True,
             footfall_summary=footfall_summary,
             open_alert_count=open_alert_count,
@@ -99,6 +103,8 @@ def poll_store(
         )
         return StoreStatus(
             store_id=config.store_id,
+            name=config.name,
+            api_base_url=config.api_base_url,
             reachable=False,
             footfall_summary=None,
             open_alert_count=None,
@@ -151,6 +157,8 @@ def aggregate_stores(
                 except Exception as exc:
                     status = StoreStatus(
                         store_id=cfg.store_id,
+                        name=cfg.name,
+                        api_base_url=cfg.api_base_url,
                         reachable=False,
                         footfall_summary=None,
                         open_alert_count=None,

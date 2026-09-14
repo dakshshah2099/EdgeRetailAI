@@ -1,3 +1,5 @@
+import contextlib
+import os
 import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -16,6 +18,7 @@ from api.routes.reports import router as reports_router
 from api.routes.staff import router as staff_router
 from api.routes.system import router as system_router
 from api.routes.video import router as video_router
+from api.routes.ws import router as ws_router
 
 
 def _install_signal_handlers() -> None:
@@ -43,6 +46,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from api.stream_manager import stream_manager
 
     _install_signal_handlers()
+
+    from api.dependencies import get_app_config
+    from vision.camera_mesh import camera_mesh
+
+    with contextlib.suppress(Exception):
+        cfg = get_app_config()
+        if cfg and cfg.cameras:
+            for c in cfg.cameras:
+                camera_mesh.register_camera(
+                    camera_id=c.camera_id,
+                    source=c.source,
+                    role=c.role,
+                    label=c.label,
+                )
+
     try:
         yield
     finally:
@@ -78,10 +96,17 @@ def create_app() -> FastAPI:
     application.include_router(heatmap_router)
     application.include_router(system_router)
     application.include_router(video_router)
+    application.include_router(ws_router)
 
     @application.get("/health", tags=["system"])
     def health_check() -> dict[str, str]:
         return {"status": "ok"}
+
+    # Mount central multi-store monitoring dashboard if explicitly enabled
+    if os.environ.get("ENABLE_CENTRAL_DASHBOARD", "false").lower() == "true":
+        from central.central_dashboard import create_central_app
+
+        application.mount("/central", create_central_app())
 
     # If static frontend build is present, serve it via app.frontend()
     frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"

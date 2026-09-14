@@ -5,7 +5,30 @@ import yaml
 
 from core.schemas import StoreConfig
 
-__all__ = ["StoreConfig", "load_store_registry"]
+DEFAULT_STORES_YAML = """stores:
+  - store_id: "store_downtown"
+    name: "Downtown Flagship"
+    api_base_url: "http://127.0.0.1:8000"
+
+  - store_id: "store_suburban"
+    name: "Suburban Mall"
+    api_base_url: "http://127.0.0.1:8001"
+
+  - store_id: "store_airport"
+    name: "Terminal 2 Kiosk"
+    api_base_url: "http://127.0.0.1:8002"
+"""
+
+__all__ = ["StoreConfig", "ensure_default_stores", "load_store_registry"]
+
+
+def ensure_default_stores(path: str | Path) -> Path:
+    """Ensure stores registry file exists and is populated with default configuration."""
+    config_path = Path(path)
+    if not config_path.is_file() or config_path.stat().st_size == 0:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(DEFAULT_STORES_YAML, encoding="utf-8")
+    return config_path
 
 
 def load_store_registry(path: str | Path) -> list[StoreConfig]:
@@ -14,7 +37,13 @@ def load_store_registry(path: str | Path) -> list[StoreConfig]:
     """
     config_path = Path(path)
     if not config_path.is_file():
-        raise FileNotFoundError(f"Store registry file not found: {path}")
+        if config_path.name == "stores.yaml":
+            ensure_default_stores(config_path)
+        else:
+            raise FileNotFoundError(f"Store registry file not found: {path}")
+
+    if config_path.stat().st_size == 0:
+        ensure_default_stores(config_path)
 
     with config_path.open("r", encoding="utf-8") as f:
         try:
