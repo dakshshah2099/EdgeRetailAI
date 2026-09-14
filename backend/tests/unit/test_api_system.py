@@ -144,6 +144,85 @@ def test_get_and_update_zones(tmp_path: Path) -> None:
         app.dependency_overrides.pop(dep.get_config_path, None)
 
 
+def test_zones_resolution_scaling_and_calibration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import api.dependencies as dep
+
+    temp_cfg = tmp_path / "config.yaml"
+    temp_cfg.write_text(
+        "camera:\n"
+        "  source: '0'\n"
+        "calibration_width: 640\n"
+        "calibration_height: 480\n"
+        "low_stock_confidence_threshold: 0.6\n"
+        "queue_congestion_length: 3\n"
+        "zones:\n"
+        "  - zone_id: test_box\n"
+        "    zone_type: shelf\n"
+        "    polygon:\n"
+        "      - [100, 100]\n"
+        "      - [200, 100]\n"
+        "      - [200, 200]\n"
+        "      - [100, 200]\n"
+        "    label: Test Box\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CONFIG_PATH", str(temp_cfg))
+    app.dependency_overrides[dep.get_config_path] = lambda: temp_cfg
+
+    dep._cached_cfg = None
+    dep._cached_cfg_mtime = -1.0
+    dep._cached_cfg_path = None
+
+    try:
+        # 1. Unscaled GET returns 640x480 coordinates and calibration headers
+        resp = client.get("/system/zones")
+        assert resp.status_code == 200
+        assert resp.headers["X-Calibration-Width"] == "640"
+        assert resp.headers["X-Calibration-Height"] == "480"
+        zones = resp.json()
+        assert zones[0]["polygon"][0] == [100, 100]
+
+        # 2. Scaled GET (1280x960, exactly 2x) scales points to 200, 200
+        resp_scaled = client.get("/system/zones?frame_w=1280&frame_h=960")
+        assert resp_scaled.status_code == 200
+        assert resp_scaled.headers["X-Calibration-Width"] == "1280"
+        assert resp_scaled.headers["X-Calibration-Height"] == "960"
+        scaled_zones = resp_scaled.json()
+        assert scaled_zones[0]["polygon"][0] == [200, 200]
+        assert scaled_zones[0]["polygon"][2] == [400, 400]
+
+        # 3. Update zones calibrated at 1280x720
+        write_env_file({"DEBUG_MODE": "true"})
+        update_payload = {
+            "calibration_width": 1280,
+            "calibration_height": 720,
+            "zones": [
+                {
+                    "zone_id": "hd_shelf",
+                    "zone_type": "shelf",
+                    "polygon": [[100, 200], [400, 200], [400, 500], [100, 500]],
+                    "label": "HD Shelf",
+                }
+            ],
+        }
+        put_resp = client.put("/system/zones", json=update_payload)
+        assert put_resp.status_code == 200
+        assert put_resp.headers["X-Calibration-Width"] == "1280"
+        assert put_resp.headers["X-Calibration-Height"] == "720"
+
+        # 4. GET at 1280x720 returns 1:1 scale
+        dep._cached_cfg = None
+        dep._cached_cfg_mtime = -1.0
+        resp_hd = client.get("/system/zones?frame_w=1280&frame_h=720")
+        assert resp_hd.status_code == 200
+        hd_zones = resp_hd.json()
+        assert hd_zones[0]["polygon"][0] == [100, 200]
+    finally:
+        app.dependency_overrides.pop(dep.get_config_path, None)
+
+
 def test_root_endpoint_redirects_or_returns_json() -> None:
     resp = client.get("/", follow_redirects=False)
     repo_root = Path(__file__).resolve().parent.parent.parent.parent

@@ -53,6 +53,8 @@
   // Viewport dimensions & cursor tracker
   let viewWidth = $state(640);
   let viewHeight = $state(480);
+  let calibrationBaseWidth = $state(640);
+  let calibrationBaseHeight = $state(480);
   let cursorX = $state(0);
   let cursorY = $state(0);
 
@@ -139,7 +141,10 @@
 
   async function loadZones() {
     try {
-      zones = await fetchSystemZones();
+      const data = await fetchSystemZones({ frame_w: viewWidth, frame_h: viewHeight });
+      zones = data;
+      calibrationBaseWidth = data.calibration_width || viewWidth;
+      calibrationBaseHeight = data.calibration_height || viewHeight;
     } catch (err) {
       console.error("Failed to load zones:", err);
     }
@@ -155,8 +160,28 @@
     isStreamLoading = false;
     isStreamError = false;
     if (e.target && e.target.naturalWidth) {
-      viewWidth = e.target.naturalWidth;
-      viewHeight = e.target.naturalHeight;
+      const newW = e.target.naturalWidth;
+      const newH = e.target.naturalHeight;
+      if (newW > 0 && newH > 0 && (newW !== viewWidth || newH !== viewHeight)) {
+        const oldW = calibrationBaseWidth || viewWidth;
+        const oldH = calibrationBaseHeight || viewHeight;
+
+        viewWidth = newW;
+        viewHeight = newH;
+        calibrationBaseWidth = newW;
+        calibrationBaseHeight = newH;
+
+        // Proportionally scale any existing zones in memory to match new stream dimensions
+        if (zones && zones.length > 0 && oldW > 0 && oldH > 0 && (oldW !== newW || oldH !== newH)) {
+          zones = zones.map((z) => ({
+            ...z,
+            polygon: z.polygon.map(([px, py]) => [
+              Math.round(Math.max(0, Math.min(newW - 1, (px * newW) / oldW))),
+              Math.round(Math.max(0, Math.min(newH - 1, (py * newH) / oldH))),
+            ]),
+          }));
+        }
+      }
     }
   }
 
@@ -204,8 +229,10 @@
     zoneStatusMsg = "";
     isZoneError = false;
     try {
-      zones = await updateSystemZones(zones);
-      zoneStatusMsg = "✓ Zone configuration saved to config.yaml successfully.";
+      zones = await updateSystemZones(zones, viewWidth, viewHeight);
+      calibrationBaseWidth = viewWidth;
+      calibrationBaseHeight = viewHeight;
+      zoneStatusMsg = `✓ Zone configuration saved (${viewWidth}×${viewHeight} calibration resolution) to config.yaml.`;
       isZoneError = false;
       refreshStream();
     } catch (err) {
@@ -218,15 +245,19 @@
 
   function addZone() {
     const newId = `zone_${Date.now().toString().slice(-4)}`;
+    const x1 = Math.round(viewWidth * 0.2);
+    const y1 = Math.round(viewHeight * 0.2);
+    const x2 = Math.round(viewWidth * 0.5);
+    const y2 = Math.round(viewHeight * 0.5);
     const newZone = {
       zone_id: newId,
       zone_type: "shelf",
       label: `Shelf ${zones.length + 1}`,
       polygon: [
-        [100, 100],
-        [300, 100],
-        [300, 300],
-        [100, 300],
+        [x1, y1],
+        [x2, y1],
+        [x2, y2],
+        [x1, y2],
       ],
     };
     zones = [...zones, newZone];
@@ -247,12 +278,30 @@
   }
 
   function handleSvgMouseMove(e) {
-    const svgRect = e.currentTarget.getBoundingClientRect();
-    const scaleX = viewWidth / svgRect.width;
-    const scaleY = viewHeight / svgRect.height;
-
-    cursorX = Math.round(Math.max(0, Math.min(viewWidth, (e.clientX - svgRect.left) * scaleX)));
-    cursorY = Math.round(Math.max(0, Math.min(viewHeight, (e.clientY - svgRect.top) * scaleY)));
+    const svg = e.currentTarget;
+    if (svg && typeof svg.createSVGPoint === "function") {
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const ctm = svg.getScreenCTM();
+      if (ctm) {
+        const svgP = pt.matrixTransform(ctm.inverse());
+        cursorX = Math.round(Math.max(0, Math.min(viewWidth, svgP.x)));
+        cursorY = Math.round(Math.max(0, Math.min(viewHeight, svgP.y)));
+      } else {
+        const svgRect = svg.getBoundingClientRect();
+        const scaleX = viewWidth / (svgRect.width || 1);
+        const scaleY = viewHeight / (svgRect.height || 1);
+        cursorX = Math.round(Math.max(0, Math.min(viewWidth, (e.clientX - svgRect.left) * scaleX)));
+        cursorY = Math.round(Math.max(0, Math.min(viewHeight, (e.clientY - svgRect.top) * scaleY)));
+      }
+    } else {
+      const svgRect = e.currentTarget.getBoundingClientRect();
+      const scaleX = viewWidth / (svgRect.width || 1);
+      const scaleY = viewHeight / (svgRect.height || 1);
+      cursorX = Math.round(Math.max(0, Math.min(viewWidth, (e.clientX - svgRect.left) * scaleX)));
+      cursorY = Math.round(Math.max(0, Math.min(viewHeight, (e.clientY - svgRect.top) * scaleY)));
+    }
 
     if (!activeDragHandle) return;
 

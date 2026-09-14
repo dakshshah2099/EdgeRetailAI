@@ -69,6 +69,8 @@ class UpdateEnvRequest(BaseModel):
 
 class UpdateZonesRequest(BaseModel):
     zones: list[ZoneConfig]
+    calibration_width: int | None = Field(default=None, gt=0)
+    calibration_height: int | None = Field(default=None, gt=0)
 
 
 class CameraMeshNodeConfig(BaseModel):

@@ -2,11 +2,12 @@ import os
 from typing import Annotated, Any
 
 import yaml
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Response, status
 
 from api.dependencies import AppConfigDep, ConfigPathDep, RequireDebugModeDep
 from api.env_manager import is_debug_mode, read_env_file, write_env_file
 from api.schemas_api import SystemEnvResponse, UpdateEnvRequest, UpdateZonesRequest
+from api.stream_manager import scale_zones_to_frame
 from core.schemas import ZoneConfig
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -68,17 +69,37 @@ def toggle_debug_mode(
 
 
 @router.get("/zones")
-def get_system_zones(cfg: AppConfigDep) -> list[ZoneConfig]:
-    """Return currently configured spatial ROI and detection zones."""
-    if cfg and cfg.zones:
-        return cfg.zones
-    return []
+def get_system_zones(
+    cfg: AppConfigDep,
+    response: Response,
+    frame_w: int | None = None,
+    frame_h: int | None = None,
+) -> list[ZoneConfig]:
+    """Return currently configured spatial ROI and detection zones.
+
+    If frame_w and frame_h are provided, coordinates are proportionally scaled
+    from calibration reference resolution to the requested frame dimensions.
+    """
+    raw_zones = cfg.zones if cfg and cfg.zones else []
+    base_w = cfg.calibration_width if cfg else 640
+    base_h = cfg.calibration_height if cfg else 480
+
+    if frame_w is not None and frame_h is not None and frame_w > 0 and frame_h > 0:
+        scaled = scale_zones_to_frame(raw_zones, frame_w, frame_h, base_w=base_w, base_h=base_h)
+        response.headers["X-Calibration-Width"] = str(frame_w)
+        response.headers["X-Calibration-Height"] = str(frame_h)
+        return scaled
+
+    response.headers["X-Calibration-Width"] = str(base_w)
+    response.headers["X-Calibration-Height"] = str(base_h)
+    return raw_zones
 
 
 @router.put("/zones")
 def update_system_zones(
     req: UpdateZonesRequest,
     cfg_path: ConfigPathDep,
+    response: Response,
     _: RequireDebugModeDep,
 ) -> list[ZoneConfig]:
     """Save modified zone polygons directly into config.yaml."""
@@ -98,7 +119,14 @@ def update_system_zones(
         for z in req.zones
     ]
 
+    cal_w = req.calibration_width or raw_cfg.get("calibration_width", 640)
+    cal_h = req.calibration_height or raw_cfg.get("calibration_height", 480)
+    raw_cfg["calibration_width"] = cal_w
+    raw_cfg["calibration_height"] = cal_h
+
     with cfg_path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
 
+    response.headers["X-Calibration-Width"] = str(cal_w)
+    response.headers["X-Calibration-Height"] = str(cal_h)
     return req.zones

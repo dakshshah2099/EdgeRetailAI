@@ -114,24 +114,49 @@ export async function toggleDebugMode(options = {}) {
   return res.json();
 }
 
-export async function fetchSystemZones(options = {}) {
-  const res = await fetch(`${API_BASE}/system/zones`, { signal: options.signal });
+export async function fetchSystemZones(params = {}, options = {}) {
+  const search = new URLSearchParams();
+  if (params && params.frame_w) search.set('frame_w', String(params.frame_w));
+  if (params && params.frame_h) search.set('frame_h', String(params.frame_h));
+
+  const query = search.toString() ? `?${search.toString()}` : '';
+  const signal = options.signal || (params && params.signal);
+  const res = await fetch(`${API_BASE}/system/zones${query}`, { signal });
   if (!res.ok) throw new Error(`Fetch zones error: ${res.statusText}`);
-  return res.json();
+
+  const calW = parseInt(res.headers.get('x-calibration-width') || '640', 10);
+  const calH = parseInt(res.headers.get('x-calibration-height') || '480', 10);
+  const data = await res.json();
+  if (Array.isArray(data)) {
+    data.calibration_width = calW;
+    data.calibration_height = calH;
+  }
+  return data;
 }
 
-export async function updateSystemZones(zones, options = {}) {
+export async function updateSystemZones(zones, calibrationWidth = null, calibrationHeight = null, options = {}) {
+  const payload = { zones };
+  if (calibrationWidth) payload.calibration_width = calibrationWidth;
+  if (calibrationHeight) payload.calibration_height = calibrationHeight;
+
   const res = await fetch(`${API_BASE}/system/zones`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ zones }),
+    body: JSON.stringify(payload),
     signal: options.signal,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || 'Failed to update zones');
   }
-  return res.json();
+  const calW = parseInt(res.headers.get('x-calibration-width') || String(calibrationWidth || 640), 10);
+  const calH = parseInt(res.headers.get('x-calibration-height') || String(calibrationHeight || 480), 10);
+  const data = await res.json();
+  if (Array.isArray(data)) {
+    data.calibration_width = calW;
+    data.calibration_height = calH;
+  }
+  return data;
 }
 
 export async function checkHealth(options = {}) {

@@ -136,12 +136,16 @@ class AppConfig(BaseModel):
     camera: CameraConfig
     cameras: list[CameraNodeDefinition] = Field(default_factory=list)
     zones: list[ZoneConfig] = Field(default_factory=list)
+    calibration_width: int = Field(default=640, gt=0)
+    calibration_height: int = Field(default=480, gt=0)
     low_stock_confidence_threshold: float = Field(ge=0.0, le=1.0)
     queue_congestion_length: int = Field(ge=1)
 
 
 DEFAULT_CONFIG_YAML = """camera:
   source: "rtsp://192.168.1.100:8080/h264_pcm.sdp"
+calibration_width: 640
+calibration_height: 480
 zones:
   - zone_id: "zone_entrance_exit"
     zone_type: "entry_exit"

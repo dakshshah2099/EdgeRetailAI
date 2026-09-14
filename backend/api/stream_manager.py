@@ -49,15 +49,23 @@ def resolve_camera_source() -> str:
     return "0"
 
 
-def scale_zones_to_frame(zones: list[ZoneConfig], frame_w: int, frame_h: int) -> list[ZoneConfig]:
+def scale_zones_to_frame(
+    zones: list[ZoneConfig],
+    frame_w: int,
+    frame_h: int,
+    base_w: int | None = None,
+    base_h: int | None = None,
+) -> list[ZoneConfig]:
     """Proportionally scale zone polygon vertices to the actual video frame resolution."""
     if not zones or frame_w <= 0 or frame_h <= 0:
         return zones
 
-    max_x = max((p[0] for z in zones for p in z.polygon), default=640)
-    max_y = max((p[1] for z in zones for p in z.polygon), default=480)
-    base_w = max(640, int(max_x))
-    base_h = max(480, int(max_y))
+    if base_w is None or base_w <= 0:
+        max_x = max((p[0] for z in zones for p in z.polygon), default=640)
+        base_w = max(640, int(max_x))
+    if base_h is None or base_h <= 0:
+        max_y = max((p[1] for z in zones for p in z.polygon), default=480)
+        base_h = max(480, int(max_y))
 
     if base_w == frame_w and base_h == frame_h:
         return zones
@@ -137,7 +145,9 @@ def draw_zones_overlay(
     annotated = frame_bgr.copy()
     overlay = annotated.copy()
     h, w = frame_bgr.shape[:2]
-    zones = scale_zones_to_frame(cfg.zones, w, h)
+    base_w = cfg.calibration_width if cfg else 640
+    base_h = cfg.calibration_height if cfg else 480
+    zones = scale_zones_to_frame(cfg.zones, w, h, base_w=base_w, base_h=base_h)
 
     for zone in zones:
         pts = np.array(zone.polygon, dtype=np.int32).reshape((-1, 1, 2))
@@ -491,7 +501,11 @@ class StreamManager:
                     cached_cfg = get_app_config()
 
                 raw_zones = cached_cfg.zones if cached_cfg and cached_cfg.zones else []
-                zones = scale_zones_to_frame(raw_zones, curr_meta.width, curr_meta.height)
+                base_w = cached_cfg.calibration_width if cached_cfg else 640
+                base_h = cached_cfg.calibration_height if cached_cfg else 480
+                zones = scale_zones_to_frame(
+                    raw_zones, curr_meta.width, curr_meta.height, base_w=base_w, base_h=base_h
+                )
 
                 if "LOW_STOCK_CONFIDENCE_THRESHOLD" in env_vars:
                     with contextlib.suppress(Exception):
