@@ -89,6 +89,8 @@ class FootfallTracker:
         self._track_line_side: dict[str, dict[str, int]] = {}
         # Mapping of track_id -> zone_id -> event emitted on entry
         self._entry_emitted: dict[str, dict[str, str]] = {}
+        # Mapping of track_id -> consecutive frames lost
+        self._track_lost_count: dict[str, int] = {}
 
     def reset(self) -> None:
         """Reset internal zone tracking states."""
@@ -97,6 +99,7 @@ class FootfallTracker:
         self._track_entry_info.clear()
         self._track_line_side.clear()
         self._entry_emitted.clear()
+        self._track_lost_count.clear()
 
     def _get_zone_direction(self, zone: ZoneConfig) -> tuple[float, float]:
         """Resolve direction vector for a specific zone."""
@@ -117,14 +120,24 @@ class FootfallTracker:
         events: list[DetectionEvent] = []
         current_track_ids = {det.track_id for det in tracked_detections}
 
-        # Clean up tracks that have terminated
-        for track_id in list(self._inside_zones.keys()):
+        # Clean up tracks that have terminated after grace period of absence
+        for track_id in list(self._track_lost_count.keys()):
             if track_id not in current_track_ids:
-                del self._inside_zones[track_id]
-                self._prev_positions.pop(track_id, None)
-                self._track_entry_info.pop(track_id, None)
-                self._track_line_side.pop(track_id, None)
-                self._entry_emitted.pop(track_id, None)
+                lost = self._track_lost_count.get(track_id, 0) + 1
+                self._track_lost_count[track_id] = lost
+                if lost > 30:
+                    self._inside_zones.pop(track_id, None)
+                    self._prev_positions.pop(track_id, None)
+                    self._track_entry_info.pop(track_id, None)
+                    self._track_line_side.pop(track_id, None)
+                    self._entry_emitted.pop(track_id, None)
+                    self._track_lost_count.pop(track_id, None)
+            else:
+                self._track_lost_count[track_id] = 0
+
+        for track_id in current_track_ids:
+            if track_id not in self._track_lost_count:
+                self._track_lost_count[track_id] = 0
 
         # Pre-convert zone polygons to cv2-compatible numpy arrays
         cached_polygons = zone_polygon_cache(zones)
