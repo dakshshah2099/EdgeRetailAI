@@ -85,10 +85,6 @@
               </svg>
               {#if !isCollapsed}
                 <span class="flex-1 text-left truncate">Camera Feed</span>
-                <span class="flex h-2 w-2 relative shrink-0">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
               {/if}
             </a>
           {:else}
@@ -103,17 +99,12 @@
               </svg>
               {#if !isCollapsed}
                 <span class="flex-1 text-left truncate">Camera Feed</span>
-                <span class="flex h-2 w-2 relative shrink-0">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
               {/if}
             </a>
           {/if}
           {#if isCollapsed}
             <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
               <span>Camera Feed</span>
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
             </div>
           {/if}
         </div>
@@ -467,8 +458,6 @@
                     {alertsCount}
                   </span>
                 {/if}
-              {:else if alertsCount > 0}
-                <span class="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
               {/if}
             </a>
           {:else}
@@ -488,8 +477,6 @@
                     {alertsCount}
                   </span>
                 {/if}
-              {:else if alertsCount > 0}
-                <span class="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
               {/if}
             </a>
           {/if}
@@ -540,6 +527,31 @@
             </div>
           {/if}
         </div>
+
+        <!-- Central Multi-Store Monitor -->
+        <div class="relative group">
+          <a
+            href="/central"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="w-full flex items-center {isCollapsed ? 'justify-center px-0' : 'justify-start px-2.5'} gap-2.5 py-1.5 rounded-md text-xs font-medium bg-transparent text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent transition-all cursor-pointer select-none"
+            title="Open Central Multi-Store Operations Monitor"
+          >
+            <svg class="w-4 h-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            {#if !isCollapsed}
+              <span class="flex-1 text-left truncate">Multi-Store</span>
+              <span class="text-2xs font-mono text-slate-400">3 STORES</span>
+            {/if}
+          </a>
+          {#if isCollapsed}
+            <div class="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden group-hover:flex items-center px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-sans rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
+              Multi-Store Monitor
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
   </nav>
@@ -549,20 +561,20 @@
     {#if !isCollapsed}
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <span class="text-slate-500">INFERENCE</span>
-          <strong class="text-slate-800">ONNX-RT</strong>
+          <span class="text-slate-500">RUNTIME</span>
+          <strong class="text-slate-800">ACTIVE</strong>
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-slate-500">PRIVACY</span>
-          <strong class="text-emerald-700 font-semibold">ZERO-PII</strong>
+          <span class="text-slate-500">STORAGE</span>
+          <strong class="text-emerald-700 font-semibold">EPHEMERAL</strong>
         </div>
       </div>
     {:else}
-      <div class="flex flex-col items-center justify-center gap-1 group relative cursor-pointer" title="Inference: ONNX-RT | Privacy: ZERO-PII">
-        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+      <div class="flex flex-col items-center justify-center gap-1 group relative cursor-pointer" title="Runtime: Active | Storage: Ephemeral">
+        <span class="w-2 h-2 rounded-xs bg-slate-400"></span>
         <div class="pointer-events-none absolute left-full bottom-0 ml-3 hidden group-hover:flex flex-col gap-0.5 px-2.5 py-1 bg-slate-900 text-slate-100 text-xs font-mono rounded shadow-xl whitespace-nowrap z-50 border border-slate-700">
-          <span>INFERENCE: ONNX-RT</span>
-          <span class="text-emerald-400 font-semibold">PRIVACY: ZERO-PII</span>
+          <span>RUNTIME: ACTIVE</span>
+          <span class="text-emerald-400 font-semibold">STORAGE: EPHEMERAL</span>
         </div>
       </div>
     {/if}

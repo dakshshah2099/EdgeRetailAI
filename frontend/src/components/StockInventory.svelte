@@ -1,7 +1,8 @@
 <script>
   let {
     stockEvents = [],
-    skuReport = null
+    skuReport = null,
+    skuCatalog = []
   } = $props();
 
   function formatTime(isoStr) {
@@ -9,12 +10,11 @@
     return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
-  // Fallback map for store layout if SKU report hasn't finished initial 10s cycle
-  const fallbackSKUs = {
-    zone_shelf_beverages: { name: 'Classic Cola Can 330ml', brand: 'EdgeCola', skuId: 'sku_bev_cola_330', category: 'Beverages' },
-    zone_shelf_snacks: { name: 'Artisan Potato Chips 50g', brand: 'CrunchCo', skuId: 'sku_snack_chips_gold', category: 'Snacks' },
-    zone_shelf_electronics: { name: 'Braided USB-C Cable 1m', brand: 'VoltTech', skuId: 'sku_elec_cable_usbc', category: 'Electronics' }
-  };
+  let catalogByZone = $derived(
+    Array.isArray(skuCatalog)
+      ? Object.fromEntries(skuCatalog.filter(c => c.expected_zone_id).map(c => [c.expected_zone_id, c]))
+      : {}
+  );
 
   let skuByShelf = $derived(
     (skuReport && skuReport.items)
@@ -54,22 +54,25 @@
     }
   }
 
-  // Combine shelves from stockEvents and skuReport items
+  // Combine shelves from stockEvents, skuReport items, and registered catalog zones
   let allShelfIds = $derived(Array.from(new Set([
     ...stockEvents.map(s => s.shelf_id),
-    ...(skuReport && skuReport.items ? skuReport.items.map(i => i.shelf_id) : [])
+    ...(skuReport && skuReport.items ? skuReport.items.map(i => i.shelf_id) : []),
+    ...(Array.isArray(skuCatalog) ? skuCatalog.filter(c => c.expected_zone_id).map(c => c.expected_zone_id) : [])
   ])));
 
   let cardsData = $derived(allShelfIds.map(shelfId => {
     const sEv = stockEvents.find(s => s.shelf_id === shelfId);
     const skuItem = skuByShelf[shelfId];
-    const fallback = fallbackSKUs[shelfId] || { name: 'Retail SKU Item', brand: 'Generic', skuId: `sku_${shelfId}`, category: 'General' };
+    const catItem = catalogByZone[shelfId];
 
     const status = (sEv && sEv.status) || (skuItem && skuItem.status === 'misplaced' ? 'ok' : skuItem?.status) || 'ok';
     const confidence = (sEv && sEv.confidence) || skuItem?.confidence || 0.85;
     const timestamp = (sEv && sEv.timestamp) || skuItem?.timestamp;
-    const skuName = skuItem?.detected_sku_name || fallback.name;
-    const skuId = skuItem?.detected_sku_id || skuItem?.expected_sku_id || fallback.skuId;
+    const skuName = skuItem?.detected_sku_name || catItem?.name || `Shelf Item (${shelfId})`;
+    const skuId = skuItem?.detected_sku_id || skuItem?.expected_sku_id || catItem?.sku_id || `sku_${shelfId}`;
+    const brand = catItem?.brand || 'Store';
+    const category = catItem?.category || 'General';
     const facingCount = skuItem ? skuItem.facing_count : (status === 'empty' ? 0 : status === 'low' ? 2 : 5);
     const fillPct = skuItem ? Math.round(skuItem.fill_percentage * 100) : (status === 'empty' ? 0 : status === 'low' ? 25 : 85);
 
@@ -80,8 +83,8 @@
       timestamp,
       skuName,
       skuId,
-      brand: fallback.brand,
-      category: fallback.category,
+      brand,
+      category,
       facingCount,
       fillPct
     };
@@ -185,7 +188,7 @@
           <!-- Replenishment Alert Banner if low or empty -->
           {#if st.alertText}
             <div class="px-2 py-1 rounded text-xs font-mono font-medium flex items-center gap-1.5 {card.status === 'empty' ? 'bg-rose-50 border border-rose-200 text-rose-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}">
-              <span class="w-1.5 h-1.5 rounded-full {card.status === 'empty' ? 'bg-rose-600 animate-ping' : 'bg-amber-600'}"></span>
+              <span class="w-1.5 h-1.5 rounded-full {card.status === 'empty' ? 'bg-rose-600' : 'bg-amber-600'}"></span>
               <span>{st.alertText}</span>
             </div>
           {/if}

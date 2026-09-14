@@ -1,13 +1,19 @@
-﻿<script>
+<script>
   let {
     planogramData = null,
-    zoneId = "zone_shelf_beverages",
+    shelfZones = [],
+    selectedShelfId = "",
     isLoading = false,
+    onSelectShelf = () => {},
     onRefresh = () => {}
   } = $props();
 
   let complianceRatio = $derived(
     planogramData ? Math.round(planogramData.compliance_ratio * 100) : 0
+  );
+
+  let currentZoneId = $derived(
+    selectedShelfId || (planogramData ? planogramData.zone_id : (shelfZones[0]?.zone_id || ""))
   );
 
   function getStatusColor(status) {
@@ -28,9 +34,22 @@
           </span>
         {/if}
       </div>
-      <p class="text-xs text-slate-500 font-mono mt-0.5">
-        Target Shelf: <span class="font-semibold text-slate-700">{zoneId}</span>
-      </p>
+      <div class="flex items-center gap-2 text-xs font-mono mt-1">
+        <span class="text-slate-500">Target Shelf:</span>
+        {#if shelfZones.length > 0}
+          <select
+            class="bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
+            value={currentZoneId}
+            onchange={(e) => onSelectShelf(e.target.value)}
+          >
+            {#each shelfZones as shelf}
+              <option value={shelf.zone_id}>{shelf.label || shelf.zone_id} ({shelf.zone_id})</option>
+            {/each}
+          </select>
+        {:else}
+          <span class="font-semibold text-slate-700">{currentZoneId || "None configured"}</span>
+        {/if}
+      </div>
     </div>
 
     <button

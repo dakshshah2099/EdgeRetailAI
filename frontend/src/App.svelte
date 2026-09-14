@@ -23,14 +23,19 @@
     fetchAlerts,
     fetchHeatmap,
     fetchSystemEnv,
+    fetchSystemZones,
+    fetchSKUCatalog,
     checkHealth,
     resetTelemetry,
     resolveAllAlerts,
     resolveAlert,
+    connectTelemetryWebSocket,
   } from "./lib/api.js";
 
   // App State
   let isConnected = $state(false);
+  let isWsConnected = $state(false);
+  let liveDwellPoints = $state([]);
   let isRefreshing = $state(false);
   let lastUpdated = $state(new Date());
   let autoRefresh = $state(true);
@@ -40,10 +45,13 @@
 
   // Settings & System Env
   let envVariables = $state({});
+  let systemZones = $state([]);
+  let skuCatalog = $state([]);
 
   // Filters
   let selectedTimeRange = $state("all");
   let selectedZone = $state("");
+  let selectedPlanogramShelf = $state("");
   let groupBy = $state("hour");
   let alertFilter = $state("open");
 
@@ -176,8 +184,12 @@
       since: since || null,
     };
 
+    const targetPlanoShelf =
+      selectedPlanogramShelf ||
+      (shelfZones.length > 0 ? shelfZones[0].zone_id : "zone_shelf_beverages");
+
     try {
-      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, staff] = await Promise.allSettled([
+      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, staff, zonesRes, catalogRes] = await Promise.allSettled([
         checkHealth({ signal: ac.signal }),
         fetchKPIFootfall({ ...params, group_by: groupBy }, { signal: ac.signal }),
         fetchKPIQueue(params, { signal: ac.signal }),
@@ -186,8 +198,10 @@
         fetchHeatmap(params, { signal: ac.signal }),
         fetchSystemEnv({ signal: ac.signal }),
         fetchKPISKU(params, { signal: ac.signal }),
-        fetchPlanogramCompliance("zone_shelf_beverages", { signal: ac.signal }),
+        fetchPlanogramCompliance(targetPlanoShelf, { signal: ac.signal }),
         fetchKPIStaff(params, { signal: ac.signal }),
+        fetchSystemZones({ signal: ac.signal }),
+        fetchSKUCatalog({}, { signal: ac.signal }),
       ]);
 
       if (ac.signal.aborted) return;
@@ -203,6 +217,16 @@
       if (staff.status === "fulfilled") staffData = staff.value;
       if (sysEnv.status === "fulfilled") {
         envVariables = sysEnv.value.variables;
+      }
+      if (zonesRes.status === "fulfilled" && Array.isArray(zonesRes.value)) {
+        systemZones = zonesRes.value;
+        if (!selectedPlanogramShelf && zonesRes.value.some((z) => z.zone_type === "shelf")) {
+          const firstShelf = zonesRes.value.find((z) => z.zone_type === "shelf");
+          if (firstShelf) selectedPlanogramShelf = firstShelf.zone_id;
+        }
+      }
+      if (catalogRes.status === "fulfilled" && Array.isArray(catalogRes.value)) {
+        skuCatalog = catalogRes.value;
       }
 
       lastUpdated = new Date();
@@ -244,27 +268,67 @@
     }
   }
 
-  // Reactive polling interval with automatic cleanup
-  $effect(() => {
-    if (autoRefresh && refreshIntervalSec > 0) {
-      const timer = setInterval(() => {
-        loadAllData();
-      }, refreshIntervalSec * 1000);
-      return () => clearInterval(timer);
-    }
-  });
-
-  // Initial mount lifecycle
+  // Initial mount lifecycle & real-time WebSocket connection
   $effect(() => {
     setupRouting();
     loadAllData();
+
+    const wsClient = connectTelemetryWebSocket(
+      (msg) => {
+        if (!msg || !msg.type) return;
+        if (msg.type === "dwell_points") {
+          liveDwellPoints = msg.points || [];
+        } else if (msg.type === "footfall") {
+          if (msg.data) {
+            footfallData = msg.data;
+          } else if (msg.total_enters !== undefined || msg.total_exits !== undefined) {
+            const currentEnters = (footfallData?.total_enters || 0) + (msg.total_enters || 0);
+            const currentExits = (footfallData?.total_exits || 0) + (msg.total_exits || 0);
+            footfallData = {
+              ...(footfallData || {}),
+              total_enters: currentEnters,
+              total_exits: currentExits,
+              net_occupancy: Math.max(0, currentEnters - currentExits),
+            };
+          }
+          lastUpdated = new Date();
+        } else if (msg.type === "queue") {
+          const qData = Array.isArray(msg.data)
+            ? msg.data
+            : (Array.isArray(msg.counters) ? msg.counters : []);
+          if (qData.length > 0) {
+            queueData = qData;
+          }
+          lastUpdated = new Date();
+        } else if (msg.type === "stock_update") {
+          if (Array.isArray(msg.data)) {
+            stockData = msg.data;
+          } else {
+            fetchKPIStock({ zone_id: selectedZone || null }).then((res) => { stockData = res; }).catch(() => {});
+            fetchKPISKU({ zone_id: selectedZone || null }).then((res) => { skuReport = res; }).catch(() => {});
+          }
+          fetchAlerts({ status: alertFilter }).then((res) => { alertsData = res; }).catch(() => {});
+          lastUpdated = new Date();
+        } else if (msg.type === "alerts_update") {
+          fetchAlerts({ status: alertFilter }).then((res) => { alertsData = res; }).catch(() => {});
+          lastUpdated = new Date();
+        }
+      },
+      ({ connected }) => {
+        isWsConnected = connected;
+        if (connected) isConnected = true;
+      }
+    );
+
     return () => {
       page.stop();
+      wsClient.disconnect();
       if (activeAbortController) activeAbortController.abort();
     };
   });
 
   // Derived KPI metrics
+  let shelfZones = $derived(systemZones.filter((z) => z.zone_type === "shelf"));
   let occupancy = $derived(footfallData ? footfallData.net_occupancy : 0);
   let totalEnters = $derived(footfallData ? footfallData.total_enters : 0);
   let totalExits = $derived(footfallData ? footfallData.total_exits : 0);
@@ -296,6 +360,7 @@
     <!-- Top Operational Header -->
     <Header
       {isConnected}
+      {isWsConnected}
       {lastUpdated}
       {isRefreshing}
       bind:autoRefresh
@@ -440,7 +505,7 @@
 
                     <div class="flex items-center justify-between py-1 border-b border-slate-100">
                       <span class="text-slate-500">Inference Backend</span>
-                      <span class="text-sky-800 font-semibold">ONNX Runtime (YOLOv26n)</span>
+                      <span class="text-sky-800 font-semibold">YOLOv26n Acceleration</span>
                     </div>
 
                     <div class="flex items-center justify-between py-1 border-b border-slate-100">
@@ -469,8 +534,8 @@
                     </div>
 
                     <div class="flex items-center justify-between py-1">
-                      <span class="text-slate-500">Privacy & PII Policy</span>
-                      <span class="text-emerald-700 font-semibold">In-Memory / Zero Disk</span>
+                      <span class="text-slate-500">Data Policy</span>
+                      <span class="text-emerald-700 font-semibold">In-Memory / Ephemeral</span>
                     </div>
                   </div>
 
@@ -491,7 +556,7 @@
         {:else if activeTab === "heatmap"}
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
             <div class="lg:col-span-2">
-              <HeatmapCanvas {heatmapData} isLoading={isRefreshing} />
+              <HeatmapCanvas {heatmapData} isLoading={isRefreshing} livePoints={liveDwellPoints} />
             </div>
             <div class="lg:col-span-1">
               <AlertsFeed 
@@ -512,12 +577,17 @@
         {:else if activeTab === "queues"}
           <QueueMonitor queueEvents={queueData} congestionThreshold={4} />
         {:else if activeTab === "stock"}
-          <StockInventory stockEvents={stockData} {skuReport} />
+          <StockInventory stockEvents={stockData} {skuReport} {skuCatalog} />
         {:else if activeTab === "planogram"}
           <PlanogramCompliance 
             {planogramData} 
-            zoneId={selectedZone || "zone_shelf_beverages"} 
+            {shelfZones}
+            selectedShelfId={selectedPlanogramShelf}
             isLoading={isRefreshing} 
+            onSelectShelf={(sId) => {
+              selectedPlanogramShelf = sId;
+              loadAllData();
+            }}
             onRefresh={loadAllData} 
           />
         {:else if activeTab === "staff"}

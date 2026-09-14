@@ -1,6 +1,7 @@
 <script>
   let {
     isConnected = true,
+    isWsConnected = false,
     lastUpdated = new Date(),
     isRefreshing = false,
     autoRefresh = $bindable(true),
@@ -85,15 +86,7 @@
     </div>
 
     <!-- Edge Health Status Badge -->
-    <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1 text-xs font-mono">
-      <span class="relative flex h-2 w-2">
-        {#if isConnected}
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-        {:else}
-          <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
-        {/if}
-      </span>
+    <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1 text-xs font-mono">
       <span class={isConnected ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>
         {isConnected ? 'NODE ONLINE' : 'NODE OFFLINE'}
       </span>
@@ -101,27 +94,11 @@
       <span class="text-slate-500 text-xs">{formatTime(lastUpdated)}</span>
     </div>
 
-    <!-- Auto-refresh and Manual Pulse -->
-    <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs font-mono">
-      <label class="flex items-center gap-1.5 cursor-pointer select-none">
-        <input type="checkbox" class="accent-sky-600 cursor-pointer" bind:checked={autoRefresh} />
-        <span class="text-slate-600 text-xs font-medium">AUTO</span>
-      </label>
-      <select 
-        class="bg-transparent text-slate-700 text-xs focus:outline-none cursor-pointer ml-1"
-        bind:value={refreshInterval}
-        disabled={!autoRefresh}
-        aria-label="Auto refresh interval in seconds"
-      >
-        <option value={1}>1s</option>
-        <option value={3}>3s</option>
-        <option value={5}>5s</option>
-        <option value={10}>10s</option>
-      </select>
-
+    <!-- Manual Refresh Button -->
+    <div class="flex items-center bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 text-xs font-mono">
       <button 
         type="button" 
-        class="ml-1 p-1 text-slate-500 hover:text-sky-600 transition-colors"
+        class="p-1 text-slate-500 hover:text-sky-600 transition-colors cursor-pointer"
         class:animate-spin={isRefreshing}
         onclick={onRefresh}
         title="Force Refresh Data"

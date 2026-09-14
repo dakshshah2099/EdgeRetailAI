@@ -1,7 +1,8 @@
 <script>
   let {
     heatmapData = null,
-    isLoading = false
+    isLoading = false,
+    livePoints = []
   } = $props();
 
   let canvas = $state(null);
@@ -9,6 +10,7 @@
   let cachedCtx = null;
 
   $effect(() => {
+    const _pts = livePoints;
     if (canvas && heatmapData && heatmapData.grid) {
       drawHeatmap();
     }
@@ -73,6 +75,42 @@
         ctx.strokeRect(c * cellW, r * cellH, cellW, cellH);
       }
     }
+
+    // Draw Real-time Shopper Dwell Points Overlay
+    if (livePoints && livePoints.length > 0) {
+      for (const pt of livePoints) {
+        const px = Math.max(0, Math.min(canvas.width, pt.x));
+        const py = Math.max(0, Math.min(canvas.height, pt.y));
+
+        // Pulsing thermal glow
+        const grad = ctx.createRadialGradient(px, py, 2, px, py, 18);
+        grad.addColorStop(0, 'rgba(239, 68, 68, 0.8)');
+        grad.addColorStop(0.5, 'rgba(245, 158, 11, 0.4)');
+        grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(px, py, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core marker
+        ctx.fillStyle = '#e11d48';
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Shopper dwell counter tag
+        if (pt.dwell_seconds != null) {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+          ctx.fillRect(px + 6, py - 14, 34, 14);
+          ctx.fillStyle = '#38bdf8';
+          ctx.font = 'bold 9px monospace';
+          ctx.fillText(`${Math.round(pt.dwell_seconds)}s`, px + 8, py - 4);
+        }
+      }
+    }
   }
 
   function updatePointer(clientX, clientY) {
@@ -117,6 +155,11 @@
         <span class="px-1.5 py-0.5 text-xs font-mono bg-sky-50 text-sky-700 border border-sky-200 rounded">
           SPATIAL ROI
         </span>
+        {#if livePoints && livePoints.length > 0}
+          <span class="flex items-center gap-1 px-1.5 py-0.5 text-xs font-mono bg-slate-50 text-slate-700 border border-slate-200 rounded">
+            TRACKED: {livePoints.length}
+          </span>
+        {/if}
       </div>
       <p class="text-xs text-slate-500 font-mono mt-0.5">Aggregated dwell time density across camera tracking perspective.</p>
     </div>
@@ -129,13 +172,13 @@
     </div>
   </div>
 
-  <!-- Heatmap Canvas Stage -->
-  <div class="relative w-full aspect-video bg-slate-50 border border-slate-200 rounded-md overflow-hidden flex items-center justify-center">
+  <!-- Heatmap Canvas Container -->
+  <div class="relative w-full aspect-video bg-slate-900 rounded-md overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner">
     <canvas
       bind:this={canvas}
       width={640}
       height={480}
-      class="w-full h-full object-contain cursor-crosshair touch-none"
+      class="w-full h-full object-contain cursor-crosshair"
       onmousemove={handleMouseMove}
       onmouseleave={handleMouseLeave}
       ontouchstart={handleTouchMove}
@@ -145,7 +188,7 @@
 
     {#if isLoading}
       <div class="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center font-mono text-xs text-sky-700 gap-2">
-        <span class="w-2 h-2 rounded-full bg-sky-600 animate-ping"></span>
+        <span class="w-2 h-2 rounded-xs bg-sky-600"></span>
         <span>UPDATING SPATIAL MATRIX...</span>
       </div>
     {:else if !heatmapData || heatmapData.total_points === 0}

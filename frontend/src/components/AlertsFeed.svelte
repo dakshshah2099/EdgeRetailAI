@@ -51,7 +51,6 @@
   <!-- Feed Header -->
   <div class="px-3 sm:px-3.5 py-2 sm:py-2.5 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap bg-slate-50/50">
     <div class="flex items-center gap-2">
-      <span class="w-2 h-2 rounded-full {alerts.filter(a => !a.resolved_at).length > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}"></span>
       <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Incident Triage</span>
       <span class="px-1.5 py-0.5 text-xs font-mono bg-white text-slate-600 rounded border border-slate-200">
         {alerts.length}

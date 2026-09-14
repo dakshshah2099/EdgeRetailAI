@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   let {
     staffData = null,
     isLoading = false,
@@ -14,7 +14,7 @@
     <div>
       <h3 class="text-base font-semibold text-slate-900">Staff Efficiency & Intervention</h3>
       <p class="text-xs text-slate-500 font-mono mt-0.5">
-        Zero-PII aggregated store-level operational metrics & counter utilization
+        Aggregated store-level operational metrics & counter utilization
       </p>
     </div>
 
