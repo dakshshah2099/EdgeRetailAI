@@ -2,8 +2,10 @@ import asyncio
 import contextlib
 import os
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
+from fastapi import Path as PathParam
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -21,12 +23,13 @@ from central.store_registry import (
 
 class AddStoreRequest(BaseModel):
     store_id: str = Field(
-        ..., min_length=1, max_length=64, description="Unique alphanumeric store identifier"
+        min_length=1, max_length=64, description="Unique alphanumeric store identifier"
     )
-    name: str = Field(..., min_length=1, max_length=128, description="Human-readable store name")
+    name: str = Field(min_length=1, max_length=128, description="Human-readable store name")
     api_base_url: str = Field(
-        ..., min_length=7, description="Base URL of store API (e.g. http://127.0.0.1:8000)"
+        min_length=7, description="Base URL of store API (e.g. http://127.0.0.1:8000)"
     )
+
 
 
 class StoreActionResponse(BaseModel):
@@ -1365,21 +1368,21 @@ def create_central_app(config_path: str | Path = "stores.yaml") -> FastAPI:
             return load_store_registry(path)
         except Exception as exc:
             raise HTTPException(
-                status_code=500, detail=f"Failed loading store registry: {exc}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed loading store registry: {exc}",
             ) from exc
 
     @app.get("/health", tags=["system"])
     def health_check() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/stores", response_model=list[StoreConfig], tags=["central"])
+    @app.get("/api/stores", tags=["central"])
     def get_stores() -> list[StoreConfig]:
         return get_registry()
 
     @app.post(
         "/api/stores",
-        response_model=StoreActionResponse,
-        status_code=201,
+        status_code=status.HTTP_201_CREATED,
         tags=["central"],
     )
     def add_store(req: AddStoreRequest) -> StoreActionResponse:
@@ -1393,10 +1396,11 @@ def create_central_app(config_path: str | Path = "stores.yaml") -> FastAPI:
         try:
             updated_stores = add_store_to_registry(path, clean_store)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(
-                status_code=500, detail=f"Failed adding store: {exc}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed adding store: {exc}",
             ) from exc
 
         # Auto-spawn if local loopback and auto-spawning enabled
@@ -1418,19 +1422,21 @@ def create_central_app(config_path: str | Path = "stores.yaml") -> FastAPI:
 
     @app.delete(
         "/api/stores/{store_id}",
-        response_model=StoreActionResponse,
         tags=["central"],
     )
-    def remove_store(store_id: str) -> StoreActionResponse:
+    def remove_store(
+        store_id: Annotated[str, PathParam(description="Store ID to remove from registry")],
+    ) -> StoreActionResponse:
         """Remove an edge store node by store_id from stores.yaml."""
         path = resolve_store_config_path(config_path)
         try:
             updated_stores, removed = remove_store_from_registry(path, store_id)
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(
-                status_code=500, detail=f"Failed removing store: {exc}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed removing store: {exc}",
             ) from exc
 
         # Clean up local spawned instance if running
@@ -1450,7 +1456,7 @@ def create_central_app(config_path: str | Path = "stores.yaml") -> FastAPI:
             stores=updated_stores,
         )
 
-    @app.get("/api/summary", response_model=CentralSummaryResponse, tags=["central"])
+    @app.get("/api/summary", tags=["central"])
     async def get_cross_store_summary() -> CentralSummaryResponse:
         registry = get_registry()
         if (

@@ -2,7 +2,7 @@ import os
 from typing import Annotated, Any
 
 import yaml
-from fastapi import APIRouter, Header, HTTPException, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 
 from api.dependencies import AppConfigDep, ConfigPathDep, RequireDebugModeDep
 from api.env_manager import is_debug_mode, read_env_file, write_env_file
@@ -72,8 +72,14 @@ def toggle_debug_mode(
 def get_system_zones(
     cfg: AppConfigDep,
     response: Response,
-    frame_w: int | None = None,
-    frame_h: int | None = None,
+    frame_w: Annotated[
+        int | None,
+        Query(ge=10, le=3840, description="Optional target frame width for scaling"),
+    ] = None,
+    frame_h: Annotated[
+        int | None,
+        Query(ge=10, le=2160, description="Optional target frame height for scaling"),
+    ] = None,
 ) -> list[ZoneConfig]:
     """Return currently configured spatial ROI and detection zones.
 
