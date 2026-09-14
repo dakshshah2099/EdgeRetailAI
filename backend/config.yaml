@@ -1,63 +1,55 @@
 camera:
-  source: "rtsp://192.168.1.100:8080/h264_pcm.sdp"
-calibration_width: 640
-calibration_height: 480
+  source: rtsp://192.168.1.100:8080/h264_pcm.sdp
+calibration_width: 1280
+calibration_height: 720
 zones:
-  - zone_id: "zone_entrance_exit"
-    zone_type: "entry_exit"
-    polygon:
-      - [40, 360]
-      - [240, 360]
-      - [240, 470]
-      - [40, 470]
-    label: "Main Entrance / Exit"
-  - zone_id: "zone_shelf_beverages"
-    zone_type: "shelf"
-    polygon:
-      - [50, 80]
-      - [220, 80]
-      - [220, 240]
-      - [50, 240]
-    label: "Shelf 1 - Cold Beverages"
-  - zone_id: "zone_shelf_snacks"
-    zone_type: "shelf"
-    polygon:
-      - [250, 80]
-      - [420, 80]
-      - [420, 240]
-      - [250, 240]
-    label: "Shelf 2 - Snacks & Bakery"
-  - zone_id: "zone_shelf_electronics"
-    zone_type: "shelf"
-    polygon:
-      - [450, 80]
-      - [610, 80]
-      - [610, 240]
-      - [450, 240]
-    label: "Shelf 3 - Tech & Accessories"
-  - zone_id: "zone_display_promo"
-    zone_type: "product_display"
-    polygon:
-      - [220, 260]
-      - [380, 260]
-      - [380, 340]
-      - [220, 340]
-    label: "Promotional Island Display"
-  - zone_id: "zone_queue_checkout_1"
-    zone_type: "checkout"
-    polygon:
-      - [300, 350]
-      - [440, 350]
-      - [440, 460]
-      - [300, 460]
-    label: "Checkout Counter 1"
-  - zone_id: "zone_queue_checkout_2"
-    zone_type: "checkout"
-    polygon:
-      - [470, 350]
-      - [610, 350]
-      - [610, 460]
-      - [470, 460]
-    label: "Checkout Counter 2"
+- zone_id: zone_shelf_beverages
+  zone_type: shelf
+  polygon:
+  - - 24
+    - 373
+  - - 237
+    - 226
+  - - 237
+    - 287
+  - - 43
+    - 467
+  label: Shelf 1 - Cold Beverages
+- zone_id: zone_shelf_snacks
+  zone_type: shelf
+  polygon:
+  - - 461
+    - 264
+  - - 766
+    - 248
+  - - 761
+    - 706
+  - - 486
+    - 702
+  label: Shelf 2 - Snacks & Bakery
+- zone_id: zone_shelf_electronics
+  zone_type: shelf
+  polygon:
+  - - 66
+    - 532
+  - - 265
+    - 334
+  - - 273
+    - 383
+  - - 121
+    - 595
+  label: Shelf 3 - Tech & Accessories
+- zone_id: zone_1721
+  zone_type: shelf
+  polygon:
+  - - 256
+    - 144
+  - - 772
+    - 114
+  - - 1200
+    - 565
+  - - 154
+    - 671
+  label: Shelf 5
 low_stock_confidence_threshold: 0.6
 queue_congestion_length: 4
