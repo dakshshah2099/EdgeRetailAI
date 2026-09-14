@@ -338,7 +338,7 @@
 </script>
 
 <svelte:head>
-  <title>{routeMeta[activeTab]?.title || "Dashboard"} — EdgeRetail AI</title>
+  <title>{routeMeta[activeTab]?.title || "Dashboard"} — Dukaanlytics</title>
 </svelte:head>
 
 <div class="h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 flex font-sans">

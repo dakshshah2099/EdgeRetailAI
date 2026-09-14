@@ -58,7 +58,7 @@
         </svg>
       </div>
       <div class="overflow-hidden {isCollapsed ? 'md:hidden' : 'block'}">
-        <div class="font-bold text-xs tracking-tight text-slate-900 leading-tight">EdgeRetail AI</div>
+        <div class="font-bold text-xs tracking-tight text-slate-900 leading-tight">Dukaanlytics</div>
       </div>
     </div>
 
