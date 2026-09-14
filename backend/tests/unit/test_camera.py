@@ -287,3 +287,38 @@ def test_rtsp_source_ffmpeg_transport_options() -> None:
         assert "timeout;" in os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS", "")
         assert source.source_url == "rtsp://192.168.1.100:8080/h264_pcm.sdp"
         source.close()
+
+
+def test_http_source_endpoint_resolution() -> None:
+    from vision.http_source import HTTPSource
+
+    src = HTTPSource("http://192.168.1.50:8080", non_blocking=True)
+    assert src.active_url == "http://192.168.1.50:8080/video"
+    src.close()
+
+    src2 = HTTPSource("http://192.168.1.50:8080/mjpegfeed", non_blocking=True)
+    assert src2.active_url == "http://192.168.1.50:8080/mjpegfeed"
+    src2.close()
+
+
+def test_http_source_cv2_capture() -> None:
+    import os
+
+    from vision.http_source import HTTPSource
+
+    synthetic = np.zeros((480, 640, 3), dtype=np.uint8)
+    with patch("cv2.VideoCapture") as mock_cap_cls:
+        mock_cap = MagicMock()
+        mock_cap.isOpened.return_value = True
+        mock_cap.read.return_value = (True, synthetic)
+        mock_cap_cls.return_value = mock_cap
+
+        src = HTTPSource("http://192.168.1.50:8080/video")
+        assert "rtsp_transport;tcp" not in os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS", "")
+        res = src.get_frame()
+        assert res is not None
+        meta, frame = res
+        assert meta.width == 640
+        assert meta.height == 480
+        assert frame.shape == (480, 640, 3)
+        src.close()

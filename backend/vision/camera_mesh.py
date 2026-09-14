@@ -11,6 +11,7 @@ import numpy.typing as npt
 
 from api.schemas_api import CameraMeshNodeConfig, CameraMeshSummary
 from vision.camera_base import CameraSource
+from vision.http_source import HTTPSource
 from vision.rtsp_source import RTSPSource, mask_rtsp_credentials
 from vision.usb_source import USBSource
 
@@ -119,13 +120,19 @@ class CameraNode:
             try:
                 if self.camera_source is None:
                     src = self.source
-                    if (
-                        src.startswith("rtsp://")
-                        or src.startswith("rtsps://")
-                        or src.startswith("http://")
-                    ):
+                    if src.startswith(("http://", "https://")):
+                        self.camera_source = HTTPSource(
+                            source_url=src,
+                            source_id=self.camera_id,
+                            timeout_msec=2500,
+                            initial_backoff_sec=1.5,
+                            max_backoff_sec=10.0,
+                            non_blocking=True,
+                        )
+                    elif src.startswith(("rtsp://", "rtsps://")):
                         self.camera_source = RTSPSource(
                             source_url=src,
+                            source_id=self.camera_id,
                             timeout_msec=2000,
                             initial_backoff_sec=1.5,
                             max_backoff_sec=10.0,
