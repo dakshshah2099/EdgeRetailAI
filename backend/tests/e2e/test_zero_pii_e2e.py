@@ -52,7 +52,7 @@ def _check_no_pii_recursive(data: Any, path: str = "") -> None:
             f"Base64 image payload detected in response value at '{path}'"
         )
         assert len(data) < 50_000, f"Suspiciously large serialized string at '{path}'"
-    elif isinstance(data, (bytes, bytearray)):
+    elif isinstance(data, bytes | bytearray):
         raise AssertionError(f"Raw binary bytes payload exposed at '{path}'")
 
 
@@ -142,7 +142,7 @@ def test_sqlite_database_has_zero_pii(e2e_db_path: Path, e2e_repo: EventReposito
             for row in rows:
                 for val in row:
                     # No binary blobs
-                    assert not isinstance(val, (bytes, bytearray)), (
+                    assert not isinstance(val, bytes | bytearray), (
                         f"Binary BLOB data found in table {table_name}"
                     )
                     if isinstance(val, str):
