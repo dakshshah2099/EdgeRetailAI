@@ -1,7 +1,25 @@
 <script>
-  import { fetchSystemZones, updateSystemZones } from "../lib/api.js";
+  import { 
+    fetchSystemZones, 
+    updateSystemZones, 
+    fetchCameras, 
+    registerCamera, 
+    unregisterCamera 
+  } from "../lib/api.js";
 
   let { isConnected = true } = $props();
+
+  let cameras = $state([
+    { camera_id: "cam_primary", label: "Primary (Overhead Entrance)", is_active: true }
+  ]);
+
+  let isAddCameraOpen = $state(false);
+  let newCamId = $state("");
+  let newCamSource = $state("");
+  let newCamLabel = $state("");
+  let newCamRole = $state("general");
+  let isSubmittingCam = $state(false);
+  let camErrorMsg = $state("");
 
   let overlayZones = $state(true);
   let overlayDetections = $state(true);
@@ -38,17 +56,6 @@
   let cursorX = $state(0);
   let cursorY = $state(0);
 
-  // CCTV Live UTC Watermark
-  let camClock = $state("");
-
-  function updateClock() {
-    const now = new Date();
-    camClock = now.toISOString().replace("T", " ").slice(0, 19) + " UTC";
-  }
-
-  let streamUrl = $derived(
-    `/video/stream?overlay_zones=${!isEditingZones && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`
-  );
 
   const zoneColorMap = {
     entry_exit: {
@@ -71,6 +78,63 @@
 
   function getZoneTheme(zoneType) {
     return zoneColorMap[zoneType] || zoneColorMap.shelf;
+  }
+
+  async function loadCameras() {
+    try {
+      const res = await fetchCameras();
+      if (res && Array.isArray(res.cameras) && res.cameras.length > 0) {
+        const hasPrimary = res.cameras.some((c) => c.camera_id === "cam_primary");
+        cameras = hasPrimary
+          ? res.cameras
+          : [
+              { camera_id: "cam_primary", label: "Primary (Overhead Entrance)", is_active: true },
+              ...res.cameras,
+            ];
+      }
+    } catch (err) {
+      console.warn("Failed to load camera mesh list:", err);
+    }
+  }
+
+  async function handleAddCamera(e) {
+    e.preventDefault();
+    if (!newCamId.trim() || !newCamSource.trim()) {
+      camErrorMsg = "Camera ID and Source are required.";
+      return;
+    }
+    isSubmittingCam = true;
+    camErrorMsg = "";
+    try {
+      await registerCamera({
+        camera_id: newCamId.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+        source: newCamSource.trim(),
+        role: newCamRole,
+        label: newCamLabel.trim() || newCamId.trim(),
+      });
+      newCamId = "";
+      newCamSource = "";
+      newCamLabel = "";
+      newCamRole = "general";
+      isAddCameraOpen = false;
+      await loadCameras();
+      refreshStream();
+    } catch (err) {
+      camErrorMsg = err.message || "Failed to register camera";
+    } finally {
+      isSubmittingCam = false;
+    }
+  }
+
+  async function handleRemoveCamera(camId) {
+    if (!confirm(`Remove camera "${camId}" from mesh?`)) return;
+    try {
+      await unregisterCamera(camId);
+      await loadCameras();
+      refreshStream();
+    } catch (err) {
+      alert(`Failed to remove camera: ${err.message}`);
+    }
   }
 
   async function loadZones() {
@@ -116,7 +180,7 @@
 
   function takeSnapshot() {
     const link = document.createElement("a");
-    link.href = `/video/snapshot?overlay_zones=${overlayZones}&overlay_detections=${overlayDetections}&t=${Date.now()}`;
+    link.href = `/video/snapshot?camera_id=cam_primary&overlay_zones=${overlayZones}&overlay_detections=${overlayDetections}&t=${Date.now()}`;
     link.download = `retail_snapshot_${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
     link.target = "_blank";
     document.body.appendChild(link);
@@ -201,9 +265,8 @@
   }
 
   $effect(() => {
+    loadCameras();
     loadZones();
-    updateClock();
-    const clockTimer = setInterval(updateClock, 1000);
 
     const handleFsChange = () => {
       isFullscreen = !!document.fullscreenElement;
@@ -211,7 +274,6 @@
     document.addEventListener("fullscreenchange", handleFsChange);
 
     return () => {
-      clearInterval(clockTimer);
       document.removeEventListener("fullscreenchange", handleFsChange);
     };
   });
@@ -225,17 +287,22 @@
   <div class="flex items-center justify-between flex-wrap gap-2 sm:gap-2.5 pb-2 sm:pb-2.5 border-b border-slate-100">
     <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap">
       <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full {isConnected && !isStreamError ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></span>
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Live Camera Stream</h2>
       </div>
-      <span class="px-2 py-0.5 text-xs font-mono font-semibold uppercase rounded border {isConnected && !isStreamError ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}">
-        {isConnected && !isStreamError ? 'LIVE' : 'STANDBY'}
+
+      <div class="flex items-center bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-xs font-mono text-slate-700">
+        <span class="text-slate-500 mr-1.5 uppercase font-semibold">CAMERAS:</span>
+        <span class="font-bold text-slate-900">{cameras.length} ACTIVE</span>
+      </div>
+
+      <span class="px-2 py-0.5 text-xs font-mono font-semibold uppercase rounded border {isConnected && !isStreamError ? 'bg-slate-50 text-slate-800 border-slate-200' : 'bg-rose-50 text-rose-800 border-rose-200'}">
+        {isConnected && !isStreamError ? 'ONLINE' : 'STANDBY'}
       </span>
       <span class="px-2 py-0.5 text-xs font-mono bg-sky-50 text-sky-800 border border-sky-200 rounded hidden sm:inline">
         YOLOv26n Active
       </span>
       {#if isEditingZones}
-        <span class="px-2 py-0.5 text-xs font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-300 rounded animate-pulse">
+        <span class="px-2 py-0.5 text-xs font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-300 rounded">
           CALIBRATION MODE
         </span>
       {/if}
@@ -344,6 +411,20 @@
         />
       </div>
 
+      <!-- Add Camera Toggle -->
+      <button 
+        type="button" 
+        class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-slate-50 text-slate-700 border border-slate-200 rounded hover:bg-slate-100 transition-colors cursor-pointer"
+        onclick={() => { isAddCameraOpen = !isAddCameraOpen; }}
+        title="Add camera node to mesh"
+      >
+        <svg class="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span>CAMERA</span>
+      </button>
+
       <!-- Action Buttons -->
       <button 
         type="button" 
@@ -404,136 +485,209 @@
     </div>
   {/if}
 
-  <!-- Stream Player & Overlays Viewport -->
-  <div class="relative w-full aspect-video bg-slate-950 rounded-md overflow-hidden flex items-center justify-center border border-slate-800">
-    <img 
-      src={streamUrl} 
-      alt="Edge AI Live Camera Feed" 
-      class="w-full h-full object-contain select-none"
-      onload={handleImageLoad}
-      onerror={handleImageError}
-    />
-
-    <!-- Top Watermark & CCTV Timecode Overlay -->
-    <div class="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
-      <div class="flex items-center gap-1.5 sm:gap-2 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
-        <span class="w-2 h-2 rounded-full {isConnected && !isStreamError ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}"></span>
-        <span class="text-slate-400">CAM_01</span>
-        <span class="text-slate-600">|</span>
-        <span class="text-slate-200">{camClock}</span>
-      </div>
-
-      {#if isEditingZones}
-        <div class="flex items-center gap-1.5 sm:gap-2 bg-amber-950/80 backdrop-blur-xs border border-amber-600/50 text-amber-200 px-2 sm:px-2.5 py-0.5 rounded shadow-sm">
-          <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-          <span class="hidden sm:inline">CALIBRATING</span>
-          <span class="text-amber-400 font-bold">X:{cursorX} Y:{cursorY}</span>
-        </div>
-      {/if}
-    </div>
-
-    <!-- Interactive SVG ROI polygon editor in Calibration mode -->
-    {#if isEditingZones}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <svg 
-        class="absolute inset-0 w-full h-full cursor-crosshair select-none z-20" 
-        viewBox="0 0 {viewWidth} {viewHeight}"
-        role="region"
-        aria-label="Zone calibration canvas"
-        onmousemove={handleSvgMouseMove}
-        onmouseup={handleSvgMouseUp}
-        onmouseleave={handleSvgMouseUp}
-      >
-        {#each zones as zone, zIdx}
-          {@const isSel = zIdx === selectedZoneIdx}
-          {@const theme = getZoneTheme(zone.zone_type)}
-          {@const ptsStr = zone.polygon.map((p) => p.join(',')).join(' ')}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <polygon
-            points={ptsStr}
-            stroke={theme.stroke}
-            stroke-width={isSel ? '2.5' : '1.5'}
-            stroke-dasharray={isSel ? '4 2' : 'none'}
-            fill={theme.fill}
-            class="transition-all cursor-pointer"
-            onmousedown={() => selectedZoneIdx = zIdx}
-          />
-          <text
-            x={zone.polygon[0][0]}
-            y={Math.max(18, zone.polygon[0][1] - 8)}
-            class="fill-white font-mono text-xs font-bold drop-shadow"
-          >
-            {zone.label} ({zone.zone_type})
-          </text>
-
-          {#if isSel}
-            {#each zone.polygon as pt, ptIdx}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <circle
-                cx={pt[0]}
-                cy={pt[1]}
-                r="6"
-                fill={theme.stroke}
-                class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform"
-                onmousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
-              />
-            {/each}
-          {/if}
-        {/each}
-      </svg>
-    {/if}
-
-    <!-- Loading State Overlay -->
-    {#if isStreamLoading}
-      <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center gap-2 text-sky-400 font-mono text-xs z-30">
-        <span class="w-3 h-3 rounded-full bg-sky-400 animate-ping"></span>
-        <span>INITIALIZING LIVE CAMERA STREAM...</span>
-      </div>
-    {/if}
-
-    <!-- Stream Error Fallback -->
-    {#if isStreamError}
-      <div class="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center gap-2 text-rose-400 font-mono text-xs p-4 text-center z-30">
-        <svg class="w-8 h-8 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <span class="font-semibold">RTSP STREAM DISCONNECTED / OFFLINE</span>
-        <p class="text-slate-400 text-xs max-w-sm">Ensure local camera RTSP feed is active or update VIDEO_SOURCE in Configuration.</p>
+  <!-- Add Camera Drawer Form -->
+  {#if isAddCameraOpen}
+    <form 
+      onsubmit={handleAddCamera}
+      class="p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-md flex flex-col gap-3 shadow-xs"
+    >
+      <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+        <h3 class="text-xs font-mono font-semibold uppercase text-slate-800">Register New Camera Node</h3>
         <button 
           type="button" 
-          class="mt-2 px-3 py-1 bg-slate-800 text-slate-200 border border-slate-700 rounded hover:bg-slate-700 cursor-pointer"
-          onclick={refreshStream}
+          class="text-xs font-mono text-slate-500 hover:text-slate-800 cursor-pointer"
+          onclick={() => { isAddCameraOpen = false; camErrorMsg = ""; }}
         >
-          RETRY CONNECTION
+          Close
         </button>
       </div>
-    {/if}
 
-    <!-- Live Stream HUD -->
-    <div class="absolute bottom-2 sm:bottom-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
-      <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md truncate">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
-        <span>{targetFps} FPS</span>
-        <span class="text-slate-500">|</span>
-        <span class="text-slate-300">{viewWidth}×{viewHeight}</span>
-        <span class="text-slate-500 hidden sm:inline">|</span>
-        <span class="text-sky-400 hidden sm:inline">YOLOv26n ONNX-RT</span>
+      {#if camErrorMsg}
+        <div class="px-2.5 py-1 text-xs font-mono bg-rose-50 text-rose-800 border border-rose-200 rounded">
+          {camErrorMsg}
+        </div>
+      {/if}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div class="flex flex-col gap-1">
+          <label for="cam-id-input" class="text-2xs font-mono uppercase text-slate-500 font-medium">Camera ID *</label>
+          <input 
+            id="cam-id-input"
+            type="text" 
+            placeholder="cam_aisle_2" 
+            bind:value={newCamId}
+            class="px-2.5 py-1 text-xs font-mono bg-white border border-slate-300 rounded focus:outline-none focus:border-sky-500"
+            required
+          />
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label for="cam-src-input" class="text-2xs font-mono uppercase text-slate-500 font-medium">Source (RTSP / USB / MP4) *</label>
+          <input 
+            id="cam-src-input"
+            type="text" 
+            placeholder="rtsp://192.168.1.102:8080/live" 
+            bind:value={newCamSource}
+            class="px-2.5 py-1 text-xs font-mono bg-white border border-slate-300 rounded focus:outline-none focus:border-sky-500"
+            required
+          />
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label for="cam-label-input" class="text-2xs font-mono uppercase text-slate-500 font-medium">Display Label</label>
+          <input 
+            id="cam-label-input"
+            type="text" 
+            placeholder="Aisle 2 - Snacks" 
+            bind:value={newCamLabel}
+            class="px-2.5 py-1 text-xs font-mono bg-white border border-slate-300 rounded focus:outline-none focus:border-sky-500"
+          />
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label for="cam-role-input" class="text-2xs font-mono uppercase text-slate-500 font-medium">Role</label>
+          <select 
+            id="cam-role-input"
+            bind:value={newCamRole}
+            class="px-2 py-1 text-xs font-mono bg-white border border-slate-300 rounded focus:outline-none focus:border-sky-500"
+          >
+            <option value="general">general</option>
+            <option value="shelf">shelf</option>
+            <option value="checkout">checkout</option>
+            <option value="entrance">entrance</option>
+          </select>
+        </div>
       </div>
 
-      <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-300 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md shrink-0">
-        {#if overlayZones}
-          <span class="text-sky-400 hidden md:inline">ZONES: ON</span>
-        {/if}
-        {#if overlayDetections}
-          <span class="text-emerald-400 hidden md:inline">YOLO: ON</span>
-        {/if}
-        <span class="text-slate-500 hidden md:inline">|</span>
-        <span class="text-emerald-400 font-semibold">ZERO PII</span>
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button 
+          type="button" 
+          class="px-3 py-1 text-xs font-mono bg-white border border-slate-200 text-slate-600 rounded hover:bg-slate-100 cursor-pointer"
+          onclick={() => { isAddCameraOpen = false; }}
+        >
+          Cancel
+        </button>
+        <button 
+          type="submit" 
+          class="px-3 py-1 text-xs font-mono bg-sky-600 text-white font-semibold rounded hover:bg-sky-700 disabled:opacity-50 cursor-pointer"
+          disabled={isSubmittingCam}
+        >
+          {isSubmittingCam ? "Registering..." : "Add Camera Node"}
+        </button>
       </div>
-    </div>
+    </form>
+  {/if}
+
+  <!-- Dynamic Multi-Camera Stream Grid -->
+  <div class="grid gap-3 w-full {cameras.length <= 1 ? 'grid-cols-1' : cameras.length === 2 ? 'grid-cols-1 md:grid-cols-2' : cameras.length === 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'}">
+    {#each cameras as cam (cam.camera_id)}
+      {@const camStreamUrl = `/video/stream?camera_id=${cam.camera_id}&overlay_zones=${cam.camera_id === 'cam_primary' && !isEditingZones && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`}
+      <div class="relative w-full aspect-video bg-slate-950 rounded-md overflow-hidden flex items-center justify-center border border-slate-800">
+        <img 
+          src={camStreamUrl} 
+          alt={cam.label || cam.camera_id} 
+          class="w-full h-full object-contain select-none"
+          onload={handleImageLoad}
+          onerror={handleImageError}
+        />
+
+        <!-- Top Watermark & Info Overlay -->
+        <div class="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
+          <div class="flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
+            <span class="text-slate-300 font-semibold">{cam.label || cam.camera_id.toUpperCase()}</span>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            {#if cam.camera_id !== 'cam_primary'}
+              <button
+                type="button"
+                class="pointer-events-auto bg-slate-950/80 hover:bg-rose-950/80 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-800/60 px-1.5 py-0.5 rounded transition-colors cursor-pointer text-[10px]"
+                title="Remove camera node"
+                onclick={() => handleRemoveCamera(cam.camera_id)}
+              >
+                ✕ REMOVE
+              </button>
+            {/if}
+
+            {#if cam.camera_id === 'cam_primary' && isEditingZones}
+              <div class="flex items-center gap-1.5 bg-amber-950/80 backdrop-blur-xs border border-amber-600/50 text-amber-200 px-2 sm:px-2.5 py-0.5 rounded shadow-sm">
+                <span>CALIBRATING</span>
+                <span class="text-amber-400 font-bold">X:{cursorX} Y:{cursorY}</span>
+              </div>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Interactive SVG ROI polygon editor for primary camera in calibration mode -->
+        {#if cam.camera_id === 'cam_primary' && isEditingZones}
+          <svg 
+            class="absolute inset-0 w-full h-full cursor-crosshair select-none z-20 pointer-events-auto" 
+            viewBox="0 0 {viewWidth} {viewHeight}"
+            role="region"
+            aria-label="Zone calibration canvas"
+            onmousemove={handleSvgMouseMove}
+            onmouseup={handleSvgMouseUp}
+            onmouseleave={handleSvgMouseUp}
+          >
+            {#each zones as zone, zIdx}
+              {@const isSel = zIdx === selectedZoneIdx}
+              {@const theme = getZoneTheme(zone.zone_type)}
+              {@const ptsStr = zone.polygon.map((p) => p.join(',')).join(' ')}
+              <polygon
+                points={ptsStr}
+                stroke={theme.stroke}
+                stroke-width={isSel ? '2.5' : '1.5'}
+                stroke-dasharray={isSel ? '4 2' : 'none'}
+                fill={theme.fill}
+                class="transition-all cursor-pointer"
+                onmousedown={() => selectedZoneIdx = zIdx}
+              />
+              <text
+                x={zone.polygon[0][0]}
+                y={Math.max(18, zone.polygon[0][1] - 8)}
+                class="fill-white font-mono text-xs font-bold drop-shadow"
+              >
+                {zone.label} ({zone.zone_type})
+              </text>
+
+              {#if isSel}
+                {#each zone.polygon as pt, ptIdx}
+                  <circle
+                    cx={pt[0]}
+                    cy={pt[1]}
+                    r="6"
+                    fill={theme.stroke}
+                    class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform"
+                    onmousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
+                  />
+                {/each}
+              {/if}
+            {/each}
+          </svg>
+        {/if}
+
+        <!-- Bottom Stream HUD on each cell -->
+        <div class="absolute bottom-2 sm:bottom-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
+          <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md truncate">
+            <span>{targetFps} FPS</span>
+            <span class="text-slate-500">|</span>
+            <span class="text-slate-300">{viewWidth}×{viewHeight}</span>
+            <span class="text-slate-500 hidden sm:inline">|</span>
+            <span class="text-sky-400 hidden sm:inline">YOLOv26n</span>
+          </div>
+
+          <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-300 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md shrink-0">
+            {#if overlayZones && cam.camera_id === 'cam_primary'}
+              <span class="text-sky-400 hidden md:inline">ZONES: ON</span>
+            {/if}
+            {#if overlayDetections}
+              <span class="text-emerald-400 hidden md:inline">YOLO: ON</span>
+            {/if}
+            <span class="text-slate-300 font-semibold">FEED ACTIVE</span>
+          </div>
+        </div>
+      </div>
+    {/each}
   </div>
 
   <!-- Calibration Mode Editor Form -->

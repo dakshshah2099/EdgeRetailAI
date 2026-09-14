@@ -1,4 +1,4 @@
-﻿"""MultiCameraManager: Manages N CameraSources with parallel capture threads
+"""MultiCameraManager: Manages N CameraSources with parallel capture threads
 feeding a single shared InferenceBackend instance with per-camera runtime telemetry,
 automatic reconnect with capped exponential backoff, latest-frame-only buffering,
 and round-robin inference scheduling.
@@ -187,8 +187,8 @@ class MultiCameraManager:
             res = source.get_frame()
             if res is not None:
                 frame_meta, frame_pixels = res
-                if frame_meta.camera_id != camera_id:
-                    frame_meta = frame_meta.model_copy(update={"camera_id": camera_id})
+                if frame_meta.source_id != camera_id:
+                    frame_meta = frame_meta.model_copy(update={"source_id": camera_id})
 
                 now = self._time_fn()
                 with self._lock:
@@ -330,8 +330,8 @@ class MultiCameraManager:
                 res = source.get_frame()
                 if res is not None:
                     frame_meta, frame_pixels = res
-                    if frame_meta.camera_id != cam_id:
-                        frame_meta = frame_meta.model_copy(update={"camera_id": cam_id})
+                    if frame_meta.source_id != cam_id:
+                        frame_meta = frame_meta.model_copy(update={"source_id": cam_id})
                     batch.append((cam_id, frame_meta, frame_pixels))
 
         return batch

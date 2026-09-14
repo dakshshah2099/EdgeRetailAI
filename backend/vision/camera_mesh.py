@@ -256,7 +256,7 @@ class CameraMesh:
 
     def generate_mosaic(
         self,
-        grid_cols: int = 2,
+        grid_cols: int | None = None,
         mosaic_width: int = 1280,
         mosaic_height: int = 720,
     ) -> npt.NDArray[np.uint8]:
@@ -279,7 +279,17 @@ class CameraMesh:
             return canvas
 
         num_nodes = len(nodes)
-        cols = min(grid_cols, num_nodes)
+        if grid_cols is None or grid_cols <= 0:
+            if num_nodes <= 1:
+                cols = 1
+            elif num_nodes <= 4:
+                cols = 2
+            elif num_nodes <= 9:
+                cols = 3
+            else:
+                cols = math.ceil(math.sqrt(num_nodes))
+        else:
+            cols = min(grid_cols, num_nodes)
         rows = math.ceil(num_nodes / cols)
         cell_w = mosaic_width // cols
         cell_h = mosaic_height // rows

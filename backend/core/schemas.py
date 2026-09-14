@@ -124,17 +124,105 @@ class StoreConfig(BaseModel):
     api_base_url: str
 
 
+class CameraNodeDefinition(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    camera_id: str
+    source: str
+    role: Literal["entrance", "checkout", "shelf", "general"] = "general"
+    label: str = ""
+
+
 class AppConfig(BaseModel):
     camera: CameraConfig
+    cameras: list[CameraNodeDefinition] = Field(default_factory=list)
     zones: list[ZoneConfig] = Field(default_factory=list)
     low_stock_confidence_threshold: float = Field(ge=0.0, le=1.0)
     queue_congestion_length: int = Field(ge=1)
 
 
+DEFAULT_CONFIG_YAML = """camera:
+  source: "rtsp://192.168.1.100:8080/h264_pcm.sdp"
+zones:
+  - zone_id: "zone_entrance_exit"
+    zone_type: "entry_exit"
+    polygon:
+      - [40, 360]
+      - [240, 360]
+      - [240, 470]
+      - [40, 470]
+    label: "Main Entrance / Exit"
+  - zone_id: "zone_shelf_beverages"
+    zone_type: "shelf"
+    polygon:
+      - [50, 80]
+      - [220, 80]
+      - [220, 240]
+      - [50, 240]
+    label: "Shelf 1 - Cold Beverages"
+  - zone_id: "zone_shelf_snacks"
+    zone_type: "shelf"
+    polygon:
+      - [250, 80]
+      - [420, 80]
+      - [420, 240]
+      - [250, 240]
+    label: "Shelf 2 - Snacks & Bakery"
+  - zone_id: "zone_shelf_electronics"
+    zone_type: "shelf"
+    polygon:
+      - [450, 80]
+      - [610, 80]
+      - [610, 240]
+      - [450, 240]
+    label: "Shelf 3 - Tech & Accessories"
+  - zone_id: "zone_display_promo"
+    zone_type: "product_display"
+    polygon:
+      - [220, 260]
+      - [380, 260]
+      - [380, 340]
+      - [220, 340]
+    label: "Promotional Island Display"
+  - zone_id: "zone_queue_checkout_1"
+    zone_type: "checkout"
+    polygon:
+      - [300, 350]
+      - [440, 350]
+      - [440, 460]
+      - [300, 460]
+    label: "Checkout Counter 1"
+  - zone_id: "zone_queue_checkout_2"
+    zone_type: "checkout"
+    polygon:
+      - [470, 350]
+      - [610, 350]
+      - [610, 460]
+      - [470, 460]
+    label: "Checkout Counter 2"
+low_stock_confidence_threshold: 0.6
+queue_congestion_length: 4
+"""
+
+
+def ensure_default_config(path: str | Path) -> Path:
+    """Ensure config file exists and is populated with default configuration."""
+    config_path = Path(path)
+    if not config_path.is_file() or config_path.stat().st_size == 0:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(DEFAULT_CONFIG_YAML, encoding="utf-8")
+    return config_path
+
+
 def load_config(path: str | Path) -> AppConfig:
     config_path = Path(path)
     if not config_path.is_file():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        if config_path.name == "config.yaml":
+            ensure_default_config(config_path)
+        else:
+            raise FileNotFoundError(f"Config file not found: {path}")
+
+    if config_path.stat().st_size == 0:
+        ensure_default_config(config_path)
 
     with config_path.open("r", encoding="utf-8") as f:
         raw_data = yaml.safe_load(f)
@@ -143,3 +231,4 @@ def load_config(path: str | Path) -> AppConfig:
         raise ValueError(f"Config file at {path} must contain a YAML mapping/dictionary")
 
     return AppConfig.model_validate(raw_data)
+

@@ -206,3 +206,116 @@ export async function resolveAlert(alertId, options = {}) {
   return res.json();
 }
 
+export async function fetchCameras(options = {}) {
+  const res = await fetch(`${API_BASE}/video/cameras`, { signal: options.signal });
+  if (!res.ok) throw new Error(`Fetch cameras error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function registerCamera(cameraData, options = {}) {
+  const res = await fetch(`${API_BASE}/video/cameras`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cameraData),
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to register camera');
+  }
+  return res.json();
+}
+
+export async function unregisterCamera(cameraId, options = {}) {
+  const res = await fetch(`${API_BASE}/video/cameras/${encodeURIComponent(cameraId)}`, {
+    method: 'DELETE',
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to unregister camera');
+  }
+  return res.json();
+}
+
+export function connectTelemetryWebSocket(onMessage, onStatusChange) {
+  let ws = null;
+  let isClosedManually = false;
+  let retryCount = 0;
+  let pingInterval = null;
+
+  const getWsUrl = () => {
+    if (typeof window === 'undefined') return '';
+    const loc = window.location;
+    let url = API_BASE;
+    if (!url) {
+      const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${loc.host}/ws/telemetry`;
+    }
+    return url.replace(/^http/, 'ws') + '/ws/telemetry';
+  };
+
+  function connect() {
+    if (isClosedManually || typeof window === 'undefined') return;
+    try {
+      const wsUrl = getWsUrl();
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        retryCount = 0;
+        if (onStatusChange) onStatusChange({ connected: true });
+        if (pingInterval) clearInterval(pingInterval);
+        pingInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 15000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'pong') return;
+          if (onMessage) onMessage(data);
+        } catch (e) {
+          console.warn('Failed to parse WS payload', e);
+        }
+      };
+
+      ws.onclose = () => {
+        if (pingInterval) clearInterval(pingInterval);
+        if (onStatusChange) onStatusChange({ connected: false });
+        if (!isClosedManually) {
+          const backoff = Math.min(1000 * Math.pow(2, retryCount), 10000);
+          retryCount++;
+          setTimeout(connect, backoff);
+        }
+      };
+
+      ws.onerror = () => {
+        ws?.close();
+      };
+    } catch (e) {
+      console.warn('WS connection setup error', e);
+      if (!isClosedManually) {
+        setTimeout(connect, 3000);
+      }
+    }
+  }
+
+  connect();
+
+  return {
+    disconnect() {
+      isClosedManually = true;
+      if (pingInterval) clearInterval(pingInterval);
+      if (ws) ws.close();
+    },
+    send(payload) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
+      }
+    },
+  };
+}
+
