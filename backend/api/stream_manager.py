@@ -3,8 +3,8 @@ import logging
 import os
 import threading
 import time
-from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import cv2
 import numpy as np
@@ -18,11 +18,11 @@ from analytics.shelf_classifier import (
     HybridShelfClassifier,
     ShelfClassifier,
     TemporalShelfSmoother,
-    check_shelves,
 )
 from analytics.sku_classifier import sku_segregator
 from api.dependencies import get_app_config, get_repository
 from api.env_manager import read_env_file
+from api.routes.ws import ws_manager
 from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
 from vision.camera_base import CameraSource
 from vision.camera_mesh import camera_mesh
@@ -94,7 +94,6 @@ def generate_fallback_frame(src: str, width: int = 640, height: int = 480) -> np
         cv2.line(img, (0, y), (width, y), (38, 42, 53), 1)
 
     # Status text overlay
-    now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     cv2.putText(
         img,
         "EDGE RETAIL AI - CAMERA FEED",
@@ -106,9 +105,6 @@ def generate_fallback_frame(src: str, width: int = 640, height: int = 480) -> np
     )
     cv2.putText(
         img, f"Source: {masked_src}", (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 175, 200), 1
-    )
-    cv2.putText(
-        img, f"Time:   {now_str}", (30, 105), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 175, 200), 1
     )
 
     # Center standby notice
@@ -362,9 +358,8 @@ class StreamManager:
         repo = get_repository()
         env_vars = read_env_file()
         target_interval = 0.2
-        shelf_interval = 1.0
-        last_sku_time = 0.0
-        sku_interval = 10.0
+        shelf_interval = 30.0  # Fallback watchdog interval for event-driven shelf checks
+        pending_shelf_eval_zones: set[str] = set()
 
         while not self._shutdown_event.is_set():
             try:
@@ -379,14 +374,7 @@ class StreamManager:
                     target_interval = 1.0 / max(0.1, target_fps)
                     shelf_interval = float(
                         env_vars.get("SHELF_ANALYSIS_INTERVAL")
-                        or os.environ.get("SHELF_ANALYSIS_INTERVAL", "1.0")
-                    )
-                    sku_interval = max(
-                        10.0,
-                        float(
-                            env_vars.get("SKU_SEGREGATION_INTERVAL")
-                            or os.environ.get("SKU_SEGREGATION_INTERVAL", "10.0")
-                        ),
+                        or os.environ.get("SHELF_ANALYSIS_INTERVAL", "30.0")
                     )
                     last_cfg_time = now
 
@@ -511,6 +499,27 @@ class StreamManager:
                         dwell_events = self.dwell_tracker.update(footfall_events)
                         for d_ev in dwell_events:
                             repo.save_dwell_event(d_ev)
+                            # Event-triggered shelf inspection: customer finished dwell in shelf
+                            is_shelf = any(
+                                z.zone_id == d_ev.zone_id and z.zone_type == "shelf"
+                                for z in zones
+                            )
+                            if is_shelf:
+                                pending_shelf_eval_zones.add(d_ev.zone_id)
+
+                        if footfall_events:
+                            enters = sum(1 for e in footfall_events if e.event_type == "enter")
+                            exits = sum(1 for e in footfall_events if e.event_type == "exit")
+                            ws_manager.broadcast_sync({
+                                "type": "footfall",
+                                "total_enters": enters,
+                                "total_exits": exits,
+                                "data": {
+                                    "total_enters": enters,
+                                    "total_exits": exits,
+                                    "net_occupancy": max(0, enters - exits),
+                                },
+                            })
                     except Exception as e:
                         logger.error("Footfall/Dwell error: %s", e)
 
@@ -520,115 +529,150 @@ class StreamManager:
                             q_events = self.queue_monitor.update(
                                 curr_meta, tracked_dets, checkout_zones
                             )
+                            had_q_alert = False
                             for q_ev in q_events:
                                 repo.save_queue_event(q_ev)
                                 self.latest_queue_events[q_ev.counter_id] = q_ev
                                 q_alert = self.alert_engine.process_queue_event(q_ev)
                                 if q_alert:
                                     repo.upsert_alert(q_alert)
+                                    had_q_alert = True
+
+                            if q_events:
+                                counters_payload = [
+                                    {
+                                        "counter_id": q.counter_id,
+                                        "queue_length": q.queue_length,
+                                        "avg_wait": q.avg_wait_est_sec,
+                                    }
+                                    for q in q_events
+                                ]
+                                ws_manager.broadcast_sync({
+                                    "type": "queue",
+                                    "counters": counters_payload,
+                                    "data": counters_payload,
+                                })
+                                if had_q_alert:
+                                    ws_manager.broadcast_sync({"type": "alerts_update"})
                         except Exception as e:
                             logger.error("Queue error: %s", e)
 
-                # 6. Workload B: Periodic Shelf Analysis (Independent from tracking)
+                # Broadcast real-time centroid coordinates for instant dwell heatmap accumulation
+                if tracked_dets:
+                    ws_manager.broadcast_sync({
+                        "type": "dwell_points",
+                        "points": [
+                            {
+                                "x": int(det.bbox[0] + det.bbox[2] / 2),
+                                "y": int(det.bbox[1] + det.bbox[3] / 2),
+                                "track_id": det.track_id,
+                            }
+                            for det in tracked_dets
+                        ],
+                    })
+
+                # 6. Unified Shelf Stock & SKU Analysis: Event-Triggered + 30s Watchdog
                 now = time.monotonic()
-                if now - last_shelf_time >= shelf_interval:
+                shelf_zones = [z for z in zones if z.zone_type == "shelf"]
+                is_watchdog_due = (now - last_shelf_time >= shelf_interval)
+                has_pending = bool(pending_shelf_eval_zones)
+                should_eval_shelves = bool(shelf_zones and (has_pending or is_watchdog_due))
+
+                if should_eval_shelves:
+                    target_shelves = (
+                        [z for z in shelf_zones if z.zone_id in pending_shelf_eval_zones]
+                        if (pending_shelf_eval_zones and not is_watchdog_due)
+                        else shelf_zones
+                    )
+                    pending_shelf_eval_zones.clear()
                     last_shelf_time = now
-                    shelf_zones = [z for z in zones if z.zone_type == "shelf"]
-                    if shelf_zones:
-                        try:
-                            stock_events = check_shelves(
-                                frame=curr_meta,
-                                pixels=curr_frame,
-                                classifier=self.shelf_classifier,
-                                shelf_zones=shelf_zones,
-                                tracked_detections=tracked_dets,
-                                smoother=self.shelf_smoother,
-                            )
-                            for s_ev in stock_events:
-                                repo.save_stock_event(s_ev)
-                                self.latest_stock_events[s_ev.shelf_id] = s_ev
-                                sku_prof = sku_segregator.get_sku_for_zone(s_ev.shelf_id)
-                                s_alert = self.alert_engine.process_stock_event(
-                                    s_ev,
-                                    sku_name=sku_prof.name if sku_prof else None,
-                                    sku_id=sku_prof.sku_id if sku_prof else None,
-                                )
-                                if s_alert:
-                                    repo.upsert_alert(s_alert)
-                        except Exception as e:
-                            logger.error("Shelf error: %s", e)
 
-                    # Alert Resolutions check
                     try:
-                        resolved_alerts = self.alert_engine.check_resolutions(
-                            self.latest_stock_events,
-                            self.latest_queue_events,
-                            latest_facings=self.latest_facings,
-                        )
-                        for res_alert in resolved_alerts:
-                            repo.upsert_alert(res_alert)
+                        mesh_frames = camera_mesh.get_active_frames()
+                        frames_to_eval = list(mesh_frames)
+                        if curr_frame is not None and not any(
+                            cam_id == "cam_primary" for cam_id, _ in frames_to_eval
+                        ):
+                            frames_to_eval.insert(0, ("cam_primary", curr_frame))
+
+                        if frames_to_eval:
+                            sku_report = sku_segregator.evaluate_all_shelves(
+                                frames_by_camera=frames_to_eval,
+                                zones=target_shelves,
+                                force=has_pending,
+                            )
+                            stock_events_emitted = []
+                            for item in sku_report.items:
+                                self.latest_facings[item.shelf_id] = item.facing_count
+                                s_status: Literal["empty", "low", "ok"] = (
+                                    "empty"
+                                    if item.status == "empty"
+                                    else ("low" if item.status == "low" else "ok")
+                                )
+                                prev_ev = self.latest_stock_events.get(item.shelf_id)
+                                state_changed = prev_ev is None or prev_ev.status != s_status
+
+                                sku_ev = StockEvent(
+                                    event_id=f"stk_ev_{item.shelf_id}_{int(time.time())}",
+                                    shelf_id=item.shelf_id,
+                                    timestamp=item.timestamp,
+                                    status=s_status,
+                                    confidence=item.confidence,
+                                )
+                                self.latest_stock_events[item.shelf_id] = sku_ev
+
+                                if state_changed:
+                                    repo.save_stock_event(sku_ev)
+                                    stock_events_emitted.append(sku_ev)
+                                    logger.info(
+                                        "Shelf '%s' status transitioned: %s -> %s "
+                                        "(facings: %d, confidence: %.2f)",
+                                        item.shelf_id,
+                                        prev_ev.status if prev_ev else "initial",
+                                        s_status,
+                                        item.facing_count,
+                                        item.confidence,
+                                    )
+
+                                    sku_prof = sku_segregator.get_sku_for_zone(item.shelf_id)
+                                    sku_name = item.detected_sku_name or (
+                                        sku_prof.name if sku_prof else None
+                                    )
+                                    sku_id = item.detected_sku_id or (
+                                        sku_prof.sku_id if sku_prof else None
+                                    )
+                                    s_alert = self.alert_engine.process_stock_event(
+                                        sku_ev,
+                                        sku_name=sku_name,
+                                        sku_id=sku_id,
+                                        facing_count=item.facing_count,
+                                    )
+                                    if s_alert:
+                                        repo.upsert_alert(s_alert)
+
+                            resolved_alerts = self.alert_engine.check_resolutions(
+                                self.latest_stock_events,
+                                self.latest_queue_events,
+                                latest_facings=self.latest_facings,
+                            )
+                            for res_alert in resolved_alerts:
+                                repo.upsert_alert(res_alert)
+
+                            if stock_events_emitted or resolved_alerts:
+                                ws_manager.broadcast_sync({
+                                    "type": "stock_update",
+                                    "shelves": [s.shelf_id for s in stock_events_emitted],
+                                    "data": [
+                                        s.model_dump(mode="json")
+                                        for s in self.latest_stock_events.values()
+                                    ],
+                                })
+                                if resolved_alerts:
+                                    ws_manager.broadcast_sync({"type": "alerts_update"})
                     except Exception as e:
-                        logger.error("Alert resolution error: %s", e)
+                        logger.error("Unified shelf analysis error: %s", e)
 
-                # 7. Workload C: Periodic Edge SKU Segregation (Locked >= 10s cadence)
-                now = time.monotonic()
-                if now - last_sku_time >= sku_interval:
-                    last_sku_time = now
-                    shelf_zones = [z for z in zones if z.zone_type == "shelf"]
-                    if shelf_zones:
-                        try:
-                            # Collate active frames from multi-camera mesh and primary feed
-                            mesh_frames = camera_mesh.get_active_frames()
-                            frames_to_eval = list(mesh_frames)
-                            if curr_frame is not None and not any(
-                                cam_id == "cam_primary" for cam_id, _ in frames_to_eval
-                            ):
-                                frames_to_eval.insert(0, ("cam_primary", curr_frame))
-
-                            if frames_to_eval:
-                                sku_report = sku_segregator.evaluate_all_shelves(
-                                    frames_by_camera=frames_to_eval,
-                                    zones=shelf_zones,
-                                )
-                                # SKU-specific stock alerts with facing counts
-                                for item in sku_report.items:
-                                    self.latest_facings[item.shelf_id] = item.facing_count
-                                    if item.status in ("low", "empty"):
-                                        sku_ev = StockEvent(
-                                            event_id=f"sku_ev_{item.shelf_id}_{int(time.time())}",
-                                            shelf_id=item.shelf_id,
-                                            timestamp=item.timestamp,
-                                            status="empty" if item.status == "empty" else "low",
-                                            confidence=item.confidence,
-                                        )
-                                        sku_prof = sku_segregator.get_sku_for_zone(item.shelf_id)
-                                        sku_name = item.detected_sku_name or (
-                                            sku_prof.name if sku_prof else None
-                                        )
-                                        sku_id = item.detected_sku_id or (
-                                            sku_prof.sku_id if sku_prof else None
-                                        )
-                                        s_alert = self.alert_engine.process_stock_event(
-                                            sku_ev,
-                                            sku_name=sku_name,
-                                            sku_id=sku_id,
-                                            facing_count=item.facing_count,
-                                        )
-                                        if s_alert:
-                                            repo.upsert_alert(s_alert)
-
-                                # Immediate resolution pass with fresh facing counts
-                                resolved_alerts = self.alert_engine.check_resolutions(
-                                    self.latest_stock_events,
-                                    self.latest_queue_events,
-                                    latest_facings=self.latest_facings,
-                                )
-                                for res_alert in resolved_alerts:
-                                    repo.upsert_alert(res_alert)
-                        except Exception as e:
-                            logger.error("SKU segregation error: %s", e)
-
-                # 8. Flush pending audit trail events to repository
+                # 7. Flush pending audit trail events to repository
                 with contextlib.suppress(Exception):
                     for audit_entry in self.alert_engine.pop_pending_audit_events():
                         repo.save_audit_event(audit_entry)
