@@ -135,3 +135,24 @@ class SKUSegregationReport(BaseModel):
     low_or_empty_shelves: int
     last_evaluated_at: datetime | None = None
     items: list[SKUSegregationItem]
+
+
+class ResolveAlertResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    alert_id: str
+
+
+class ResolveAllAlertsResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    resolved_count: int = Field(ge=0)
+
+
+class ResetTelemetryResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    cleared_events: int = Field(ge=0)
+
+
+class UnregisterCameraResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    unregistered: str
+

@@ -1,8 +1,9 @@
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, status
 
 from api.dependencies import RepoDep
+from api.schemas_api import ResolveAlertResponse, ResolveAllAlertsResponse
 from core.schemas import Alert, AuditLogEntry
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -39,14 +40,17 @@ def get_audit_trail(
 
 
 @router.post("/resolve-all")
-def resolve_all_alerts(repo: RepoDep) -> dict[str, int | str]:
+def resolve_all_alerts(repo: RepoDep) -> ResolveAllAlertsResponse:
     """Resolve all currently open operational alerts in persistence."""
     count = repo.resolve_all_open_alerts()
-    return {"status": "ok", "resolved_count": count}
+    return ResolveAllAlertsResponse(status="ok", resolved_count=count)
 
 
 @router.post("/{alert_id}/resolve")
-def resolve_single_alert(alert_id: str, repo: RepoDep) -> dict[str, Any]:
+def resolve_single_alert(
+    alert_id: Annotated[str, Path(description="The unique ID of the alert to resolve")],
+    repo: RepoDep,
+) -> ResolveAlertResponse:
     """Resolve a specific open operational alert."""
     resolved = repo.resolve_alert(alert_id)
     if not resolved:
@@ -54,5 +58,6 @@ def resolve_single_alert(alert_id: str, repo: RepoDep) -> dict[str, Any]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Alert {alert_id} not found or already resolved",
         )
-    return {"status": "ok", "alert_id": alert_id}
+    return ResolveAlertResponse(status="ok", alert_id=alert_id)
+
 

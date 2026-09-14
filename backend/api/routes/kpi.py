@@ -10,6 +10,7 @@ from api.schemas_api import (
     FootfallBucket,
     FootfallSummary,
     RegisterSKURequest,
+    ResetTelemetryResponse,
     SKUProfile,
     SKUSegregationReport,
 )
@@ -177,8 +178,9 @@ def register_catalog_sku(req: RegisterSKURequest) -> SKUProfile:
 
 
 @router.post("/reset")
-def reset_telemetry(repo: RepoDep) -> dict[str, int | str]:
+def reset_telemetry(repo: RepoDep) -> ResetTelemetryResponse:
     """Purge transient detection and dwell events to reset store traffic telemetry to zero."""
     cleared_count = repo.clear_detection_events()
-    return {"status": "ok", "cleared_events": cleared_count}
+    return ResetTelemetryResponse(status="ok", cleared_events=cleared_count)
+
 

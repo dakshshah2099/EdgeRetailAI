@@ -6,12 +6,17 @@ from typing import Annotated
 import cv2
 import numpy as np
 import numpy.typing as npt
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from api.dependencies import AppConfigDep
-from api.schemas_api import CameraMeshNodeConfig, CameraMeshSummary, RegisterCameraRequest
+from api.schemas_api import (
+    CameraMeshNodeConfig,
+    CameraMeshSummary,
+    RegisterCameraRequest,
+    UnregisterCameraResponse,
+)
 from api.stream_manager import (
     draw_tracked_overlay,
     draw_zones_overlay,
@@ -161,7 +166,9 @@ def register_mesh_camera(req: RegisterCameraRequest) -> CameraMeshNodeConfig:
 
 
 @router.delete("/cameras/{camera_id}")
-def unregister_mesh_camera(camera_id: str) -> dict[str, str]:
+def unregister_mesh_camera(
+    camera_id: Annotated[str, Path(description="Camera node ID to unregister from mesh")],
+) -> UnregisterCameraResponse:
     """Remove and shut down a camera node from the mesh topology."""
     success = camera_mesh.unregister_camera(camera_id)
     if not success:
@@ -169,7 +176,8 @@ def unregister_mesh_camera(camera_id: str) -> dict[str, str]:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera node '{camera_id}' not found in mesh.",
         )
-    return {"status": "ok", "unregistered": camera_id}
+    return UnregisterCameraResponse(status="ok", unregistered=camera_id)
+
 
 
 @router.get("/stream")
