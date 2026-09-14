@@ -41,6 +41,7 @@ class SpawnedStore:
 
 
 _spawned_stores: dict[int, SpawnedStore] = {}
+_failed_spawns: dict[int, float] = {}
 _lock = threading.Lock()
 
 
@@ -64,7 +65,7 @@ def _seed_store_database(db_path: Path, store_id: str, port: int) -> None:
     # 1. Seed footfall enters and exits
     for i in range(enters_count):
         ts = now - timedelta(minutes=enters_count - i)
-        repo.add_detection_event(
+        repo.save_detection_event(
             DetectionEvent(
                 event_id=f"det_in_{store_id}_{i}",
                 track_id=f"person_{i}",
@@ -77,7 +78,7 @@ def _seed_store_database(db_path: Path, store_id: str, port: int) -> None:
 
     for j in range(exits_count):
         ts = now - timedelta(minutes=exits_count - j)
-        repo.add_detection_event(
+        repo.save_detection_event(
             DetectionEvent(
                 event_id=f"det_out_{store_id}_{j}",
                 track_id=f"person_{j}",
@@ -90,18 +91,18 @@ def _seed_store_database(db_path: Path, store_id: str, port: int) -> None:
 
     # 2. Seed queue events
     queue_len = max(1, multiplier - 1)
-    repo.add_queue_event(
+    repo.save_queue_event(
         QueueEvent(
             event_id=f"q_{store_id}_01",
             counter_id="counter_1",
             timestamp=now,
             queue_length=queue_len,
-            avg_dwell_sec=45.0 * queue_len,
+            avg_wait_est_sec=45.0 * queue_len,
         )
     )
 
     # 3. Seed stock events
-    repo.add_stock_event(
+    repo.save_stock_event(
         StockEvent(
             event_id=f"stk_{store_id}_01",
             shelf_id="shelf_beverages",
@@ -113,15 +114,14 @@ def _seed_store_database(db_path: Path, store_id: str, port: int) -> None:
 
     # 4. Seed an alert if applicable
     if multiplier % 2 == 1:
-        repo.add_alert(
+        repo.save_alert(
             Alert(
                 alert_id=f"alert_{store_id}_01",
                 alert_type="low_stock",
                 severity="warning",
                 message=f"Low stock detected on beverage aisle ({store_id})",
-                timestamp=now,
+                created_at=now,
                 zone_id="shelf_beverages",
-                status="open",
             )
         )
 
@@ -183,20 +183,21 @@ def spawn_real_store(
         thread.start()
 
         # 4. Wait for server to become healthy
-        deadline = time.time() + 4.0
+        deadline = time.time() + 1.5
         is_healthy = False
         while time.time() < deadline:
             try:
-                with httpx.Client(timeout=0.5) as client:
+                with httpx.Client(timeout=0.3) as client:
                     resp = client.get(f"http://{host}:{port}/health")
                     if resp.status_code == 200:
                         is_healthy = True
                         break
             except Exception:
-                time.sleep(0.1)
+                time.sleep(0.05)
 
         if not is_healthy:
             logger.warning("Store node %s on port %s took long to report healthy.", store_id, port)
+            _failed_spawns[port] = time.monotonic()
 
         spawned = SpawnedStore(
             store_id=store_id,
@@ -230,10 +231,15 @@ def spawn_configured_local_stores(
         return []
 
     spawned_list: list[SpawnedStore] = []
+    now_ts = time.monotonic()
     for cfg in registry:
         parsed = urlparse(cfg.api_base_url)
         hostname = parsed.hostname or "127.0.0.1"
         port = parsed.port or 80
+
+        # Don't retry spawning failed ports repeatedly within cooldown
+        if port in _failed_spawns and now_ts - _failed_spawns[port] < 30.0:
+            continue
 
         # Only auto-spawn loopback nodes
         if hostname in ("127.0.0.1", "localhost", "0.0.0.0") and not is_port_in_use(
@@ -251,6 +257,21 @@ def spawn_configured_local_stores(
     return spawned_list
 
 
+def stop_spawned_store(port: int) -> bool:
+    """Stop a specific spawned store node running on given port."""
+    with _lock:
+        store = _spawned_stores.pop(port, None)
+        if store is not None:
+            try:
+                store.server.should_exit = True
+                logger.info("Stopped spawned store '%s' on port %s", store.name, port)
+                return True
+            except Exception as exc:
+                logger.warning("Error stopping store on port %s: %s", port, exc)
+                return False
+    return False
+
+
 def stop_all_spawned_stores() -> None:
     """Shut down all running local store nodes cleanly."""
     with _lock:
@@ -261,3 +282,4 @@ def stop_all_spawned_stores() -> None:
                 logger.warning("Error stopping store on port %s: %s", port, exc)
         _spawned_stores.clear()
     logger.info("All spawned edge store nodes stopped.")
+

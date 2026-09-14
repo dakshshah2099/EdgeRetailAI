@@ -35,7 +35,7 @@ class CrossStoreSummary:
 
 def poll_store(
     config: StoreConfig,
-    timeout_sec: float = 5.0,
+    timeout_sec: float = 2.0,
     client: httpx.Client | None = None,
 ) -> StoreStatus:
     """Query one store's API. On timeout/connection failure, return a
@@ -46,7 +46,8 @@ def poll_store(
     should_close = False
     http_client = client
     if http_client is None:
-        http_client = httpx.Client(timeout=timeout_sec)
+        client_timeout = httpx.Timeout(timeout_sec, connect=min(1.0, timeout_sec))
+        http_client = httpx.Client(timeout=client_timeout)
         should_close = True
 
     try:
@@ -119,7 +120,7 @@ def poll_store(
 
 def aggregate_stores(
     registry: list[StoreConfig],
-    timeout_sec: float = 5.0,
+    timeout_sec: float = 2.0,
     client: httpx.Client | None = None,
     max_workers: int = 10,
 ) -> CrossStoreSummary:
@@ -138,19 +139,12 @@ def aggregate_stores(
         )
 
     workers = min(max_workers, len(registry))
-    should_close = False
-    http_client = client
-    if http_client is None:
-        http_client = httpx.Client(timeout=timeout_sec)
-        should_close = True
-
     results_by_id: dict[str, StoreStatus] = {}
-    try:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_to_cfg = {
-                executor.submit(poll_store, cfg, timeout_sec, http_client): cfg for cfg in registry
-            }
-            for future in as_completed(future_to_cfg):
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_cfg = {
+            executor.submit(poll_store, cfg, timeout_sec, client): cfg for cfg in registry
+        }
+        for future in as_completed(future_to_cfg):
                 cfg = future_to_cfg[future]
                 try:
                     status = future.result()
@@ -167,9 +161,6 @@ def aggregate_stores(
                         error=f"Unexpected executor error: {exc}",
                     )
                 results_by_id[status.store_id] = status
-    finally:
-        if should_close:
-            http_client.close()
 
     ordered_statuses = [results_by_id[cfg.store_id] for cfg in registry]
     total_reachable = sum(1 for s in ordered_statuses if s.reachable)

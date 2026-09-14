@@ -254,3 +254,119 @@ stores:
     r_ui = client.get("/")
     assert r_ui.status_code == 200
     assert "Central Store Operations Monitor" in r_ui.text
+    assert "Add Store" in r_ui.text
+
+
+def test_central_dashboard_add_and_remove_stores(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from central.central_dashboard import create_central_app
+
+    cfg_file = tmp_path / "stores.yaml"
+    cfg_file.write_text(
+        """
+stores:
+  - store_id: "store_initial"
+    name: "Initial Store"
+    api_base_url: "http://127.0.0.1:8000"
+""",
+        encoding="utf-8",
+    )
+
+    app = create_central_app(config_path=cfg_file)
+    client = TestClient(app)
+
+    # 1. Add valid store
+    payload = {
+        "store_id": "store_new",
+        "name": "New Mall Store",
+        "api_base_url": "http://127.0.0.1:8001",
+    }
+    r_add = client.post("/api/stores", json=payload)
+    assert r_add.status_code == 201
+    data = r_add.json()
+    assert data["status"] == "created"
+    assert data["store"]["store_id"] == "store_new"
+    assert len(data["stores"]) == 2
+
+    # 2. Check GET /api/stores shows the added store
+    r_stores = client.get("/api/stores")
+    assert r_stores.status_code == 200
+    store_ids = [s["store_id"] for s in r_stores.json()]
+    assert "store_new" in store_ids
+
+    # 3. Add duplicate store -> 400 Bad Request
+    r_dup = client.post("/api/stores", json=payload)
+    assert r_dup.status_code == 400
+    assert "already exists" in r_dup.json()["detail"]
+
+    # 4. Add invalid store -> validation failure
+    r_bad = client.post(
+        "/api/stores",
+        json={"store_id": "", "name": "", "api_base_url": "ftp://bad"},
+    )
+    assert r_bad.status_code in (400, 422)
+
+    # 5. Delete existing store
+    r_del = client.delete("/api/stores/store_new")
+    assert r_del.status_code == 200
+    del_data = r_del.json()
+    assert del_data["status"] == "deleted"
+    assert del_data["store"]["store_id"] == "store_new"
+    assert len(del_data["stores"]) == 1
+
+    # 6. Verify removed via GET /api/stores
+    r_after = client.get("/api/stores")
+    assert len(r_after.json()) == 1
+    assert r_after.json()[0]["store_id"] == "store_initial"
+
+    # 7. Delete non-existent store -> 404
+    r_del_404 = client.delete("/api/stores/non_existent_id")
+    assert r_del_404.status_code == 404
+
+
+def test_central_dashboard_with_unpollable_store(tmp_path: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from central.central_dashboard import create_central_app
+
+    cfg_file = tmp_path / "stores.yaml"
+    cfg_file.write_text(
+        """
+stores:
+  - store_id: "store_unreachable"
+    name: "Unreachable Store"
+    api_base_url: "http://127.0.0.1:59999"
+""",
+        encoding="utf-8",
+    )
+
+    app = create_central_app(config_path=cfg_file)
+    client = TestClient(app)
+
+    # 1. UI root opens instantly with 200
+    r_ui = client.get("/")
+    assert r_ui.status_code == 200
+    assert "Central Store Operations Monitor" in r_ui.text
+
+    # 2. Stores list loads instantly
+    r_stores = client.get("/api/stores")
+    assert r_stores.status_code == 200
+    assert len(r_stores.json()) == 1
+    assert r_stores.json()[0]["store_id"] == "store_unreachable"
+
+    # 3. Summary endpoint handles unpollable store gracefully and returns fast
+    import time
+    start = time.perf_counter()
+    r_summary = client.get("/api/summary")
+    elapsed = time.perf_counter() - start
+
+    assert r_summary.status_code == 200
+    assert elapsed < 3.5  # Must not hang or freeze
+    data = r_summary.json()
+    assert data["total_reachable"] == 0
+    assert data["total_unreachable"] == 1
+    assert data["stores"][0]["reachable"] is False
+    assert data["stores"][0]["error"] is not None
+
+

@@ -110,7 +110,7 @@ def create_app() -> FastAPI:
 
         @application.get("/central", response_class=HTMLResponse, tags=["central"])
         @application.get("/central/", response_class=HTMLResponse, tags=["central"])
-        def central_dashboard_view() -> HTMLResponse:
+        async def central_dashboard_view() -> HTMLResponse:
             return HTMLResponse(HTML_TEMPLATE)
 
     # If static frontend build is present, serve it via app.frontend()

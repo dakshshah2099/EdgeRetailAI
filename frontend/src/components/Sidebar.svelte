@@ -1,4 +1,6 @@
 <script>
+  import { onMount } from "svelte";
+
   let {
     activeTab = "camera",
     queueCount = 0,
@@ -10,6 +12,19 @@
     onToggleCollapse = () => {},
     onCloseMobile = () => {}
   } = $props();
+
+  let configuredStoreCount = $state(3);
+
+  onMount(() => {
+    fetch("/central/api/stores")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          configuredStoreCount = data.length;
+        }
+      })
+      .catch(() => {});
+  });
 
   function handleTabClick(tab) {
     onSelectTab(tab);
@@ -543,7 +558,7 @@
             </svg>
             {#if !isCollapsed}
               <span class="flex-1 text-left truncate">Multi-Store</span>
-              <span class="text-2xs font-mono text-slate-400">3 STORES</span>
+              <span class="text-2xs font-mono text-slate-400">{configuredStoreCount} {configuredStoreCount === 1 ? 'STORE' : 'STORES'}</span>
             {/if}
           </a>
           {#if isCollapsed}
