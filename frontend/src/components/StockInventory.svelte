@@ -54,11 +54,11 @@
     }
   }
 
-  // Combine shelves from stockEvents, skuReport items, and registered catalog zones
+  // Combine shelves from recorded stock events, registered catalog zones, or live detected SKUs
   let allShelfIds = $derived(Array.from(new Set([
     ...stockEvents.map(s => s.shelf_id),
-    ...(skuReport && skuReport.items ? skuReport.items.map(i => i.shelf_id) : []),
-    ...(Array.isArray(skuCatalog) ? skuCatalog.filter(c => c.expected_zone_id).map(c => c.expected_zone_id) : [])
+    ...(Array.isArray(skuCatalog) ? skuCatalog.filter(c => c.expected_zone_id).map(c => c.expected_zone_id) : []),
+    ...(skuReport && skuReport.items ? skuReport.items.filter(i => i.detected_sku_id || i.facing_count > 0).map(i => i.shelf_id) : [])
   ])));
 
   let cardsData = $derived(allShelfIds.map(shelfId => {

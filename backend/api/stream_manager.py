@@ -321,7 +321,7 @@ class StreamManager:
                     elif formatted_src.isdigit():
                         self.camera = USBSource(device_index=int(formatted_src))
                     else:
-                        self.camera = USBSource(device_index=formatted_src, loop=True)
+                        self.camera = USBSource(device_index=formatted_src, loop=True, pace=True)
 
                 if self._shutdown_event.is_set():
                     break
@@ -548,8 +548,17 @@ class StreamManager:
                             )
                             had_q_alert = False
                             for q_ev in q_events:
-                                repo.save_queue_event(q_ev)
+                                prev_q = self.latest_queue_events.get(q_ev.counter_id)
+                                q_changed = (
+                                    prev_q is not None
+                                    and prev_q.queue_length != q_ev.queue_length
+                                )
                                 self.latest_queue_events[q_ev.counter_id] = q_ev
+                                if q_changed and (
+                                    q_ev.queue_length > 0
+                                    or (prev_q is not None and prev_q.queue_length > 0)
+                                ):
+                                    repo.save_queue_event(q_ev)
                                 q_alert = self.alert_engine.process_queue_event(q_ev)
                                 if q_alert:
                                     repo.upsert_alert(q_alert)
@@ -632,7 +641,7 @@ class StreamManager:
                                     else ("low" if item.status == "low" else "ok")
                                 )
                                 prev_ev = self.latest_stock_events.get(item.shelf_id)
-                                state_changed = prev_ev is None or prev_ev.status != s_status
+                                state_changed = prev_ev is not None and prev_ev.status != s_status
 
                                 sku_ev = StockEvent(
                                     event_id=f"stk_ev_{item.shelf_id}_{int(time.time())}",
