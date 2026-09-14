@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from api.routes.alerts import router as alerts_router
 from api.routes.heatmap import router as heatmap_router
@@ -102,11 +102,16 @@ def create_app() -> FastAPI:
     def health_check() -> dict[str, str]:
         return {"status": "ok"}
 
-    # Mount central multi-store monitoring dashboard if explicitly enabled
-    if os.environ.get("ENABLE_CENTRAL_DASHBOARD", "false").lower() == "true":
-        from central.central_dashboard import create_central_app
+    # Mount central multi-store monitoring dashboard at /central
+    if os.environ.get("ENABLE_CENTRAL_DASHBOARD", "true").lower() == "true":
+        from central.central_dashboard import HTML_TEMPLATE, create_central_app
 
         application.mount("/central", create_central_app())
+
+        @application.get("/central", response_class=HTMLResponse, tags=["central"])
+        @application.get("/central/", response_class=HTMLResponse, tags=["central"])
+        def central_dashboard_view() -> HTMLResponse:
+            return HTMLResponse(HTML_TEMPLATE)
 
     # If static frontend build is present, serve it via app.frontend()
     frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"

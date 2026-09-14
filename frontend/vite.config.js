@@ -17,7 +17,8 @@ export default defineConfig({
       '/heatmap': 'http://127.0.0.1:8000',
       '/system': 'http://127.0.0.1:8000',
       '/video': 'http://127.0.0.1:8000',
-      '/health': 'http://127.0.0.1:8000'
+      '/health': 'http://127.0.0.1:8000',
+      '/central': 'http://127.0.0.1:8000'
     }
   }
 });

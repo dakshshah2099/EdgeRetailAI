@@ -1,3 +1,5 @@
+import contextlib
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -701,6 +703,15 @@ def create_central_app(config_path: str | Path = "stores.yaml") -> FastAPI:
     @app.get("/api/summary", response_model=CentralSummaryResponse, tags=["central"])
     def get_cross_store_summary() -> CentralSummaryResponse:
         registry = get_registry()
+        if (
+            os.environ.get("AUTO_SPAWN_LOCAL_STORES", "true").lower() == "true"
+            and "PYTEST_CURRENT_TEST" not in os.environ
+        ):
+            with contextlib.suppress(Exception):
+                from central.store_spawner import spawn_configured_local_stores
+
+                spawn_configured_local_stores(config_path)
+
         summary: CrossStoreSummary = aggregate_stores(registry)
 
         stores_data: list[CentralStoreStatus] = []
