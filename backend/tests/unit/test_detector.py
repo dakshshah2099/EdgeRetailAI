@@ -32,7 +32,10 @@ def test_raw_detection_has_no_pii_or_pixels() -> None:
     assert not hasattr(det, "embedding")
 
 
-@pytest.mark.skipif(not MODEL_PATH.is_file(), reason="ONNX model not present")
+@pytest.mark.skipif(
+    not MODEL_PATH.is_file() or not BUS_IMAGE_PATH.is_file(),
+    reason="ONNX model or bus.jpg fixture not present",
+)
 def test_onnx_backend_infer_bus_image() -> None:
     assert BUS_IMAGE_PATH.is_file(), f"Test fixture image missing at {BUS_IMAGE_PATH}"
     raw_img = cv2.imread(str(BUS_IMAGE_PATH))
@@ -62,7 +65,10 @@ def test_onnx_backend_infer_bus_image() -> None:
         assert 0.0 <= d.confidence <= 1.0
 
 
-@pytest.mark.skipif(not MODEL_PATH.is_file(), reason="ONNX model not present")
+@pytest.mark.skipif(
+    not MODEL_PATH.is_file() or not BUS_IMAGE_PATH.is_file(),
+    reason="ONNX model or bus.jpg fixture not present",
+)
 def test_person_detector_filters_non_person_classes() -> None:
     raw_img = cv2.imread(str(BUS_IMAGE_PATH))
     assert raw_img is not None

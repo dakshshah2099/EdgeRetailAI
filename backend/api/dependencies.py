@@ -14,16 +14,19 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 def get_db_path() -> Path:
     """Return configured or default database path for the repository."""
+    if "PYTEST_CURRENT_TEST" in os.environ or "PYTEST_VERSION" in os.environ:
+        db_str = os.environ.get("DATABASE_PATH")
+        if db_str and db_str != "retail.db":
+            p = Path(db_str)
+            if p.is_absolute() and p != (BACKEND_DIR / "retail.db").resolve():
+                return p
+        import tempfile
+
+        fallback_db = Path(tempfile.gettempdir()) / "retail_pytest_fallback.db"
+        return fallback_db
+
     env_vars = read_env_file()
-    db_str = os.environ.get("DATABASE_PATH") or env_vars.get("DATABASE_PATH")
-    if not db_str:
-        if "PYTEST_CURRENT_TEST" in os.environ:
-            import tempfile
-
-            fallback_db = Path(tempfile.gettempdir()) / "retail_pytest_fallback.db"
-            return fallback_db
-        db_str = "retail.db"
-
+    db_str = os.environ.get("DATABASE_PATH") or env_vars.get("DATABASE_PATH") or "retail.db"
     p = Path(db_str)
     if p.is_absolute():
         return p

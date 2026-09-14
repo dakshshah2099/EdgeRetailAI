@@ -77,3 +77,29 @@ def test_structural_no_pii_or_raw_imagery_columns(tmp_path: Path) -> None:
                     f"Forbidden PII/image column '{col}' found in table '{table_name}'"
                 )
     conn.close()
+
+
+def test_throwaway_database_isolation_prevents_production_db_access() -> None:
+    """Ensure tests strictly use a throwaway database and never touch backend/retail.db."""
+    from api.dependencies import get_db_path
+
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    prod_db = (backend_dir / "retail.db").resolve()
+
+    resolved_db = get_db_path().resolve()
+    assert resolved_db != prod_db, "get_db_path() returned production retail.db during testing!"
+    assert "pytest" in str(resolved_db) or "tmp" in str(resolved_db)
+
+    # Test connecting via literal 'retail.db' safely redirects to throwaway
+    conn = get_connection("retail.db")
+    try:
+        # Check attached database filename
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA database_list;")
+        row = cursor.fetchone()
+        attached_path = Path(row[2]).resolve()
+        assert attached_path != prod_db, "get_connection('retail.db') opened production retail.db!"
+        assert "pytest" in str(attached_path) or "tmp" in str(attached_path)
+    finally:
+        conn.close()
+

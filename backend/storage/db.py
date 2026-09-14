@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import tempfile
 from pathlib import Path
 
 _SCHEMA_STATEMENTS = [
@@ -86,9 +88,28 @@ _SCHEMA_STATEMENTS = [
 ]
 
 
+
+def _resolve_db_target(db_path: str | Path) -> Path:
+    """Resolve database path, preventing tests from ever modifying the production retail.db."""
+    path = Path(db_path)
+    if "PYTEST_CURRENT_TEST" in os.environ or "PYTEST_VERSION" in os.environ:
+        backend_dir = Path(__file__).resolve().parent.parent
+        prod_db = (backend_dir / "retail.db").resolve()
+        target = path.resolve() if path.is_absolute() else (backend_dir / path).resolve()
+        temp_dir = tempfile.gettempdir()
+        if target == prod_db or (
+            path.name == "retail.db"
+            and not str(target).startswith(temp_dir)
+            and "pytest" not in str(target)
+        ):
+            return Path(temp_dir) / "retail_pytest_throwaway.db"
+    return path
+
+
 def get_connection(db_path: str | Path) -> sqlite3.Connection:
     """Create and return a configured SQLite connection with WAL mode and busy timeout."""
-    conn = sqlite3.connect(str(db_path), timeout=10.0)
+    target_path = _resolve_db_target(db_path)
+    conn = sqlite3.connect(str(target_path), timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL;")
     conn.execute("PRAGMA busy_timeout = 5000;")
@@ -99,7 +120,7 @@ def get_connection(db_path: str | Path) -> sqlite3.Connection:
 
 def init_db(db_path: str | Path) -> None:
     """Create tables and indices if they do not exist. Idempotent on application startup."""
-    path = Path(db_path)
+    path = _resolve_db_target(db_path)
     if path.parent and str(path.parent) != "." and not path.parent.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
 
