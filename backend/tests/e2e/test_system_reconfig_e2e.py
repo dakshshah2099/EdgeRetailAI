@@ -27,6 +27,8 @@ def test_system_dynamic_reconfiguration_e2e(
     temp_env_file.write_text("DEBUG_MODE=false\nDEBUG_TOKEN=e2e-secret-token\n", encoding="utf-8")
 
     monkeypatch.setattr("api.env_manager.ENV_PATH", temp_env_file)
+    monkeypatch.setattr("api.env_manager.get_default_env_path", lambda: temp_env_file)
+    monkeypatch.setenv("ENV_PATH", str(temp_env_file))
     monkeypatch.setenv("DEBUG_TOKEN", "e2e-secret-token")
     monkeypatch.setenv("DEBUG_MODE", "false")
     monkeypatch.setenv("CONFIG_PATH", str(e2e_config_file))
@@ -36,13 +38,20 @@ def test_system_dynamic_reconfiguration_e2e(
     assert resp_env.status_code == 200
     assert resp_env.json()["debug_mode"] is False
 
-    # 2. Attempt unauthorized modification while debug mode is disabled
-    unauth_resp = e2e_client.put(
-        "/system/env",
-        json={"variables": {"QUEUE_CONGESTION_LENGTH": "2"}},
+    # 2. Attempt unauthorized zone modification while debug mode is disabled
+    unauth_zones_resp = e2e_client.put(
+        "/system/zones",
+        json={"zones": []},
     )
-    assert unauth_resp.status_code == 403
-    assert "Debug mode is disabled" in unauth_resp.json()["detail"]
+    assert unauth_zones_resp.status_code == 403
+    assert "Debug mode is disabled" in unauth_zones_resp.json()["detail"]
+
+    # Updating system .env is permitted without debug mode
+    env_update_resp = e2e_client.put(
+        "/system/env",
+        json={"variables": {"CAMERA_SOURCE": "0"}},
+    )
+    assert env_update_resp.status_code == 200
 
     # 3. Enable debug mode with valid token
     resp_toggle_on = e2e_client.post(

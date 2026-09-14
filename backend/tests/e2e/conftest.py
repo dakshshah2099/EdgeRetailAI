@@ -14,10 +14,11 @@ from storage.repository import EventRepository
 
 
 @pytest.fixture
-def e2e_db_path(tmp_path: Path) -> Path:
+def e2e_db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Provide a clean, isolated SQLite database for E2E tests."""
     db_file = tmp_path / "e2e_retail.db"
     init_db(db_file)
+    monkeypatch.setenv("DATABASE_PATH", str(db_file))
     return db_file
 
 

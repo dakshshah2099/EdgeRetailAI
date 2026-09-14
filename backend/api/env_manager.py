@@ -6,10 +6,12 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 def get_default_env_path() -> Path:
     """Resolve backend .env file path, ensuring root directory is never polluted."""
-    return BACKEND_DIR / ".env"
+    if "ENV_PATH" in os.environ:
+        return Path(os.environ["ENV_PATH"])
+    return ENV_PATH
 
 
-ENV_PATH = get_default_env_path()
+ENV_PATH = BACKEND_DIR / ".env"
 
 _cached_env: dict[str, str] = {}
 _cached_env_mtime: float = -1.0

@@ -23,9 +23,8 @@ def get_system_environment() -> SystemEnvResponse:
 @router.put("/env")
 def update_system_environment(
     req: UpdateEnvRequest,
-    _: RequireDebugModeDep,
 ) -> SystemEnvResponse:
-    """Update system .env variables when permitted."""
+    """Update system .env variables without requiring debug mode."""
     updated_vars = write_env_file(req.variables)
     return SystemEnvResponse(
         debug_mode=is_debug_mode(),

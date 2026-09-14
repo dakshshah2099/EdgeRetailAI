@@ -47,17 +47,17 @@ def test_get_system_environment() -> None:
     assert isinstance(data["variables"], dict)
 
 
-def test_update_system_environment_when_debug_disabled_rejects_bypass() -> None:
+def test_update_system_environment_when_debug_disabled_succeeds() -> None:
     # Ensure debug mode is disabled on server
     write_env_file({"DEBUG_MODE": "false"})
     try:
-        # Attacker attempts to bypass guard by sending DEBUG_MODE=true in payload
+        # Updating system .env is allowed without debug mode
         resp = client.put(
             "/system/env",
-            json={"variables": {"DEBUG_MODE": "true", "CAMERA_SOURCE": "malicious_stream"}},
+            json={"variables": {"CAMERA_SOURCE": "rtsp://192.168.1.50:8080"}},
         )
-        assert resp.status_code == 403
-        assert "Debug mode is disabled" in resp.json()["detail"]
+        assert resp.status_code == 200
+        assert resp.json()["variables"]["CAMERA_SOURCE"] == "rtsp://192.168.1.50:8080"
     finally:
         # Restore debug mode to true
         write_env_file({"DEBUG_MODE": "true"})

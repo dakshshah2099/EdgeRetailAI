@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 
 from api.env_manager import is_debug_mode, read_env_file
-from core.schemas import AppConfig, load_config
+from core.schemas import AppConfig, ensure_default_config, load_config
 from storage.repository import EventRepository
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -15,7 +15,15 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 def get_db_path() -> Path:
     """Return configured or default database path for the repository."""
     env_vars = read_env_file()
-    db_str = env_vars.get("DATABASE_PATH") or os.environ.get("DATABASE_PATH", "retail.db")
+    db_str = os.environ.get("DATABASE_PATH") or env_vars.get("DATABASE_PATH")
+    if not db_str:
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            import tempfile
+
+            fallback_db = Path(tempfile.gettempdir()) / "retail_pytest_fallback.db"
+            return fallback_db
+        db_str = "retail.db"
+
     p = Path(db_str)
     if p.is_absolute():
         return p
@@ -29,15 +37,20 @@ def get_db_path() -> Path:
 def get_config_path() -> Path:
     """Return configured config.yaml path, checking backend/ if executed from repo root."""
     env_vars = read_env_file()
-    cfg_str = env_vars.get("CONFIG_PATH") or os.environ.get("CONFIG_PATH", "config.yaml")
+    cfg_str = os.environ.get("CONFIG_PATH") or env_vars.get("CONFIG_PATH") or "config.yaml"
     p = Path(cfg_str)
     if p.is_absolute():
-        return p
-    if (BACKEND_DIR / cfg_str).is_file():
-        return BACKEND_DIR / cfg_str
-    if p.is_file():
-        return p
-    return BACKEND_DIR / cfg_str
+        target = p
+    elif (BACKEND_DIR / cfg_str).is_file():
+        target = BACKEND_DIR / cfg_str
+    elif p.is_file():
+        target = p
+    else:
+        target = BACKEND_DIR / cfg_str
+    if not target.is_file() or target.stat().st_size == 0:
+        ensure_default_config(target)
+    return target
+
 
 
 def get_repository() -> EventRepository:

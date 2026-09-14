@@ -1,5 +1,5 @@
 stores:
-  - store_id: "store_downtown"
+  - store_id: "store_main"
     name: "Downtown Flagship"
     api_base_url: "http://127.0.0.1:8000"
 
