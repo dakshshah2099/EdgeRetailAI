@@ -1,19 +1,23 @@
 import asyncio
+import contextlib
 import logging
+from collections.abc import AsyncIterable
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["websocket"])
+router = APIRouter(tags=["telemetry"])
 
 
 class ConnectionManager:
-    """Thread-safe WebSocket connection manager with async/sync broadcast support."""
+    """Thread-safe WebSocket and SSE connection manager with broadcast support."""
 
     def __init__(self) -> None:
         self.active_connections: list[WebSocket] = []
+        self.active_sse_queues: list[asyncio.Queue[dict[str, Any]]] = []
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -34,8 +38,22 @@ class ConnectionManager:
                 len(self.active_connections),
             )
 
+    def register_sse(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        self.active_sse_queues.append(queue)
+        logger.info(
+            "SSE client subscribed. Total SSE subscribers: %d", len(self.active_sse_queues)
+        )
+
+    def unregister_sse(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        if queue in self.active_sse_queues:
+            self.active_sse_queues.remove(queue)
+            logger.info(
+                "SSE client unsubscribed. Total SSE subscribers: %d",
+                len(self.active_sse_queues),
+            )
+
     async def broadcast(self, data: dict[str, Any]) -> None:
-        """Broadcast JSON payload to all connected clients."""
+        """Broadcast JSON payload to all connected WebSocket clients and SSE subscribers."""
         dead_connections: list[WebSocket] = []
         for connection in list(self.active_connections):
             try:
@@ -46,9 +64,13 @@ class ConnectionManager:
         for dead in dead_connections:
             self.disconnect(dead)
 
+        for sse_queue in list(self.active_sse_queues):
+            with contextlib.suppress(asyncio.QueueFull):
+                sse_queue.put_nowait(data)
+
     def broadcast_sync(self, data: dict[str, Any]) -> None:
         """Thread-safe sync dispatch callable from background inference threads."""
-        if not self.active_connections:
+        if not self.active_connections and not self.active_sse_queues:
             return
         if self._loop is not None and self._loop.is_running():
             asyncio.run_coroutine_threadsafe(self.broadcast(data), self._loop)
@@ -84,3 +106,36 @@ async def websocket_telemetry_endpoint(websocket: WebSocket) -> None:
     except Exception as e:
         logger.warning("WebSocket connection exception: %s", e)
         ws_manager.disconnect(websocket)
+
+
+async def sse_telemetry_generator(
+    request: Request | None = None,
+) -> AsyncIterable[ServerSentEvent]:
+    """Asynchronous generator yielding ServerSentEvent objects for telemetry subscribers."""
+    ws_manager.set_loop(asyncio.get_running_loop())
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)
+    ws_manager.register_sse(queue)
+
+    try:
+        yield ServerSentEvent(
+            data={"type": "handshake", "status": "connected"}, event="telemetry"
+        )
+        while not (request is not None and await request.is_disconnected()):
+            try:
+                data = await asyncio.wait_for(queue.get(), timeout=1.0)
+                yield ServerSentEvent(data=data, event="telemetry")
+            except TimeoutError:
+                if request is not None and await request.is_disconnected():
+                    break
+                yield ServerSentEvent(comment="keepalive")
+    finally:
+        ws_manager.unregister_sse(queue)
+
+
+@router.get("/events/telemetry", response_class=EventSourceResponse)
+async def sse_telemetry_endpoint(request: Request) -> AsyncIterable[ServerSentEvent]:
+    """Server-Sent Events (SSE) stream for real-time telemetry (footfall, dwell, queues, alerts)."""
+    async for event in sse_telemetry_generator(request):
+        yield event
+
+
