@@ -27,6 +27,7 @@ from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
 from vision.camera_base import CameraSource
 from vision.camera_mesh import camera_mesh
 from vision.detector import PersonDetector
+from vision.http_source import HTTPSource
 from vision.inference_backend import ONNXBackend
 from vision.rtsp_source import RTSPSource, format_authenticated_rtsp_url, mask_rtsp_credentials
 from vision.tracker import TrackedDetection, Tracker
@@ -294,13 +295,23 @@ class StreamManager:
                         self.camera = None
 
                     self.active_src = formatted_src
-                    if (
+                    if formatted_src.startswith(("http://", "https://")):
+                        self.camera = HTTPSource(
+                            source_url=formatted_src,
+                            source_id="cam_primary",
+                            timeout_msec=3000,
+                            initial_backoff_sec=1.5,
+                            max_backoff_sec=10.0,
+                            backoff_factor=2.0,
+                            non_blocking=True,
+                        )
+                    elif (
                         formatted_src.startswith("rtsp://")
                         or formatted_src.startswith("rtsps://")
-                        or formatted_src.startswith("http://")
                     ):
                         self.camera = RTSPSource(
                             source_url=formatted_src,
+                            source_id="cam_primary",
                             timeout_msec=2500,
                             initial_backoff_sec=2.0,
                             max_backoff_sec=15.0,
@@ -336,6 +347,8 @@ class StreamManager:
                     with self._slot_lock:
                         if time.monotonic() - self.last_frame_time > 4.0:
                             self.is_connected = False
+                            self._slot_frame = None
+                            self._slot_meta = None
                     primary_node = camera_mesh.get_camera("cam_primary")
                     if primary_node and time.monotonic() - self.last_frame_time > 4.0:
                         primary_node.is_connected = False
@@ -444,7 +457,11 @@ class StreamManager:
                 curr_frame: npt.NDArray[np.uint8] | None = None
                 curr_meta: Frame | None = None
                 with self._slot_lock:
-                    if self._frame_seq != last_processed_seq and self._slot_frame is not None:
+                    if (
+                        self.is_connected
+                        and self._frame_seq != last_processed_seq
+                        and self._slot_frame is not None
+                    ):
                         curr_frame = self._slot_frame
                         curr_meta = self._slot_meta
                         last_processed_seq = self._frame_seq
@@ -576,7 +593,12 @@ class StreamManager:
                 shelf_zones = [z for z in zones if z.zone_type == "shelf"]
                 is_watchdog_due = (now - last_shelf_time >= shelf_interval)
                 has_pending = bool(pending_shelf_eval_zones)
-                should_eval_shelves = bool(shelf_zones and (has_pending or is_watchdog_due))
+                should_eval_shelves = bool(
+                    self.is_connected
+                    and curr_frame is not None
+                    and shelf_zones
+                    and (has_pending or is_watchdog_due)
+                )
 
                 if should_eval_shelves:
                     target_shelves = (
@@ -641,14 +663,16 @@ class StreamManager:
                                     sku_id = item.detected_sku_id or (
                                         sku_prof.sku_id if sku_prof else None
                                     )
-                                    s_alert = self.alert_engine.process_stock_event(
-                                        sku_ev,
-                                        sku_name=sku_name,
-                                        sku_id=sku_id,
-                                        facing_count=item.facing_count,
-                                    )
-                                    if s_alert:
-                                        repo.upsert_alert(s_alert)
+                                    # Only alert if custom SKU is registered or visually detected
+                                    if sku_prof is not None or sku_id is not None:
+                                        s_alert = self.alert_engine.process_stock_event(
+                                            sku_ev,
+                                            sku_name=sku_name,
+                                            sku_id=sku_id,
+                                            facing_count=item.facing_count,
+                                        )
+                                        if s_alert:
+                                            repo.upsert_alert(s_alert)
 
                             resolved_alerts = self.alert_engine.check_resolutions(
                                 self.latest_stock_events,

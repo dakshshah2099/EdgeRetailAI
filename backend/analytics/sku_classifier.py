@@ -1,4 +1,6 @@
 import logging
+import os
+import sys
 import time
 from datetime import UTC, datetime
 from typing import Literal
@@ -79,7 +81,13 @@ class SKUSegregator:
         self._last_eval_time: float = 0.0
         self._last_report: SKUSegregationReport | None = None
 
-        self._seed_default_catalog()
+        is_testing = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
+        should_seed = os.environ.get(
+            "ENABLE_DEMO_SKUS",
+            "true" if is_testing else "false",
+        ).lower() in ("true", "1", "yes")
+        if should_seed:
+            self._seed_default_catalog()
 
     def _seed_default_catalog(self) -> None:
         """Seed retail catalog matching the default store layout."""
