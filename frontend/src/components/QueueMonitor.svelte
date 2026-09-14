@@ -84,9 +84,9 @@
 
           <!-- Visual Queue Track -->
           <div class="flex items-center gap-1.5 py-1">
-            {#each Array(Math.min(10, Math.max(item.queue_length, 1))) as _, i}
+            {#each Array.from({ length: Math.min(10, Math.max(item.queue_length, 1)) }, (_, i) => i) as slot (slot)}
               <span 
-                class="flex-1 h-1.5 rounded-sm transition-all {i < item.queue_length ? (isCongested ? 'bg-rose-500' : 'bg-sky-500') : 'bg-slate-200'}"
+                class="flex-1 h-1.5 rounded-sm transition-all {slot < item.queue_length ? (isCongested ? 'bg-rose-500' : 'bg-sky-500') : 'bg-slate-200'}"
               ></span>
             {/each}
           </div>

@@ -343,6 +343,18 @@
     };
   });
 
+  // Fallback polling loop when auto-refresh is active and WebSocket is disconnected
+  $effect(() => {
+    if (!autoRefresh || refreshIntervalSec <= 0) return;
+    const timer = setInterval(() => {
+      if (!isWsConnected) {
+        loadAllData();
+      }
+    }, Math.max(1, refreshIntervalSec) * 1000);
+
+    return () => clearInterval(timer);
+  });
+
   // Derived KPI metrics
   let shelfZones = $derived(systemZones.filter((z) => z.zone_type === "shelf"));
   let occupancy = $derived(footfallData ? footfallData.net_occupancy : 0);
@@ -460,37 +472,30 @@
             <div class="lg:col-span-1 flex flex-col gap-2.5">
               <!-- Camera Page Subpanel Switcher -->
               <div class="flex items-center bg-white border border-slate-200 rounded-md p-1 shadow-xs">
-                {#if cameraSideTab === "alerts"}
-                  <button
-                    type="button"
-                    class="flex-1 py-1 px-2 text-xs font-mono rounded bg-sky-50 text-sky-900 border border-sky-300 font-semibold cursor-pointer transition-colors"
-                    onclick={() => cameraSideTab = "alerts"}
-                  >
-                    INCIDENTS ({openAlertsCount})
-                  </button>
-                  <button
-                    type="button"
-                    class="flex-1 py-1 px-2 text-xs font-mono rounded text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent cursor-pointer transition-colors"
-                    onclick={() => cameraSideTab = "telemetry"}
-                  >
-                    STREAM TELEMETRY
-                  </button>
-                {:else}
-                  <button
-                    type="button"
-                    class="flex-1 py-1 px-2 text-xs font-mono rounded text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent cursor-pointer transition-colors"
-                    onclick={() => cameraSideTab = "alerts"}
-                  >
-                    INCIDENTS ({openAlertsCount})
-                  </button>
-                  <button
-                    type="button"
-                    class="flex-1 py-1 px-2 text-xs font-mono rounded bg-sky-50 text-sky-900 border border-sky-300 font-semibold cursor-pointer transition-colors"
-                    onclick={() => cameraSideTab = "telemetry"}
-                  >
-                    STREAM TELEMETRY
-                  </button>
-                {/if}
+                <button
+                  type="button"
+                  class={[
+                    "flex-1 py-1 px-2 text-xs font-mono rounded cursor-pointer transition-colors",
+                    cameraSideTab === "alerts"
+                      ? "bg-sky-50 text-sky-900 border border-sky-300 font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent"
+                  ]}
+                  onclick={() => cameraSideTab = "alerts"}
+                >
+                  INCIDENTS ({openAlertsCount})
+                </button>
+                <button
+                  type="button"
+                  class={[
+                    "flex-1 py-1 px-2 text-xs font-mono rounded cursor-pointer transition-colors",
+                    cameraSideTab === "telemetry"
+                      ? "bg-sky-50 text-sky-900 border border-sky-300 font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent"
+                  ]}
+                  onclick={() => cameraSideTab = "telemetry"}
+                >
+                  STREAM TELEMETRY
+                </button>
               </div>
 
               {#if cameraSideTab === "alerts"}

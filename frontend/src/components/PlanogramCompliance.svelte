@@ -42,7 +42,7 @@
             value={currentZoneId}
             onchange={(e) => onSelectShelf(e.target.value)}
           >
-            {#each shelfZones as shelf}
+            {#each shelfZones as shelf (shelf.zone_id)}
               <option value={shelf.zone_id}>{shelf.label || shelf.zone_id} ({shelf.zone_id})</option>
             {/each}
           </select>
@@ -107,7 +107,7 @@
 
       <div class="p-4 bg-slate-100/70 border border-slate-200 rounded-md">
         <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));">
-          {#each planogramData.facing_statuses as facing}
+          {#each planogramData.facing_statuses as facing (`${facing.facing_index[0]}_${facing.facing_index[1]}`)}
             <div class="flex flex-col items-center justify-center p-3 rounded border {getStatusColor(facing.status)} shadow-xs text-center transition-transform hover:scale-102">
               <span class="text-[10px] font-mono opacity-80">R{facing.facing_index[0]}C{facing.facing_index[1]}</span>
               <strong class="text-xs font-bold uppercase tracking-wider">{facing.status}</strong>

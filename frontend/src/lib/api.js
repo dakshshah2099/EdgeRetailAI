@@ -344,3 +344,13 @@ export function connectTelemetryWebSocket(onMessage, onStatusChange) {
   };
 }
 
+export async function fetchCentralStores(options = {}) {
+  try {
+    const res = await fetch(`${API_BASE}/central/api/stores`, { signal: options.signal });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+

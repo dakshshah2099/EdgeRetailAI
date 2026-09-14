@@ -94,12 +94,21 @@
       <span class="text-slate-500 text-xs">{formatTime(lastUpdated)}</span>
     </div>
 
-    <!-- Manual Refresh Button -->
-    <div class="flex items-center bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 text-xs font-mono">
+    <!-- Auto-Refresh Toggle & Manual Refresh Button -->
+    <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md px-1.5 py-1 text-xs font-mono">
+      <button
+        type="button"
+        class={["px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase transition-colors cursor-pointer", autoRefresh ? "bg-sky-100 text-sky-800" : "text-slate-400 hover:text-slate-600"]}
+        onclick={() => autoRefresh = !autoRefresh}
+        title={autoRefresh ? "Auto-refresh active (fallback polling)" : "Auto-refresh paused"}
+        aria-label="Toggle auto refresh"
+      >
+        {autoRefresh ? "AUTO" : "MANUAL"}
+      </button>
+      <span class="text-slate-300">|</span>
       <button 
         type="button" 
-        class="p-1 text-slate-500 hover:text-sky-600 transition-colors cursor-pointer"
-        class:animate-spin={isRefreshing}
+        class={["p-1 text-slate-500 hover:text-sky-600 transition-colors cursor-pointer", isRefreshing && "animate-spin"]}
         onclick={onRefresh}
         title="Force Refresh Data"
         aria-label="Force Refresh Data"

@@ -38,7 +38,7 @@
   let streamTimestamp = $state(Date.now());
   let isStreamLoading = $state(true);
   let isStreamError = $state(false);
-  let videoContainer = $state(null);
+  let videoContainer = null;
   let isFullscreen = $state(false);
 
   // Visual Zone Calibration
@@ -316,17 +316,10 @@
   $effect(() => {
     loadCameras();
     loadZones();
-
-    const handleFsChange = () => {
-      isFullscreen = !!document.fullscreenElement;
-    };
-    document.addEventListener("fullscreenchange", handleFsChange);
-
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFsChange);
-    };
   });
 </script>
+
+<svelte:document onfullscreenchange={() => { isFullscreen = !!document.fullscreenElement; }} />
 
 <div 
   class="bg-white border border-slate-200 rounded-md shadow-xs flex flex-col gap-2.5 sm:gap-3 p-3 sm:p-4 transition-all duration-150 {isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-4 sm:p-6 rounded-none border-none' : ''} {isEditingZones ? 'ring-2 ring-amber-500/50' : ''}" 
@@ -673,27 +666,33 @@
 
         <!-- Interactive SVG ROI polygon editor for primary camera in calibration mode -->
         {#if cam.camera_id === 'cam_primary' && isEditingZones}
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <svg 
             class="absolute inset-0 w-full h-full cursor-crosshair select-none z-20 pointer-events-auto" 
             viewBox="0 0 {viewWidth} {viewHeight}"
-            role="region"
+            role="application"
             aria-label="Zone calibration canvas"
             onmousemove={handleSvgMouseMove}
             onmouseup={handleSvgMouseUp}
             onmouseleave={handleSvgMouseUp}
           >
-            {#each zones as zone, zIdx}
+            {#each zones as zone, zIdx (zone.zone_id || zIdx)}
               {@const isSel = zIdx === selectedZoneIdx}
               {@const theme = getZoneTheme(zone.zone_type)}
               {@const ptsStr = zone.polygon.map((p) => p.join(',')).join(' ')}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <polygon
                 points={ptsStr}
                 stroke={theme.stroke}
                 stroke-width={isSel ? '2.5' : '1.5'}
                 stroke-dasharray={isSel ? '4 2' : 'none'}
                 fill={theme.fill}
-                class="transition-all cursor-pointer"
+                role="button"
+                tabindex="0"
+                aria-label={zone.label || `Zone ${zIdx + 1}`}
+                class="transition-all cursor-pointer focus:outline-none"
                 onmousedown={() => selectedZoneIdx = zIdx}
+                onkeydown={(e) => e.key === 'Enter' && (selectedZoneIdx = zIdx)}
               />
               <text
                 x={zone.polygon[0][0]}
@@ -704,13 +703,17 @@
               </text>
 
               {#if isSel}
-                {#each zone.polygon as pt, ptIdx}
+                {#each zone.polygon as pt, ptIdx (`${zone.zone_id || zIdx}_pt_${ptIdx}`)}
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
                   <circle
                     cx={pt[0]}
                     cy={pt[1]}
                     r="6"
                     fill={theme.stroke}
-                    class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform"
+                    role="button"
+                    tabindex="0"
+                    aria-label={`Vertex ${ptIdx + 1} of ${zone.label || `Zone ${zIdx + 1}`}`}
+                    class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform focus:outline-none"
                     onmousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
                   />
                 {/each}
@@ -751,7 +754,7 @@
           <div class="flex items-center gap-1">
             <label for="zone-select" class="text-slate-600 font-semibold">Zone:</label>
             <select id="zone-select" bind:value={selectedZoneIdx} class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900">
-              {#each zones as z, i}
+              {#each zones as z, i (z.zone_id || i)}
                 <option value={i}>{z.label || `Zone ${i + 1}`} ({z.zone_type})</option>
               {/each}
             </select>
