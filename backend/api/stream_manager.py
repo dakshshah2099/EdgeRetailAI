@@ -538,6 +538,7 @@ class StreamManager:
                             if is_shelf:
                                 pending_shelf_eval_zones.add(d_ev.zone_id)
 
+                        current_occupancy = len(tracked_dets)
                         if footfall_events:
                             enters = sum(1 for e in footfall_events if e.event_type == "enter")
                             exits = sum(1 for e in footfall_events if e.event_type == "exit")
@@ -545,10 +546,13 @@ class StreamManager:
                                 "type": "footfall",
                                 "total_enters": enters,
                                 "total_exits": exits,
+                                "new_enters": enters,
+                                "new_exits": exits,
+                                "net_occupancy": current_occupancy,
                                 "data": {
                                     "total_enters": enters,
                                     "total_exits": exits,
-                                    "net_occupancy": max(0, enters - exits),
+                                    "net_occupancy": current_occupancy,
                                 },
                             })
                     except Exception as e:
@@ -609,6 +613,20 @@ class StreamManager:
                             }
                             for det in tracked_dets
                         ],
+                    })
+
+                # Broadcast live camera occupancy to all telemetry clients
+                now = time.monotonic()
+                current_occ = len(tracked_dets)
+                if (
+                    current_occ != getattr(self, "_last_broadcast_occ", -1)
+                    or (now - getattr(self, "_last_occ_ts", 0.0) >= 2.0)
+                ):
+                    self._last_broadcast_occ = current_occ
+                    self._last_occ_ts = now
+                    ws_manager.broadcast_sync({
+                        "type": "occupancy",
+                        "net_occupancy": current_occ,
                     })
 
                 # 6. Unified Shelf Stock & SKU Analysis: Event-Triggered + 30s Watchdog

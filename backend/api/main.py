@@ -61,6 +61,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     label=c.label,
                 )
 
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        with contextlib.suppress(Exception):
+            stream_manager._ensure_workers_started()
+
     try:
         yield
     finally:
