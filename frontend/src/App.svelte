@@ -278,19 +278,35 @@
         if (!msg || !msg.type) return;
         if (msg.type === "dwell_points") {
           liveDwellPoints = msg.points || [];
-        } else if (msg.type === "footfall") {
-          if (msg.data) {
-            footfallData = msg.data;
-          } else if (msg.total_enters !== undefined || msg.total_exits !== undefined) {
-            const currentEnters = (footfallData?.total_enters || 0) + (msg.total_enters || 0);
-            const currentExits = (footfallData?.total_exits || 0) + (msg.total_exits || 0);
+        } else if (msg.type === "occupancy") {
+          const occ = typeof msg.net_occupancy === "number" ? msg.net_occupancy : 0;
+          if (footfallData) {
             footfallData = {
-              ...(footfallData || {}),
-              total_enters: currentEnters,
-              total_exits: currentExits,
-              net_occupancy: Math.max(0, currentEnters - currentExits),
+              ...footfallData,
+              net_occupancy: occ,
+            };
+          } else {
+            footfallData = {
+              total_enters: 0,
+              total_exits: 0,
+              net_occupancy: occ,
             };
           }
+          lastUpdated = new Date();
+        } else if (msg.type === "footfall") {
+          const deltaEnters = msg.new_enters ?? msg.total_enters ?? 0;
+          const deltaExits = msg.new_exits ?? msg.total_exits ?? 0;
+          const currentEnters = (footfallData?.total_enters || 0) + deltaEnters;
+          const currentExits = (footfallData?.total_exits || 0) + deltaExits;
+          const liveOcc = msg.net_occupancy !== undefined 
+            ? msg.net_occupancy 
+            : (msg.data?.net_occupancy !== undefined ? msg.data.net_occupancy : Math.max(0, currentEnters - currentExits));
+          footfallData = {
+            ...(footfallData || {}),
+            total_enters: currentEnters,
+            total_exits: currentExits,
+            net_occupancy: liveOcc,
+          };
           lastUpdated = new Date();
         } else if (msg.type === "queue") {
           const qData = Array.isArray(msg.data)
@@ -439,7 +455,7 @@
         {#if activeTab === "camera"}
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
             <div class="lg:col-span-2">
-              <LiveCameraFeed {isConnected} />
+              <LiveCameraFeed {isConnected} {occupancy} />
             </div>
             <div class="lg:col-span-1 flex flex-col gap-2.5">
               <!-- Camera Page Subpanel Switcher -->

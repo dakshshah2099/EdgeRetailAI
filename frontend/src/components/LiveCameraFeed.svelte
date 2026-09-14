@@ -7,7 +7,7 @@
     unregisterCamera 
   } from "../lib/api.js";
 
-  let { isConnected = true } = $props();
+  let { isConnected = true, occupancy = 0 } = $props();
 
   let cameras = $state([
     { camera_id: "cam_primary", label: "Primary (Overhead Entrance)", is_active: true }
@@ -644,6 +644,10 @@
         <div class="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
           <div class="flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
             <span class="text-slate-300 font-semibold">{cam.label || cam.camera_id.toUpperCase()}</span>
+            {#if cam.camera_id === 'cam_primary'}
+              <span class="text-slate-600">•</span>
+              <span class="text-emerald-400 font-semibold">{occupancy} IN STORE</span>
+            {/if}
           </div>
 
           <div class="flex items-center gap-1.5">
