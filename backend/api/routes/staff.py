@@ -1,22 +1,19 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from analytics.staff_efficiency import (
     StaffEfficiencySummary,
     _is_ge,
     compute_staff_efficiency,
 )
-from api.dependencies import get_repository
-from storage.repository import EventRepository
+from api.dependencies import RepoDep
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
 
-RepoDep = Annotated[EventRepository, Depends(get_repository)]
 
-
-@router.get("/staff", response_model=StaffEfficiencySummary)
+@router.get("/staff")
 def get_staff_efficiency_kpi(
     repo: RepoDep,
     since: Annotated[

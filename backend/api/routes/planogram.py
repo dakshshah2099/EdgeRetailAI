@@ -1,21 +1,18 @@
-﻿from typing import Annotated
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from analytics.planogram_lite import (
     PlanogramCompliance,
     get_latest_planogram_compliance,
     load_planogram_layouts,
 )
-from api.dependencies import get_repository
-from storage.repository import EventRepository
+from api.dependencies import RepoDep
 
 router = APIRouter(prefix="/kpi", tags=["kpi", "planogram"])
 
-RepoDep = Annotated[EventRepository, Depends(get_repository)]
 
-
-@router.get("/planogram", response_model=PlanogramCompliance)
+@router.get("/planogram")
 def get_planogram_compliance_endpoint(
     zone_id: Annotated[
         str,
@@ -28,15 +25,16 @@ def get_planogram_compliance_endpoint(
     layout = layouts.get(zone_id)
     if layout is None:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No planogram layout configured for zone '{zone_id}'",
         )
 
     compliance = get_latest_planogram_compliance(repo, zone_id, layout=layout)
     if compliance is None:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No planogram compliance data found for zone '{zone_id}'",
         )
 
     return compliance
+

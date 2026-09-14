@@ -1,15 +1,14 @@
-﻿from datetime import date
+from datetime import date
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
-from api.dependencies import get_repository
-from storage.repository import EventRepository
+from api.dependencies import RepoDep
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
-RepoDep = Annotated[EventRepository, Depends(get_repository)]
 FormatType = Literal["csv", "pdf"]
+
 
 
 @router.get("/daily")
