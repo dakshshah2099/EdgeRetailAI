@@ -139,8 +139,8 @@ class CameraNode:
                             non_blocking=True,
                         )
                     else:
-                        dev_idx = int(src) if src.isdigit() else 0
-                        self.camera_source = USBSource(device_index=dev_idx)
+                        dev_idx: int | str = int(src) if src.isdigit() else src
+                        self.camera_source = USBSource(device_index=dev_idx, pace=True)
 
                 # Attempt non-blocking frame read
                 res = self.camera_source.get_frame()

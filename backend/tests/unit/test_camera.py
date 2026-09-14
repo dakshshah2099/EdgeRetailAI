@@ -322,3 +322,22 @@ def test_http_source_cv2_capture() -> None:
         assert meta.height == 480
         assert frame.shape == (480, 640, 3)
         src.close()
+
+
+def test_usb_source_pacing(sample_video_path: str) -> None:
+    import time
+
+    source = USBSource(device_index=sample_video_path, pace=True)
+    assert source.pace is True
+
+    t0 = time.monotonic()
+    f1 = source.get_frame()
+    f2 = source.get_frame()
+    elapsed = time.monotonic() - t0
+
+    assert f1 is not None
+    assert f2 is not None
+    # With 10 FPS native video, 1 frame delay should be ~0.1s (>= 0.07s)
+    assert elapsed >= 0.07
+    source.close()
+
