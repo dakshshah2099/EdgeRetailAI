@@ -80,6 +80,11 @@ disallow_untyped_decorators = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*", "onnxruntime", "onnxruntime.*", "reportlab", "reportlab.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -88,5 +93,19 @@ pythonpath = ["."]
 markers = [
     "e2e: End-to-end integration and system tests",
     "unit: Isolated unit tests",
+    "anyio",
+    "slice_0",
+    "slice_1",
+    "slice_2",
+    "slice_3",
+    "slice_4",
+    "slice_5",
+    "slice_6",
+    "slice_7",
+    "slice_8",
+    "slice_9",
+    "slice_10",
+    "slice_11",
+    "slice_12",
 ]
 

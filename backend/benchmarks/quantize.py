@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-import onnxruntime.quantization as oq  # type: ignore[import-untyped] # onnxruntime lacks py.typed marker
+import onnxruntime.quantization as oq
 
 logger = logging.getLogger(__name__)
 
