@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from "svelte";
   import page from "page";
   import Header from "./components/Header.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -206,6 +207,10 @@
 
       if (ac.signal.aborted) return;
 
+      [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, staff, zonesRes, catalogRes].forEach((r, i) => {
+        if (r.status === 'rejected') console.warn(`Dashboard fetch [${i}] failed:`, r.reason);
+      });
+
       isConnected = healthy.status === "fulfilled" && healthy.value;
       if (footfall.status === "fulfilled") footfallData = footfall.value;
       if (queue.status === "fulfilled") queueData = queue.value;
@@ -269,7 +274,7 @@
   }
 
   // Initial mount lifecycle & real-time WebSocket connection
-  $effect(() => {
+  onMount(() => {
     setupRouting();
     loadAllData();
 
@@ -432,7 +437,7 @@
         <KPICard
           title="Depletions"
           value={`${lowStockShelves}`}
-          subtitle={`Across ${stockData.length} active shelves`}
+          subtitle={`Across ${Math.max(stockData.length, shelfZones.length)} active shelves`}
           icon="stock"
           tag={lowStockShelves > 0 ? "ATTENTION" : "STOCKED"}
           status={lowStockShelves > 0 ? "warning" : "success"}
@@ -598,7 +603,7 @@
         {:else if activeTab === "queues"}
           <QueueMonitor queueEvents={queueData} congestionThreshold={4} />
         {:else if activeTab === "stock"}
-          <StockInventory stockEvents={stockData} {skuReport} {skuCatalog} />
+          <StockInventory {shelfZones} stockEvents={stockData} {skuReport} {skuCatalog} />
         {:else if activeTab === "planogram"}
           <PlanogramCompliance 
             {planogramData} 

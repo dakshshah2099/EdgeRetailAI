@@ -1,5 +1,6 @@
 <script>
   let {
+    shelfZones = [],
     stockEvents = [],
     skuReport = null,
     skuCatalog = []
@@ -54,27 +55,31 @@
     }
   }
 
-  // Combine shelves from recorded stock events, registered catalog zones, or live detected SKUs
-  let allShelfIds = $derived(Array.from(new Set([
-    ...stockEvents.map(s => s.shelf_id),
-    ...(Array.isArray(skuCatalog) ? skuCatalog.filter(c => c.expected_zone_id).map(c => c.expected_zone_id) : []),
-    ...(skuReport && skuReport.items ? skuReport.items.filter(i => i.detected_sku_id || i.facing_count > 0).map(i => i.shelf_id) : [])
-  ])));
+  // Restrict shelf cards strictly to calibrated shelf zones, or fallback to active events/report
+  let allShelfIds = $derived(
+    Array.isArray(shelfZones) && shelfZones.length > 0
+      ? shelfZones.map(z => z.zone_id)
+      : Array.from(new Set([
+          ...stockEvents.map(s => s.shelf_id),
+          ...(skuReport && skuReport.items ? skuReport.items.map(i => i.shelf_id) : [])
+        ]))
+  );
 
   let cardsData = $derived(allShelfIds.map(shelfId => {
     const sEv = stockEvents.find(s => s.shelf_id === shelfId);
     const skuItem = skuByShelf[shelfId];
     const catItem = catalogByZone[shelfId];
+    const matchingZone = Array.isArray(shelfZones) ? shelfZones.find(z => z.zone_id === shelfId) : null;
 
-    const status = (sEv && sEv.status) || (skuItem && skuItem.status === 'misplaced' ? 'ok' : skuItem?.status) || 'ok';
-    const confidence = (sEv && sEv.confidence) || skuItem?.confidence || 0.85;
-    const timestamp = (sEv && sEv.timestamp) || skuItem?.timestamp;
-    const skuName = skuItem?.detected_sku_name || catItem?.name || `Shelf Item (${shelfId})`;
-    const skuId = skuItem?.detected_sku_id || skuItem?.expected_sku_id || catItem?.sku_id || `sku_${shelfId}`;
-    const brand = catItem?.brand || 'Store';
-    const category = catItem?.category || 'General';
-    const facingCount = skuItem ? skuItem.facing_count : (status === 'empty' ? 0 : status === 'low' ? 2 : 5);
-    const fillPct = skuItem ? Math.round(skuItem.fill_percentage * 100) : (status === 'empty' ? 0 : status === 'low' ? 25 : 85);
+    const status = (skuItem && (skuItem.status === 'misplaced' ? 'ok' : skuItem.status)) || (sEv && sEv.status) || 'empty';
+    const confidence = (skuItem && skuItem.confidence) || (sEv && sEv.confidence) || 0.0;
+    const timestamp = (skuItem && skuItem.timestamp) || (sEv && sEv.timestamp);
+    const skuName = skuItem?.detected_sku_name || catItem?.name || matchingZone?.label || `Shelf (${shelfId})`;
+    const skuId = skuItem?.detected_sku_id || skuItem?.expected_sku_id || catItem?.sku_id || null;
+    const brand = catItem?.brand || null;
+    const category = catItem?.category || null;
+    const facingCount = skuItem ? skuItem.facing_count : 0;
+    const fillPct = skuItem ? Math.round(skuItem.fill_percentage * 100) : 0;
 
     return {
       shelfId,
@@ -139,12 +144,20 @@
                   {card.skuName}
                 </span>
                 <div class="flex items-center gap-1.5 mt-1">
-                  <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-100 text-slate-600 rounded border border-slate-200">
-                    {card.skuId}
-                  </span>
-                  <span class="text-[11px] font-mono text-slate-400">
-                    {card.brand} • {card.category}
-                  </span>
+                  {#if card.skuId}
+                    <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-100 text-slate-600 rounded border border-slate-200">
+                      {card.skuId}
+                    </span>
+                  {:else}
+                    <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-50 text-slate-400 rounded border border-slate-200">
+                      NO SKU ASSIGNED
+                    </span>
+                  {/if}
+                  {#if card.brand || card.category}
+                    <span class="text-[11px] font-mono text-slate-400">
+                      {[card.brand, card.category].filter(Boolean).join(' • ')}
+                    </span>
+                  {/if}
                 </div>
               </div>
               <span class="px-2 py-0.5 text-xs font-mono uppercase font-semibold border rounded shrink-0 {st.badge}">

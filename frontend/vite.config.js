@@ -18,7 +18,12 @@ export default defineConfig({
       '/system': 'http://127.0.0.1:8000',
       '/video': 'http://127.0.0.1:8000',
       '/health': 'http://127.0.0.1:8000',
-      '/central': 'http://127.0.0.1:8000'
+      '/central': 'http://127.0.0.1:8000',
+      '/reports': 'http://127.0.0.1:8000',
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      }
     }
   }
 });

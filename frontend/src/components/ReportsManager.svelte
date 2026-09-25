@@ -1,7 +1,15 @@
-﻿<script>
+<script>
   import { getDailyReportDownloadUrl } from "../lib/api.js";
 
-  let selectedDate = $state(new Date().toISOString().slice(0, 10));
+  function getTodayLocalDate() {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  let selectedDate = $state(getTodayLocalDate());
   let isDownloading = $state(false);
   let statusMsg = $state("");
   let isError = $state(false);
@@ -23,13 +31,15 @@
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
-      a.download = `daily_report_${selectedDate}.${format}`;
+      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(11, 19);
+      const downloadFilename = `daily_report_${selectedDate}_${ts}.${format}`;
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(downloadUrl);
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
 
-      statusMsg = `✓ Successfully downloaded daily_report_${selectedDate}.${format}`;
+      statusMsg = `✓ Successfully downloaded ${downloadFilename}`;
       isError = false;
     } catch (err) {
       statusMsg = `Error: ${err.message}`;

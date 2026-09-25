@@ -11,19 +11,19 @@
 
   let editVars = $state({});
   let isDirty = $state(false);
+
+  $effect(() => {
+    if (!isDirty && envVariables) {
+      editVars = { ...envVariables };
+    }
+  });
+
   let isSaving = $state(false);
   let statusMessage = $state('');
   let isError = $state(false);
   let newKey = $state('');
   let newVal = $state('');
   let showPassword = $state(false);
-
-  // Only sync from server when user does not have active unsaved edits
-  $effect(() => {
-    if (!isDirty && envVariables) {
-      editVars = { ...envVariables };
-    }
-  });
 
   function handleInputChange(key, val) {
     editVars = { ...editVars, [key]: val };

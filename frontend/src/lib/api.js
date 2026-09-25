@@ -189,7 +189,7 @@ export async function fetchKPIStaff(params = {}, options = {}) {
 }
 
 export function getDailyReportDownloadUrl(dateStr, format = 'csv') {
-  return `${API_BASE}/reports/daily?date=${encodeURIComponent(dateStr)}&format=${encodeURIComponent(format)}`;
+  return `${API_BASE}/reports/daily?date=${encodeURIComponent(dateStr)}&format=${encodeURIComponent(format)}&_t=${Date.now()}`;
 }
 
 export async function resetTelemetry(options = {}) {
