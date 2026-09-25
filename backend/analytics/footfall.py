@@ -402,4 +402,10 @@ def process_frame(
     active_footfall_tracker = (
         footfall_tracker if footfall_tracker is not None else _default_footfall_tracker
     )
-    return active_footfall_tracker.update(frame, tracked_detections, zones)
+    events = active_footfall_tracker.update(frame, tracked_detections, zones)
+
+    for event in events:
+        if event.event_type == "exit":
+            tracker.remove_track(event.track_id)
+
+    return events

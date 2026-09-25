@@ -54,7 +54,11 @@ class EdgeDensityShelfClassifier(ShelfClassifier):
 
         gray = cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY) if shelf_crop.ndim == 3 else shelf_crop
 
-        edges = cv2.Canny(gray, self.canny_low, self.canny_high)
+        dx = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
+        dy = cv2.Sobel(gray, cv2.CV_64F, 0, 1)
+        magnitude = np.sqrt(dx**2 + dy**2)
+        edges = (magnitude > self.canny_low).astype(np.uint8)
+
         total_pixels = edges.size
         if total_pixels == 0:
             return "empty", 0.0
@@ -82,7 +86,7 @@ class EdgeDensityShelfClassifier(ShelfClassifier):
 
 
 class HybridShelfClassifier(ShelfClassifier):
-    """Hybrid shelf classifier fusing Canny edge density with HSV color/texture variance.
+    """Hybrid shelf classifier fusing Sobel edge density with HSV color/texture variance.
 
     Packaging presents varied hue and saturation gradients in addition to sharp
     edges. Plain/empty shelving surfaces exhibit low edge density AND near-zero
@@ -92,9 +96,9 @@ class HybridShelfClassifier(ShelfClassifier):
 
     def __init__(
         self,
-        empty_score_threshold: float = 0.12,
+        empty_score_threshold: float = 0.18,
         low_score_threshold: float = 0.55,
-        canny_low: int = 50,
+        canny_low: int = 70,
         canny_high: int = 150,
     ) -> None:
         self.empty_score_threshold = empty_score_threshold
@@ -102,17 +106,21 @@ class HybridShelfClassifier(ShelfClassifier):
         self.canny_low = canny_low
         self.canny_high = canny_high
 
-    def classify(
+    def compute_fill_score(
         self, shelf_crop: npt.NDArray[np.uint8]
-    ) -> tuple[Literal["empty", "low", "ok"], float]:
+    ) -> tuple[float, float, float]:
+        """Compute (combined_score, edge_score, color_score) in range [0.0, 1.0]."""
         if shelf_crop.size == 0 or shelf_crop.shape[0] == 0 or shelf_crop.shape[1] == 0:
-            return "empty", 0.0
+            return 0.0, 0.0, 0.0
 
-        # 1. Edge density component
+        # 1. Edge density component (Sobel gradient magnitude without min/max noise inflation)
         gray = cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY) if shelf_crop.ndim == 3 else shelf_crop
-        edges = cv2.Canny(gray, self.canny_low, self.canny_high)
+        dx = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
+        dy = cv2.Sobel(gray, cv2.CV_64F, 0, 1)
+        magnitude = np.sqrt(dx**2 + dy**2)
+        edges = (magnitude > self.canny_low).astype(np.uint8)
         edge_density = float(np.count_nonzero(edges)) / float(max(1, edges.size))
-        edge_score = min(1.0, edge_density / 0.07)
+        edge_score = min(1.0, edge_density / 0.22)
 
         # 2. Color texture variance component
         if shelf_crop.ndim == 3:
@@ -124,8 +132,17 @@ class HybridShelfClassifier(ShelfClassifier):
             val_std = float(np.std(gray))
             color_score = min(1.0, val_std / 50.0)
 
-        # 3. Combined metric (65% structural edges, 35% chromatic entropy)
-        combined_score = 0.65 * edge_score + 0.35 * color_score
+        # 3. Combined metric (balanced structural packaging edges and chromatic entropy)
+        combined_score = 0.55 * edge_score + 0.45 * color_score
+        return combined_score, edge_score, color_score
+
+    def classify(
+        self, shelf_crop: npt.NDArray[np.uint8]
+    ) -> tuple[Literal["empty", "low", "ok"], float]:
+        if shelf_crop.size == 0 or shelf_crop.shape[0] == 0 or shelf_crop.shape[1] == 0:
+            return "empty", 0.0
+
+        combined_score, _, _ = self.compute_fill_score(shelf_crop)
 
         if combined_score <= self.empty_score_threshold:
             ratio = combined_score / max(1e-6, self.empty_score_threshold)

@@ -30,6 +30,7 @@ class QueueMonitor:
         rate_window_sec: float = 120.0,
         forecast_horizon_sec: float = 180.0,
         hourly_baseline_provider: Callable[[str, int], float | None] | None = None,
+        congestion_threshold: int = 4,
     ) -> None:
         """service_rate_estimate_sec: fallback average service time per person.
         rate_window_sec: rolling time window for calculating arrival and departure rates.
@@ -41,6 +42,7 @@ class QueueMonitor:
         self.rate_window_sec = float(rate_window_sec)
         self.forecast_horizon_sec = float(forecast_horizon_sec)
         self.hourly_baseline_provider = hourly_baseline_provider
+        self.congestion_threshold = congestion_threshold
 
         # Mapping of (track_id, zone_id) -> _ActiveQueueTrack
         self._active_tracks: dict[tuple[str, str], _ActiveQueueTrack] = {}
@@ -173,6 +175,7 @@ class QueueMonitor:
                     avg_wait_est_sec=avg_wait_est_sec,
                     predicted_queue_length=predicted_queue_length,
                     predicted_wait_sec=predicted_wait_sec,
+                    congested=(queue_length > self.congestion_threshold),
                 )
             )
 

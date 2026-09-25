@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import numpy.typing as npt
 
@@ -60,4 +61,7 @@ class HeatmapAccumulator:
 
     def get_grid(self) -> npt.NDArray[np.float32]:
         """Return the current accumulated grid, shape (height // cell_size, width // cell_size)."""
-        return self._grid.copy()
+        grid = self._grid.copy()
+        if grid.size > 0:
+            grid = cv2.GaussianBlur(grid, (5, 5), 1.5).astype(np.float32)
+        return grid

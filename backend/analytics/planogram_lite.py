@@ -1,4 +1,4 @@
-﻿"""Planogram-lite compliance module: facing grid subdivision, per-facing scoring,
+"""Planogram-lite compliance module: facing grid subdivision, per-facing scoring,
 
 and expected layout compliance evaluation.
 """
@@ -218,11 +218,7 @@ def get_latest_planogram_compliance(
     existing StockEvents in the EventRepository (or in-memory cache).
     """
     if layout is None:
-        layouts = load_planogram_layouts()
-        layout = layouts.get(zone_id)
-
-    if layout is None:
-        return _latest_compliance_cache.get(zone_id)
+        layout = get_or_create_planogram_layout(zone_id)
 
     # Query repository for latest event of each facing
     facing_statuses: list[FacingStatus] = []
@@ -342,4 +338,21 @@ def load_planogram_layouts(
         )
 
     return layouts
+
+
+def get_or_create_planogram_layout(
+    zone_id: str,
+    config_path: str | Path | None = None,
+) -> ExpectedLayout:
+    """Retrieve configured layout for zone_id, or generate a 2x3 default layout."""
+    layouts = load_planogram_layouts(config_path)
+    if zone_id in layouts:
+        return layouts[zone_id]
+    return ExpectedLayout(
+        zone_id=zone_id,
+        grid_rows=2,
+        grid_cols=3,
+        expected_nonempty_facings=[(r, c) for r in range(2) for c in range(3)],
+    )
+
 

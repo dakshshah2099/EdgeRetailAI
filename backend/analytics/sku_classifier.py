@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from analytics.roi import crop_to_zone
+from analytics.shelf_classifier import HybridShelfClassifier
 from api.schemas_api import SKUProfile, SKUSegregationItem, SKUSegregationReport
 from core.schemas import ZoneConfig
 
@@ -80,6 +81,7 @@ class SKUSegregator:
         self._zone_expected_sku: dict[str, str] = {}
         self._last_eval_time: float = 0.0
         self._last_report: SKUSegregationReport | None = None
+        self.shelf_classifier = HybridShelfClassifier()
 
         is_testing = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
         should_seed = os.environ.get(
@@ -90,7 +92,7 @@ class SKUSegregator:
             self._seed_default_catalog()
 
     def _seed_default_catalog(self) -> None:
-        """Seed retail catalog matching the default store layout."""
+        """Seed default retail catalog SKUs for edge demo."""
         self.register_sku(
             sku_id="sku_bev_cola_330",
             name="Classic Cola Can 330ml",
@@ -203,8 +205,8 @@ class SKUSegregator:
         smoothed = np.convolve(vert_energy, kernel, mode="same")
         avg_energy = float(np.mean(smoothed))
 
-        if avg_energy < 4.0:
-            return 0  # Empty shelf surface has very low vertical gradient
+        if avg_energy < 12.0:
+            return 0  # Low vertical gradient indicates empty shelf surface or wall texture
 
         # Count peaks above threshold with minimal spacing
         peaks = 0
@@ -215,14 +217,14 @@ class SKUSegregator:
             if (
                 smoothed[x] >= smoothed[x - 1]
                 and smoothed[x] > smoothed[x + 1]
-                and smoothed[x] > avg_energy * 1.10
+                and smoothed[x] > avg_energy * 1.15
                 and (x - last_peak) >= min_spacing
             ):
                 peaks += 1
                 last_peak = x
 
-        # Facings is typically peaks if distinct items are bordered, or peaks + 1
-        return max(1, min(10, peaks))
+        # Facings is typically peaks if distinct items are bordered, or peaks
+        return min(10, peaks)
 
     def evaluate_shelf(
         self,
@@ -230,7 +232,7 @@ class SKUSegregator:
         shelf_id: str,
         camera_id: str = "cam_primary",
     ) -> SKUSegregationItem:
-        """Analyze shelf crop from 480p stream for SKU identity, facings, and planogram match."""
+        """Analyze shelf crop from stream for SKU identity, facings, and planogram match."""
         now = datetime.now(UTC)
         expected_sku_id = self._zone_expected_sku.get(shelf_id)
 
@@ -249,13 +251,12 @@ class SKUSegregator:
                 timestamp=now,
             )
 
-        # 1. Edge & color variance check for empty shelf
-        gray = cv2.cvtColor(shelf_crop, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = float(np.count_nonzero(edges) / edges.size)
-        color_std = float(np.std(shelf_crop))
+        # 1. Physical fill & status via HybridShelfClassifier (Sobel gradients + HSV variance)
+        combined_score, _, _ = self.shelf_classifier.compute_fill_score(shelf_crop)
+        raw_status, raw_confidence = self.shelf_classifier.classify(shelf_crop)
+        fill_pct = round(float(combined_score), 2)
 
-        if edge_density < 0.009 and color_std < 18.0:
+        if raw_status == "empty" or fill_pct < 0.20:
             return SKUSegregationItem(
                 shelf_id=shelf_id,
                 camera_id=camera_id,
@@ -263,8 +264,8 @@ class SKUSegregator:
                 detected_sku_name=None,
                 expected_sku_id=expected_sku_id,
                 facing_count=0,
-                fill_percentage=0.0,
-                confidence=0.85,
+                fill_percentage=fill_pct if raw_status != "empty" else 0.0,
+                confidence=round(raw_confidence, 2),
                 status="empty",
                 planogram_compliant=False,
                 timestamp=now,
@@ -276,31 +277,34 @@ class SKUSegregator:
         best_score = -1.0
 
         for sku_ref in self._catalog.values():
-            # Dot product / cosine similarity
             score = float(np.sum(crop_hist * sku_ref.hist))
             if score > best_score:
                 best_score = score
                 best_sku = sku_ref
 
-        # Compute fill percentage based on edge texture richness
-        fill_pct = float(min(1.0, max(0.1, edge_density / 0.065)))
         facings = self.detect_facings(shelf_crop)
 
-        # Normalize correlation score to confidence [0.0, 1.0]
-        confidence = float(max(0.0, min(1.0, best_score)))
+        # Filter out arbitrary matches when color correlation is too weak
+        if best_score < 0.25:
+            best_sku = None
+
+        # Confidence blends SKU visual correlation with physical shelf confidence
+        if best_sku is not None and best_score > 0:
+            confidence = float(max(0.0, min(1.0, 0.5 * best_score + 0.5 * raw_confidence)))
+        else:
+            confidence = float(raw_confidence)
 
         # 3. Planogram compliance & misplacement check
         if best_sku is not None and expected_sku_id is not None:
-            if best_sku.sku_id != expected_sku_id and confidence > 0.60:
-                # Detected SKU does not belong in this shelf section
+            if best_sku.sku_id != expected_sku_id and best_score > 0.60:
                 status: Literal["ok", "low", "empty", "misplaced"] = "misplaced"
                 planogram_ok = False
             else:
                 planogram_ok = True
-                status = "low" if fill_pct < 0.40 else "ok"
+                status = raw_status
         else:
             planogram_ok = True
-            status = "low" if fill_pct < 0.40 else "ok"
+            status = raw_status
 
         return SKUSegregationItem(
             shelf_id=shelf_id,
@@ -309,7 +313,7 @@ class SKUSegregator:
             detected_sku_name=best_sku.name if best_sku else None,
             expected_sku_id=expected_sku_id,
             facing_count=facings,
-            fill_percentage=round(fill_pct, 2),
+            fill_percentage=fill_pct,
             confidence=round(confidence, 2),
             status=status,
             planogram_compliant=planogram_ok,
@@ -339,10 +343,29 @@ class SKUSegregator:
         for cam_id, frame in frames_by_camera:
             if frame is None or frame.size == 0:
                 continue
+            h, w = frame.shape[:2]
             for zone in shelf_zones:
-                crop = crop_to_zone(frame, zone)
-                item = self.evaluate_shelf(crop, shelf_id=zone.zone_id, camera_id=cam_id)
-                items.append(item)
+                if zone.camera_id and zone.camera_id != cam_id:
+                    continue
+                try:
+                    xs = [p[0] for p in zone.polygon]
+                    ys = [p[1] for p in zone.polygon]
+                    max_x = max(xs, default=w)
+                    max_y = max(ys, default=h)
+                    if max_x > w or max_y > h:
+                        scale_x = w / max(1.0, float(max_x))
+                        scale_y = h / max(1.0, float(max_y))
+                        scaled_poly = [
+                            (int(p[0] * scale_x), int(p[1] * scale_y)) for p in zone.polygon
+                        ]
+                        eval_zone = zone.model_copy(update={"polygon": scaled_poly})
+                    else:
+                        eval_zone = zone
+                    crop = crop_to_zone(frame, eval_zone)
+                    item = self.evaluate_shelf(crop, shelf_id=zone.zone_id, camera_id=cam_id)
+                    items.append(item)
+                except Exception as e:
+                    logger.debug("Crop error for shelf '%s' on '%s': %s", zone.zone_id, cam_id, e)
 
         total = len(items)
         compliant = sum(1 for i in items if i.planogram_compliant and i.status == "ok")
