@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from api.routes.ws import sse_telemetry_generator, ws_manager
 
-
+pytestmark = pytest.mark.slice_8
 def test_websocket_telemetry_handshake_and_ping() -> None:
     client = TestClient(app)
     with client.websocket_connect("/ws/telemetry") as websocket:

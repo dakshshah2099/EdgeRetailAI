@@ -17,7 +17,7 @@ from core.schemas import (
     ZoneConfig,
 )
 
-
+pytestmark = pytest.mark.slice_0
 def test_frame_roundtrip() -> None:
     now = datetime.now(UTC)
     frame = Frame(source_id="cam_01", timestamp=now, width=1920, height=1080)
@@ -94,6 +94,7 @@ def test_detection_event_roundtrip() -> None:
         "bbox": (10, 20, 100, 200),
         "zone_id": "entry_1",
         "event_type": "enter",
+        "camera_id": None,
     }
     reconstructed = DetectionEvent(**data)
     assert reconstructed == event

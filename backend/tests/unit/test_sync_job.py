@@ -12,7 +12,7 @@ from integrations.pos_connector import (
 from integrations.sync_job import run_sync_job
 from storage.repository import EventRepository
 
-
+pytestmark = pytest.mark.slice_10
 @pytest.fixture
 def test_repo(tmp_path: Path) -> EventRepository:
     db_file = tmp_path / "test_retail.db"

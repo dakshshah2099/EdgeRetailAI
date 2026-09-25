@@ -7,7 +7,7 @@ from integrations.pos_connector import MockPOSConnector, POSSalesRecord
 from integrations.sync_job import run_sync_job
 from storage.repository import EventRepository
 
-
+pytestmark = pytest.mark.slice_10
 @pytest.mark.e2e
 def test_pos_sync_and_conversion_pipeline(e2e_repo: EventRepository) -> None:
     """End-to-End test of POS/ERP bidirectional integration:

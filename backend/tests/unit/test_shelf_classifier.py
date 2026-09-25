@@ -14,12 +14,13 @@ from analytics.shelf_classifier import (
 )
 from core.schemas import Frame, StockEvent, ZoneConfig
 
+pytestmark = pytest.mark.slice_4
+
+
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 SHELF_EMPTY_PATH = FIXTURES_DIR / "shelf_empty.jpg"
 SHELF_LOW_PATH = FIXTURES_DIR / "shelf_low.jpg"
 SHELF_STOCKED_PATH = FIXTURES_DIR / "shelf_stocked.jpg"
-
-
 def test_fixtures_exist() -> None:
     """Ensure all required shelf fixtures exist."""
     assert SHELF_EMPTY_PATH.is_file(), f"Missing fixture: {SHELF_EMPTY_PATH}"
@@ -218,7 +219,6 @@ def test_temporal_shelf_smoother_occlusion_hold() -> None:
     """Smoother holds previous stock status when a shopper occludes the shelf."""
     from analytics.shelf_classifier import TemporalShelfSmoother
     from vision.tracker import TrackedDetection
-
     smoother = TemporalShelfSmoother(alpha=0.5)
     shelf = ZoneConfig(
         zone_id="shelf_1",

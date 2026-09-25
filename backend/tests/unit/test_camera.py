@@ -11,6 +11,9 @@ from vision.camera_base import CameraSource
 from vision.rtsp_source import RTSPSource
 from vision.usb_source import USBSource
 
+pytestmark = pytest.mark.slice_1
+
+
 
 @pytest.fixture(scope="session")
 def sample_video_path(tmp_path_factory: pytest.TempPathFactory) -> str:
@@ -326,7 +329,6 @@ def test_http_source_cv2_capture() -> None:
 
 def test_usb_source_pacing(sample_video_path: str) -> None:
     import time
-
     source = USBSource(device_index=sample_video_path, pace=True)
     assert source.pace is True
 

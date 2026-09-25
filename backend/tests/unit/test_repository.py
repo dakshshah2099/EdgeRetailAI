@@ -1,10 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from core.schemas import Alert, AuditLogEntry, DetectionEvent, DwellEvent, QueueEvent, StockEvent
 from storage.repository import EventRepository
 
-
+pytestmark = pytest.mark.slice_7
 def test_detection_event_save_and_query_roundtrip(tmp_path: Path) -> None:
     db_path = tmp_path / "retail.db"
     repo = EventRepository(db_path)

@@ -15,6 +15,9 @@ from storage.db import init_db
 from storage.repository import EventRepository
 from storage.sync_buffer import AnyEvent, SyncBuffer
 
+pytestmark = pytest.mark.slice_11
+
+
 
 @pytest.mark.e2e
 def test_edge_offline_buffering_and_recovery() -> None:
@@ -144,7 +147,6 @@ def test_central_multi_store_aggregation_live(
 
     # Build FastAPI test apps for Store 1 and Store 2
     from api.dependencies import get_repository
-
     app_store1 = create_app()
     app_store1.dependency_overrides[get_repository] = lambda: repo1
 

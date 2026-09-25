@@ -7,6 +7,9 @@ import api.env_manager as em
 from api.env_manager import read_env_file, write_env_file
 from api.main import app
 
+pytestmark = pytest.mark.slice_8
+
+
 client = TestClient(app)
 
 
@@ -148,7 +151,6 @@ def test_zones_resolution_scaling_and_calibration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import api.dependencies as dep
-
     temp_cfg = tmp_path / "config.yaml"
     temp_cfg.write_text(
         "camera:\n"

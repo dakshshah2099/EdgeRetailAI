@@ -1,7 +1,9 @@
+import pytest
+
 from vision.inference_backend import RawDetection
 from vision.tracker import TrackedDetection, Tracker
 
-
+pytestmark = pytest.mark.slice_2
 def test_tracked_detection_has_no_pii_or_pixels() -> None:
     td = TrackedDetection(track_id="1", bbox=(10, 20, 30, 40), confidence=0.85, class_id=0)
     assert hasattr(td, "track_id")

@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from core.schemas import AppConfig, load_config
 
-
+pytestmark = pytest.mark.slice_0
 def test_load_valid_config(tmp_path: Path) -> None:
     config_content = """
 camera:

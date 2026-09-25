@@ -1,3 +1,4 @@
+import pytest
 import json
 from datetime import datetime
 from pathlib import Path
@@ -9,10 +10,9 @@ from core.schemas import DetectionEvent, Frame, ZoneConfig
 from vision.inference_backend import InferenceBackend, RawDetection
 from vision.tracker import TrackedDetection, Tracker
 
+pytestmark = pytest.mark.slice_2
 fixtures_dir = Path(__file__).resolve().parent.parent / "fixtures"
 SYNTHETIC_TRACKS_PATH = fixtures_dir / "synthetic_tracks.json"
-
-
 class MockBackend(InferenceBackend):
     def __init__(self, detections_per_frame: list[list[RawDetection]]) -> None:
         self.detections_per_frame = detections_per_frame

@@ -4,7 +4,7 @@ import pytest
 from analytics.roi import crop_to_zone
 from core.schemas import ZoneConfig
 
-
+pytestmark = pytest.mark.slice_4
 def test_crop_to_zone_standard_rect() -> None:
     """crop_to_zone correctly crops frame to rectangular bounding box."""
     # Synthetic frame: 480x640 with distinct channel values

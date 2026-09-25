@@ -10,7 +10,7 @@ from api.main import app
 from core.schemas import Alert, AuditLogEntry
 from storage.repository import EventRepository
 
-
+pytestmark = pytest.mark.slice_8
 @pytest.fixture
 def test_repo(tmp_path: Path) -> EventRepository:
     db_path = tmp_path / "test_retail.db"
@@ -250,6 +250,6 @@ def test_resolve_all_alerts(client: TestClient, test_repo: EventRepository) -> N
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["resolved_count"] == 2
+    assert data["count"] == 2
     assert len(test_repo.get_open_alerts()) == 0
 

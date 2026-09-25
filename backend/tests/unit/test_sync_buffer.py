@@ -7,7 +7,7 @@ import pytest
 from core.schemas import Alert, DetectionEvent, DwellEvent, QueueEvent, StockEvent
 from storage.sync_buffer import AnyEvent, BufferFullError, SyncBuffer
 
-
+pytestmark = pytest.mark.slice_7
 def test_sync_buffer_basic_enqueue_and_flush() -> None:
     buffer = SyncBuffer(max_buffer_size=100)
     assert buffer.pending_count() == 0

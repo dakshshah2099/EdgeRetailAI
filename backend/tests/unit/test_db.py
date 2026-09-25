@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pytest
+
 from storage.db import get_connection, init_db
 
-
+pytestmark = pytest.mark.slice_7
 def test_init_db_creates_all_expected_tables(tmp_path: Path) -> None:
     db_path = tmp_path / "test_retail.db"
     init_db(db_path)
@@ -82,7 +84,6 @@ def test_structural_no_pii_or_raw_imagery_columns(tmp_path: Path) -> None:
 def test_throwaway_database_isolation_prevents_production_db_access() -> None:
     """Ensure tests strictly use a throwaway database and never touch backend/retail.db."""
     from api.dependencies import get_db_path
-
     backend_dir = Path(__file__).resolve().parent.parent.parent
     prod_db = (backend_dir / "retail.db").resolve()
 

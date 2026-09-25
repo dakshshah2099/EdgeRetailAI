@@ -10,7 +10,7 @@ from api.main import app
 from core.schemas import DetectionEvent, QueueEvent, StockEvent
 from storage.repository import EventRepository
 
-
+pytestmark = pytest.mark.slice_8
 @pytest.fixture
 def test_repo(tmp_path: Path) -> EventRepository:
     db_path = tmp_path / "test_retail.db"
@@ -434,6 +434,6 @@ def test_reset_telemetry(client: TestClient, test_repo: EventRepository) -> None
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["cleared_events"] == 1
+    assert data["deleted"] == 1
     assert len(test_repo.get_recent_detection_events()) == 0
 

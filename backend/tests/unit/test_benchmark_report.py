@@ -17,7 +17,7 @@ from benchmarks.run_benchmark import (
 )
 from vision.inference_backend import InferenceBackend, ONNXBackend, RawDetection
 
-
+pytestmark = pytest.mark.slice_9
 class MockTimingBackend(InferenceBackend):
     """Mock backend that sleeps for a configurable latency on each call."""
 

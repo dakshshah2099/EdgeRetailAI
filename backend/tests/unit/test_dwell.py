@@ -9,10 +9,9 @@ from analytics.footfall import FootfallTracker
 from core.schemas import DetectionEvent, Frame, ZoneConfig
 from vision.tracker import TrackedDetection
 
+pytestmark = pytest.mark.slice_3
 fixtures_dir = Path(__file__).resolve().parent.parent / "fixtures"
 SYNTHETIC_TRACKS_PATH = fixtures_dir / "synthetic_tracks.json"
-
-
 def test_dwell_single_visit_duration() -> None:
     """A synthetic track entering product_display zone for N frames at known fps
     emits one DwellEvent with duration_sec ≈ N/fps.

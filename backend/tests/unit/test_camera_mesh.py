@@ -1,10 +1,11 @@
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
 from vision.camera_mesh import CameraMesh, CameraNode
 
-
+pytestmark = pytest.mark.slice_11
 def test_camera_node_manual_frame_update() -> None:
     node = CameraNode(
         camera_id="cam_test_1",

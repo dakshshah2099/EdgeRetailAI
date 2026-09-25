@@ -10,7 +10,7 @@ from central.store_registry import (
     save_store_registry,
 )
 
-
+pytestmark = pytest.mark.slice_11
 def test_load_store_registry_valid_dict_format(tmp_path: Path) -> None:
     yaml_content = """
 stores:

@@ -8,10 +8,9 @@ import pytest
 from vision.detector import PERSON_CLASS_ID, PersonDetector
 from vision.inference_backend import ONNXBackend, RawDetection
 
+pytestmark = pytest.mark.slice_2
 MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "yolo26n.onnx"
 BUS_IMAGE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "bus.jpg"
-
-
 def test_model_file_exists() -> None:
     assert MODEL_PATH.is_file(), f"Model file not found at {MODEL_PATH}"
 

@@ -6,7 +6,7 @@ from analytics.queue_monitor import QueueMonitor
 from core.schemas import Frame, QueueEvent, ZoneConfig
 from vision.tracker import TrackedDetection
 
-
+pytestmark = pytest.mark.slice_5
 @pytest.fixture
 def checkout_zone() -> ZoneConfig:
     return ZoneConfig(

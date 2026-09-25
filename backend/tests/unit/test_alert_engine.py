@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from alerts.alert_engine import AlertEngine
 from core.schemas import Alert, QueueEvent, StockEvent
 
-
+pytestmark = pytest.mark.slice_6
 @pytest.fixture
 def alert_engine() -> AlertEngine:
     return AlertEngine(

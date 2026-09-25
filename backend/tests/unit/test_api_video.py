@@ -4,9 +4,8 @@ from fastapi.testclient import TestClient
 from api.main import app
 from api.routes.video import frame_streamer
 
+pytestmark = pytest.mark.slice_8
 client = TestClient(app)
-
-
 def test_video_status_endpoint() -> None:
     resp = client.get("/video/status")
     assert resp.status_code == 200

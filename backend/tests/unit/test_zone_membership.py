@@ -5,7 +5,7 @@ import pytest
 from analytics.zone_membership import anchor_point, is_inside_zone, zone_polygon_cache
 from core.schemas import ZoneConfig
 
-
+pytestmark = pytest.mark.slice_12
 def test_anchor_point_calculation() -> None:
     # Test bboxes: (x, y, w, h)
     # anchor_x = x + w / 2.0, anchor_y = y + h

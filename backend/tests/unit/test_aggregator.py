@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 from central.aggregator import (
     CrossStoreSummary,
@@ -10,7 +11,7 @@ from central.aggregator import (
 )
 from central.store_registry import StoreConfig
 
-
+pytestmark = pytest.mark.slice_11
 def _make_mock_handler(store_routes: dict[str, dict[str, tuple[int, Any]]]) -> httpx.MockTransport:
     """Create a mock transport mapping base URL prefixes and path to responses."""
 
