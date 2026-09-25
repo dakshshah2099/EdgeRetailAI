@@ -148,6 +148,10 @@ class Tracker:
         self._next_id = 1
         self.tracks.clear()
 
+    def remove_track(self, track_id: str) -> None:
+        """Explicitly remove a track by its ID."""
+        self.tracks = [t for t in self.tracks if t.track_id != track_id]
+
     def update(self, detections: list[RawDetection]) -> list[TrackedDetection]:
         """Update tracks with detections from current frame."""
         for track in self.tracks:

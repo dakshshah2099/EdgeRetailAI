@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import numpy.typing as npt
-import onnxruntime as ort  # type: ignore[import-untyped] # onnxruntime lacks official py.typed marker
+import onnxruntime as ort
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,7 @@ import logging
 import math
 import threading
 import time
+from collections.abc import Mapping, Sequence
 from typing import Literal
 
 import cv2
@@ -266,6 +267,7 @@ class CameraMesh:
         grid_cols: int | None = None,
         mosaic_width: int = 1280,
         mosaic_height: int = 720,
+        tracked_by_cam: Mapping[str, Sequence[object]] | None = None,
     ) -> npt.NDArray[np.uint8]:
         """Composite all active mesh camera feeds into a unified multi-view mosaic canvas."""
         with self._lock:
@@ -317,6 +319,33 @@ class CameraMesh:
 
             if is_conn and frame is not None:
                 cell_img = cv2.resize(frame, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+                if tracked_by_cam and node.camera_id in tracked_by_cam:
+                    scale_x = target_w / max(1, frame.shape[1])
+                    scale_y = target_h / max(1, frame.shape[0])
+                    for det in tracked_by_cam[node.camera_id]:
+                        bbox = getattr(det, "bbox", None)
+                        track_id = getattr(det, "track_id", None)
+                        if bbox is not None and len(bbox) == 4:
+                            bx, by, bw, bh = bbox
+                            sbx = int(bx * scale_x)
+                            sby = int(by * scale_y)
+                            sbw = int(bw * scale_x)
+                            sbh = int(bh * scale_y)
+                            cv2.rectangle(
+                                cell_img, (sbx, sby), (sbx + sbw, sby + sbh), (0, 255, 128), 2
+                            )
+                            label = f"#{track_id}" if track_id is not None else ""
+                            if label:
+                                cv2.putText(
+                                    cell_img,
+                                    label,
+                                    (sbx, max(12, sby - 4)),
+                                    cv2.FONT_HERSHEY_SIMPLEX,
+                                    0.35,
+                                    (0, 255, 128),
+                                    1,
+                                    cv2.LINE_AA,
+                                )
             else:
                 cell_img = np.full((target_h, target_w, 3), 32, dtype=np.uint8)
                 cv2.putText(
