@@ -6,6 +6,16 @@ from pydantic import BaseModel, Field
 from core.schemas import ZoneConfig
 
 
+class StatusResponse(BaseModel):
+    status: str
+    count: int | None = None
+    message: str | None = None
+    alert_id: str | None = None
+
+class ResetResponse(BaseModel):
+    status: str
+    deleted: int
+
 class FootfallBucket(BaseModel):
     bucket_start: datetime
     enters: int = Field(ge=0)
@@ -144,12 +154,14 @@ class ResolveAlertResponse(BaseModel):
 
 class ResolveAllAlertsResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    resolved_count: int = Field(ge=0)
+    count: int = Field(default=0, ge=0)
+    resolved_count: int = Field(default=0, ge=0)
 
 
 class ResetTelemetryResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    cleared_events: int = Field(ge=0)
+    cleared_events: int = Field(default=0, ge=0)
+    deleted: int = Field(default=0, ge=0)
 
 
 class UnregisterCameraResponse(BaseModel):

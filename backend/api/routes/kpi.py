@@ -179,8 +179,14 @@ def register_catalog_sku(req: RegisterSKURequest) -> SKUProfile:
 
 @router.post("/reset")
 def reset_telemetry(repo: RepoDep) -> ResetTelemetryResponse:
-    """Purge transient detection and dwell events to reset store traffic telemetry to zero."""
-    cleared_count = repo.clear_detection_events()
-    return ResetTelemetryResponse(status="ok", cleared_events=cleared_count)
+    """Purge transient detection, dwell, queue, and stock events to reset telemetry."""
+    from api.stream_manager import stream_manager
 
+    stream_manager.reset()
+    cleared_count = repo.clear_detection_events()
+    return ResetTelemetryResponse(
+        status="ok",
+        cleared_events=cleared_count,
+        deleted=cleared_count,
+    )
 

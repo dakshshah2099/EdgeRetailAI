@@ -179,7 +179,6 @@ def unregister_mesh_camera(
     return UnregisterCameraResponse(status="ok", unregistered=camera_id)
 
 
-
 @router.get("/stream")
 async def video_stream(
     request: Request,

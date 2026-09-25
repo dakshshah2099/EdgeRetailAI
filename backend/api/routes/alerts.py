@@ -43,7 +43,7 @@ def get_audit_trail(
 def resolve_all_alerts(repo: RepoDep) -> ResolveAllAlertsResponse:
     """Resolve all currently open operational alerts in persistence."""
     count = repo.resolve_all_open_alerts()
-    return ResolveAllAlertsResponse(status="ok", resolved_count=count)
+    return ResolveAllAlertsResponse(status="ok", count=count, resolved_count=count)
 
 
 @router.post("/{alert_id}/resolve")
@@ -59,5 +59,3 @@ def resolve_single_alert(
             detail=f"Alert {alert_id} not found or already resolved",
         )
     return ResolveAlertResponse(status="ok", alert_id=alert_id)
-
-

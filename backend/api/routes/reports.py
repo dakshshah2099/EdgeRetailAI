@@ -53,19 +53,26 @@ def get_daily_report(
 
     filename = f"daily_report_{date_str}.{fmt}"
 
+    report_headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
     if fmt == "csv":
         csv_content = to_csv(snapshot)
         return Response(
             content=csv_content.encode("utf-8"),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers=report_headers,
         )
     else:  # fmt == "pdf"
         pdf_bytes = to_pdf(snapshot)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers=report_headers,
         )
 
 
@@ -111,18 +118,25 @@ def get_weekly_report(
 
     filename = f"weekly_report_{week_start_str}.{fmt}"
 
+    report_headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
     if fmt == "csv":
         csv_content = to_csv(snapshot)
         return Response(
             content=csv_content.encode("utf-8"),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers=report_headers,
         )
     else:  # fmt == "pdf"
         pdf_bytes = to_pdf(snapshot)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers=report_headers,
         )
 

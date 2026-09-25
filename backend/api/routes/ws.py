@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterable
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
@@ -110,7 +110,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket) -> None:
 
 async def sse_telemetry_generator(
     request: Request | None = None,
-) -> AsyncIterable[ServerSentEvent]:
+) -> AsyncGenerator[ServerSentEvent, None]:
     """Asynchronous generator yielding ServerSentEvent objects for telemetry subscribers."""
     ws_manager.set_loop(asyncio.get_running_loop())
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)
@@ -133,7 +133,7 @@ async def sse_telemetry_generator(
 
 
 @router.get("/events/telemetry", response_class=EventSourceResponse)
-async def sse_telemetry_endpoint(request: Request) -> AsyncIterable[ServerSentEvent]:
+async def sse_telemetry_endpoint(request: Request) -> AsyncGenerator[ServerSentEvent, None]:
     """Server-Sent Events (SSE) stream for real-time telemetry (footfall, dwell, queues, alerts)."""
     async for event in sse_telemetry_generator(request):
         yield event

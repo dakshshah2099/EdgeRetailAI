@@ -3,53 +3,53 @@ camera:
 calibration_width: 1280
 calibration_height: 720
 zones:
+- zone_id: zone_entrance_exit
+  zone_type: entry_exit
+  polygon:
+  - - 165
+    - 339
+  - - 463
+    - 311
+  - - 480
+    - 705
+  - - 80
+    - 705
+  label: Main Entrance / Exit
 - zone_id: zone_shelf_beverages
   zone_type: shelf
   polygon:
-  - - 24
-    - 373
-  - - 237
-    - 226
-  - - 237
-    - 287
-  - - 43
-    - 467
+  - - 0
+    - 265
+  - - 188
+    - 190
+  - - 211
+    - 248
+  - - 35
+    - 364
   label: Shelf 1 - Cold Beverages
 - zone_id: zone_shelf_snacks
   zone_type: shelf
   polygon:
-  - - 461
-    - 264
-  - - 766
-    - 248
+  - - 472
+    - 362
+  - - 773
+    - 353
   - - 761
-    - 706
-  - - 486
-    - 702
+    - 693
+  - - 500
+    - 718
   label: Shelf 2 - Snacks & Bakery
-- zone_id: zone_shelf_electronics
-  zone_type: shelf
+- zone_id: zone_queue_checkout_1
+  zone_type: checkout
   polygon:
-  - - 66
-    - 532
-  - - 265
-    - 334
-  - - 273
-    - 383
-  - - 121
-    - 595
-  label: Shelf 3 - Tech & Accessories
-- zone_id: zone_1721
-  zone_type: shelf
-  polygon:
-  - - 256
-    - 144
-  - - 772
-    - 114
-  - - 1200
-    - 565
-  - - 154
-    - 671
-  label: Shelf 5
+  - - 820
+    - 360
+  - - 1160
+    - 360
+  - - 1160
+    - 690
+  - - 820
+    - 690
+  label: Checkout Counter 1
 low_stock_confidence_threshold: 0.6
 queue_congestion_length: 4

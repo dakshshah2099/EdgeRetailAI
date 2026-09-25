@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -216,6 +217,8 @@ class StreamManager:
         self.active_src: str | None = None
         self.camera: CameraSource | None = None
         self.latest_tracked: list[TrackedDetection] = []
+        self.per_camera_tracked: dict[str, list[TrackedDetection]] = {}
+        self._camera_trackers: dict[str, Tracker] = {}
         self.width: int = 640
         self.height: int = 480
         self.is_connected: bool = False
@@ -254,6 +257,12 @@ class StreamManager:
         self.latest_stock_events: dict[str, StockEvent] = {}
         self.latest_queue_events: dict[str, QueueEvent] = {}
         self.latest_facings: dict[str, int] = {}
+
+    def _get_tracker_for_camera(self, camera_id: str) -> Tracker:
+        """Return dedicated ByteTrack Tracker instance per camera stream."""
+        if camera_id not in self._camera_trackers:
+            self._camera_trackers[camera_id] = Tracker()
+        return self._camera_trackers[camera_id]
 
     def _ensure_workers_started(self) -> None:
         if self._capture_thread is None or not self._capture_thread.is_alive():
@@ -381,7 +390,7 @@ class StreamManager:
         repo = get_repository()
         env_vars = read_env_file()
         target_interval = 0.2
-        shelf_interval = 30.0  # Fallback watchdog interval for event-driven shelf checks
+        shelf_interval = 2.0  # Fallback watchdog interval for event-driven shelf checks
         pending_shelf_eval_zones: set[str] = set()
 
         while not self._shutdown_event.is_set():
@@ -397,7 +406,7 @@ class StreamManager:
                     target_interval = 1.0 / max(0.1, target_fps)
                     shelf_interval = float(
                         env_vars.get("SHELF_ANALYSIS_INTERVAL")
-                        or os.environ.get("SHELF_ANALYSIS_INTERVAL", "30.0")
+                        or os.environ.get("SHELF_ANALYSIS_INTERVAL", "2.0")
                     )
                     last_cfg_time = now
 
@@ -482,17 +491,32 @@ class StreamManager:
 
                 inf_start = time.monotonic()
 
-                # 3. Person Detection & ByteTracking
+                # 3. Person Detection & ByteTracking across primary and mesh cameras
                 tracked_dets: list[TrackedDetection] = []
                 if self.detector is not None:
                     try:
                         raw_dets = self.detector.detect(curr_frame)
-                        tracked_dets = self.tracker.update(raw_dets)
+                        primary_tracker = self._get_tracker_for_camera("cam_primary")
+                        tracked_dets = primary_tracker.update(raw_dets)
                     except Exception as e:
                         logger.error("Detection/tracking error: %s", e)
 
                 with self._slot_lock:
                     self.latest_tracked = tracked_dets
+                    self.per_camera_tracked["cam_primary"] = tracked_dets
+
+                # Multi-source inference: run detection on registered secondary mesh camera streams
+                if self.detector is not None:
+                    active_mesh = camera_mesh.get_active_frames()
+                    for mesh_cam_id, mesh_frame in active_mesh:
+                        if mesh_cam_id in ("cam_primary", "default", "primary"):
+                            continue
+                        try:
+                            mesh_raw = self.detector.detect(mesh_frame)
+                            mesh_tracker = self._get_tracker_for_camera(mesh_cam_id)
+                            self.per_camera_tracked[mesh_cam_id] = mesh_tracker.update(mesh_raw)
+                        except Exception as e:
+                            logger.error("Mesh camera '%s' detection error: %s", mesh_cam_id, e)
 
                 # 4. Fetch zones and thresholds
                 now = time.monotonic()
@@ -526,6 +550,8 @@ class StreamManager:
                         )
                         for ev in footfall_events:
                             repo.save_detection_event(ev)
+                            if ev.event_type == "exit":
+                                self.tracker.remove_track(ev.track_id)
 
                         dwell_events = self.dwell_tracker.update(footfall_events)
                         for d_ev in dwell_events:
@@ -542,19 +568,21 @@ class StreamManager:
                         if footfall_events:
                             enters = sum(1 for e in footfall_events if e.event_type == "enter")
                             exits = sum(1 for e in footfall_events if e.event_type == "exit")
-                            ws_manager.broadcast_sync({
-                                "type": "footfall",
-                                "total_enters": enters,
-                                "total_exits": exits,
-                                "new_enters": enters,
-                                "new_exits": exits,
-                                "net_occupancy": current_occupancy,
-                                "data": {
+                            if enters > 0 or exits > 0:
+                                ws_manager.broadcast_sync({
+                                    "type": "footfall",
                                     "total_enters": enters,
                                     "total_exits": exits,
+                                    "new_enters": enters,
+                                    "new_exits": exits,
+                                    "is_delta": True,
                                     "net_occupancy": current_occupancy,
-                                },
-                            })
+                                    "data": {
+                                        "total_enters": enters,
+                                        "total_exits": exits,
+                                        "net_occupancy": current_occupancy,
+                                    },
+                                })
                     except Exception as e:
                         logger.error("Footfall/Dwell error: %s", e)
 
@@ -666,35 +694,53 @@ class StreamManager:
                             )
                             stock_events_emitted = []
                             for item in sku_report.items:
-                                self.latest_facings[item.shelf_id] = item.facing_count
-                                s_status: Literal["empty", "low", "ok"] = (
+                                matching_zone = next(
+                                    (z for z in zones if z.zone_id == item.shelf_id), None
+                                )
+                                is_occ = (
+                                    self.shelf_smoother.is_occluded(matching_zone, tracked_dets)
+                                    if matching_zone
+                                    else False
+                                )
+
+                                raw_s_status: Literal["empty", "low", "ok"] = (
                                     "empty"
                                     if item.status == "empty"
                                     else ("low" if item.status == "low" else "ok")
                                 )
+                                s_status, s_conf = self.shelf_smoother.update(
+                                    item.shelf_id,
+                                    raw_s_status,
+                                    item.confidence,
+                                    is_occluded=is_occ,
+                                )
+
+                                self.latest_facings[item.shelf_id] = item.facing_count
                                 prev_ev = self.latest_stock_events.get(item.shelf_id)
+                                is_initial = prev_ev is None
                                 state_changed = prev_ev is not None and prev_ev.status != s_status
 
                                 sku_ev = StockEvent(
-                                    event_id=f"stk_ev_{item.shelf_id}_{int(time.time())}",
+                                    event_id=f"stk_ev_{item.shelf_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                                     shelf_id=item.shelf_id,
                                     timestamp=item.timestamp,
                                     status=s_status,
-                                    confidence=item.confidence,
+                                    confidence=s_conf,
                                 )
                                 self.latest_stock_events[item.shelf_id] = sku_ev
 
-                                if state_changed:
+                                if is_initial or state_changed:
                                     repo.save_stock_event(sku_ev)
                                     stock_events_emitted.append(sku_ev)
                                     logger.info(
                                         "Shelf '%s' status transitioned: %s -> %s "
-                                        "(facings: %d, confidence: %.2f)",
+                                        "(facings: %d, confidence: %.2f, occluded: %s)",
                                         item.shelf_id,
                                         prev_ev.status if prev_ev else "initial",
                                         s_status,
                                         item.facing_count,
-                                        item.confidence,
+                                        s_conf,
+                                        is_occ,
                                     )
 
                                     sku_prof = sku_segregator.get_sku_for_zone(item.shelf_id)
@@ -705,7 +751,9 @@ class StreamManager:
                                         sku_prof.sku_id if sku_prof else None
                                     )
                                     # Only alert if custom SKU is registered or visually detected
-                                    if sku_prof is not None or sku_id is not None:
+                                    if state_changed and (
+                                        sku_prof is not None or sku_id is not None
+                                    ):
                                         s_alert = self.alert_engine.process_stock_event(
                                             sku_ev,
                                             sku_name=sku_name,
@@ -723,10 +771,39 @@ class StreamManager:
                             for res_alert in resolved_alerts:
                                 repo.upsert_alert(res_alert)
 
+                            # Planogram compliance evaluation for inspected shelf zones
+                            from analytics.planogram_lite import (
+                                get_or_create_planogram_layout,
+                                save_planogram_compliance,
+                                score_planogram_compliance,
+                            )
+
+                            for s_zone in target_shelves:
+                                plano_layout = get_or_create_planogram_layout(s_zone.zone_id)
+                                plano_frame = curr_frame
+                                if frames_to_eval:
+                                    plano_frame = frames_to_eval[0][1]
+                                if plano_frame is not None:
+                                    with contextlib.suppress(Exception):
+                                        p_comp = score_planogram_compliance(
+                                            plano_frame,
+                                            s_zone,
+                                            plano_layout,
+                                            classifier=self.shelf_classifier,
+                                        )
+                                        save_planogram_compliance(repo, p_comp)
+                                        ws_manager.broadcast_sync({
+                                            "type": "planogram_update",
+                                            "zone_id": s_zone.zone_id,
+                                        })
+
                             if stock_events_emitted or resolved_alerts:
+                                all_shelves = [
+                                    s.shelf_id for s in self.latest_stock_events.values()
+                                ]
                                 ws_manager.broadcast_sync({
                                     "type": "stock_update",
-                                    "shelves": [s.shelf_id for s in stock_events_emitted],
+                                    "shelves": all_shelves,
                                     "data": [
                                         s.model_dump(mode="json")
                                         for s in self.latest_stock_events.values()
@@ -764,17 +841,40 @@ class StreamManager:
     def stop(self) -> None:
         """Gracefully stop background threads and release camera resources."""
         self._shutdown_event.set()
+        if self._capture_thread and self._capture_thread.is_alive():
+            self._capture_thread.join(timeout=3.0)
+        self._capture_thread = None
+        if self._inference_thread and self._inference_thread.is_alive():
+            self._inference_thread.join(timeout=3.0)
+        self._inference_thread = None
         if self.camera:
             with contextlib.suppress(Exception):
                 self.camera.close()
             self.camera = None
         camera_mesh.close()
-        if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=0.5)
-        self._capture_thread = None
-        if self._inference_thread and self._inference_thread.is_alive():
-            self._inference_thread.join(timeout=0.5)
-        self._inference_thread = None
+
+    def reset(self) -> None:
+        """Reset live in-memory telemetry, trackers, and cached events."""
+        with self._slot_lock:
+            self.latest_tracked.clear()
+            self.per_camera_tracked.clear()
+            self._camera_trackers.clear()
+        self.latest_stock_events.clear()
+        self.latest_queue_events.clear()
+        self.latest_facings.clear()
+        self.shelf_smoother.reset()
+        self.tracker = Tracker()
+        footfall_mode = os.environ.get("FOOTFALL_TRACKER_MODE", "directional")
+        footfall_emit_on = os.environ.get("FOOTFALL_EMIT_ON", "zone_enter")
+        self.footfall_tracker = (
+            FootfallTracker(
+                mode="directional",
+                emit_on=("zone_enter" if footfall_emit_on == "zone_enter" else "zone_exit"),
+            )
+            if footfall_mode == "directional"
+            else FootfallTracker(mode="edge")
+        )
+        self.dwell_tracker = DwellTracker()
 
     def get_latest_frame(
         self,
@@ -782,12 +882,13 @@ class StreamManager:
     ) -> tuple[bool, npt.NDArray[np.uint8] | None, list[TrackedDetection], int, int]:
         self._ensure_workers_started()
         if camera_id == "mosaic":
-            mosaic = camera_mesh.generate_mosaic()
+            mosaic = camera_mesh.generate_mosaic(tracked_by_cam=self.per_camera_tracked)
             return True, mosaic, [], mosaic.shape[1], mosaic.shape[0]
 
         if camera_id and camera_id not in ("cam_primary", "default", "primary"):
             is_conn, frame, w, h = camera_mesh.get_frame(camera_id)
-            return is_conn, frame, [], w, h
+            tracked = list(self.per_camera_tracked.get(camera_id, []))
+            return is_conn, frame, tracked, w, h
 
         with self._slot_lock:
             frame_copy = self._slot_frame.copy() if self._slot_frame is not None else None
