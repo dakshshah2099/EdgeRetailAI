@@ -303,7 +303,7 @@ class EventRepository:
             conn.close()
 
     def clear_detection_events(self) -> int:
-        """Purge detection and dwell events to reset store traffic telemetry to zero."""
+        """Purge detection, dwell, queue, and stock events to reset store telemetry to zero."""
         conn = get_connection(self.db_path)
         try:
             cursor = conn.cursor()
@@ -312,6 +312,8 @@ class EventRepository:
             count = int(row[0]) if row else 0
             cursor.execute("DELETE FROM detection_events;")
             cursor.execute("DELETE FROM dwell_events;")
+            cursor.execute("DELETE FROM queue_events;")
+            cursor.execute("DELETE FROM stock_events;")
             conn.commit()
             return count
         finally:

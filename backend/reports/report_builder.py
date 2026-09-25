@@ -1,4 +1,4 @@
-﻿from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,8 +14,8 @@ try:
         compute_staff_efficiency,
     )
 except ImportError:
-    StaffEfficiencySummary = None  # type: ignore[misc, assignment]
-    compute_staff_efficiency = None  # type: ignore[assignment]
+    StaffEfficiencySummary = None  # type: ignore[misc, assignment]  # fallback if module unavailable
+    compute_staff_efficiency = None  # type: ignore[assignment]  # fallback if module unavailable
 
 
 def _normalize_tz(dt: datetime, reference: datetime) -> datetime:

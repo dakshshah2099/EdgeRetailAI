@@ -97,7 +97,7 @@ class SyncBuffer:
                     batch_ids = {_get_event_id(item) for item in batch}
                     while self._buffer and _get_event_id(self._buffer[0]) in batch_ids:
                         popped = self._buffer.popleft()
-                        batch_ids.remove(_get_event_id(popped))
+                        batch_ids.discard(_get_event_id(popped))
                 return len(batch)
 
             return 0

@@ -24,6 +24,7 @@ class ZoneConfig(BaseModel):
     zone_type: Literal["entry_exit", "product_display", "shelf", "checkout"]
     polygon: list[tuple[int, int]] = Field(min_length=3)  # pixel coords, min 3 points
     label: str
+    camera_id: str | None = None
 
 
 class DetectionEvent(BaseModel):
@@ -34,6 +35,7 @@ class DetectionEvent(BaseModel):
     bbox: tuple[int, int, int, int]  # x, y, w, h
     zone_id: str | None = None
     event_type: Literal["enter", "exit", "in_zone"]
+    camera_id: str | None = None
 
     @field_validator("bbox")
     @classmethod
@@ -79,6 +81,7 @@ class QueueEvent(BaseModel):
     avg_wait_est_sec: float | None = Field(default=None, ge=0.0)
     predicted_queue_length: int | None = Field(default=None, ge=0)
     predicted_wait_sec: float | None = Field(default=None, ge=0.0)
+    congested: bool = Field(default=False)
 
 
 class Alert(BaseModel):
@@ -104,7 +107,7 @@ class AuditLogEntry(BaseModel):
     timestamp: datetime
     event_type: Literal["breach_opened", "breach_escalated", "auto_cleared", "resolved"]
     alert_id: str
-    alert_type: str
+    alert_type: Literal["low_stock", "queue_congestion", "custom"]
     severity: Literal["info", "warning", "critical"]
     zone_id: str | None = None
     sku_id: str | None = None
