@@ -21,29 +21,68 @@
     out_of_stock: { label: 'OUT OF STOCK', border: 'border-rose-200', bg: 'bg-rose-50', text: 'text-rose-700' },
     low_stock: { label: 'LOW STOCK', border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700' },
     queue_congestion: { label: 'QUEUE CONGESTION', border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700' },
-    dwell_anomaly: { label: 'DWELL ANOMALY', border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700' }
+    dwell_anomaly: { label: 'DWELL ANOMALY', border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700' },
+    custom: { label: 'ALERT', border: 'border-slate-200', bg: 'bg-slate-50', text: 'text-slate-700' }
   };
 
-  function parseSKUAlert(message) {
+  function parseSKUAlert(alert) {
+    const message = alert?.message;
     if (!message) return null;
-    const match = message.match(/^(.*?)\s+\((sku_[a-zA-Z0-9_]+)\)\s+on\s+(.*?)\s+is\s+(.*)$/);
-    if (!match) return null;
-    return {
-      name: match[1],
-      skuId: match[2],
-      shelfId: match[3],
-      condition: match[4]
-    };
+
+    // Pattern 1: "Product Name (sku_xxx) on zone_shelf_yyy is out of stock / low on stock..."
+    const withSkuMatch = message.match(/^(.*?)\s+\((sku_[a-zA-Z0-9_]+)\)\s+on\s+(.*?)\s+is\s+(.*)$/);
+    if (withSkuMatch) {
+      return {
+        name: withSkuMatch[1],
+        skuId: withSkuMatch[2],
+        shelfId: withSkuMatch[3],
+        condition: withSkuMatch[4]
+      };
+    }
+
+    // Pattern 2: "Shelf zone_xxx is out of stock / low on stock..."
+    const shelfOnlyMatch = message.match(/^Shelf\s+(.*?)\s+is\s+(.*)$/i);
+    if (shelfOnlyMatch) {
+      return {
+        name: `Shelf Inventory (${shelfOnlyMatch[1]})`,
+        skuId: null,
+        shelfId: shelfOnlyMatch[1],
+        condition: shelfOnlyMatch[2]
+      };
+    }
+
+    // Pattern 3: "Product Name on zone_xxx is out of stock / low on stock..."
+    const productNoSkuMatch = message.match(/^(.*?)\s+on\s+(.*?)\s+is\s+(.*)$/);
+    if (productNoSkuMatch && !message.includes('people waiting')) {
+      return {
+        name: productNoSkuMatch[1],
+        skuId: null,
+        shelfId: productNoSkuMatch[2],
+        condition: productNoSkuMatch[3]
+      };
+    }
+
+    return null;
   }
 
   function getBadge(alert, skuInfo) {
     if (skuInfo) {
-      if (alert.severity === 'critical' || skuInfo.condition.includes('out of stock')) {
-        return { label: 'SKU DEPLETED', border: 'border-rose-300', bg: 'bg-rose-50', text: 'text-rose-800' };
+      if (alert.severity === 'critical' || skuInfo.condition.toLowerCase().includes('out of stock')) {
+        return { label: skuInfo.skuId ? 'SKU DEPLETED' : 'OUT OF STOCK', border: 'border-rose-300', bg: 'bg-rose-50', text: 'text-rose-800' };
       }
-      return { label: 'SKU LOW STOCK', border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-800' };
+      return { label: skuInfo.skuId ? 'SKU LOW STOCK' : 'LOW STOCK', border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-800' };
     }
-    return alertTypeBadges[alert.alert_type] || { label: alert.alert_type, border: 'border-slate-200', bg: 'bg-slate-50', text: 'text-slate-700' };
+    if (alert.alert_type === 'low_stock') {
+      return alert.severity === 'critical'
+        ? { label: 'OUT OF STOCK', border: 'border-rose-300', bg: 'bg-rose-50', text: 'text-rose-800' }
+        : { label: 'LOW STOCK', border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-800' };
+    }
+    return alertTypeBadges[alert.alert_type] || {
+      label: alert.severity === 'critical' ? 'CRITICAL ALERT' : (alert.alert_type || 'ALERT').toUpperCase(),
+      border: alert.severity === 'critical' ? 'border-rose-200' : 'border-slate-200',
+      bg: alert.severity === 'critical' ? 'bg-rose-50' : 'bg-slate-50',
+      text: alert.severity === 'critical' ? 'text-rose-700' : 'text-slate-700'
+    };
   }
 </script>
 
@@ -105,7 +144,7 @@
       </div>
     {:else}
       {#each alerts as alert, idx (alert.alert_id ?? alert.id ?? `${alert.created_at || alert.timestamp || idx}_${alert.zone_id || 'z'}_${idx}`)}
-        {@const skuInfo = parseSKUAlert(alert.message)}
+        {@const skuInfo = parseSKUAlert(alert)}
         {@const badge = getBadge(alert, skuInfo)}
         <div class="p-2.5 rounded-md border transition-colors bg-white {alert.resolved_at ? 'border-slate-100 opacity-60' : 'border-slate-200 hover:border-slate-300 shadow-xs'}">
           <div class="flex items-center justify-between gap-2 mb-1.5">

@@ -52,7 +52,7 @@
   let selectedZone = $state("");
   let selectedPlanogramShelf = $state("");
   let groupBy = $state("hour");
-  let alertFilter = $state("open");
+  let alertFilter = $state("all");
 
   // Camera Feed Page Subpanel Tab
   let cameraSideTab = $state("alerts"); // 'alerts' | 'telemetry'
