@@ -97,10 +97,14 @@
     const status = (skuItem && (skuItem.status === 'misplaced' ? 'ok' : skuItem.status)) || (sEv && sEv.status) || 'unknown';
     const confidence = (skuItem && skuItem.confidence) || (sEv && sEv.confidence) || 0.0;
     const timestamp = (skuItem && skuItem.timestamp) || (sEv && sEv.timestamp);
-    const skuName = skuItem?.detected_sku_name || catItem?.name || matchingZone?.label || `Shelf (${shelfId})`;
-    const skuId = skuItem?.detected_sku_id || skuItem?.expected_sku_id || catItem?.sku_id || null;
-    const brand = catItem?.brand || null;
-    const category = catItem?.category || null;
+    const shelfLabel = matchingZone?.label || `Shelf (${shelfId})`;
+    const detectedSkuName = skuItem?.detected_sku_name || null;
+    const detectedSkuId = skuItem?.detected_sku_id || null;
+    const expectedSkuName = catItem?.name || null;
+    const expectedSkuId = catItem?.sku_id || skuItem?.expected_sku_id || null;
+    const brand = (detectedSkuId && catItem && catItem.sku_id === detectedSkuId) ? catItem.brand : null;
+    const category = (detectedSkuId && catItem && catItem.sku_id === detectedSkuId) ? catItem.category : null;
+    const isPlanogramCompliant = skuItem?.planogram_compliant ?? true;
 
     let facingCount = 0;
     let fillPct = 0;
@@ -128,10 +132,14 @@
       status,
       confidence,
       timestamp,
-      skuName,
-      skuId,
+      shelfLabel,
+      detectedSkuName,
+      detectedSkuId,
+      expectedSkuName,
+      expectedSkuId,
       brand,
       category,
+      isPlanogramCompliant,
       facingCount,
       fillPct,
       hasData
@@ -179,28 +187,16 @@
       {#each cardsData as card (card.shelfId)}
         {@const st = getStatusBadge(card.status)}
         <div class="border rounded-md p-3.5 transition-all flex flex-col justify-between gap-3 shadow-xs bg-white {st.border}">
-          <!-- Top Row: SKU Name & Live Status Badge -->
+          <!-- Top Row: Zone Header & Live Status Badge -->
           <div>
             <div class="flex items-start justify-between gap-2 mb-1">
               <div>
                 <span class="text-xs font-bold text-slate-900 leading-tight block">
-                  {card.skuName}
+                  {card.shelfLabel}
                 </span>
-                <div class="flex items-center gap-1.5 mt-1">
-                  {#if card.skuId}
-                    <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-100 text-slate-600 rounded border border-slate-200">
-                      {card.skuId}
-                    </span>
-                  {:else}
-                    <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-50 text-slate-400 rounded border border-slate-200">
-                      NO SKU ASSIGNED
-                    </span>
-                  {/if}
-                  {#if card.brand || card.category}
-                    <span class="text-[11px] font-mono text-slate-400">
-                      {[card.brand, card.category].filter(Boolean).join(' • ')}
-                    </span>
-                  {/if}
+                <div class="text-[10px] font-mono text-slate-500 mt-0.5 flex items-center gap-1">
+                  <span>Location:</span>
+                  <code class="text-slate-800 bg-slate-100 px-1 py-0.5 rounded font-bold">{card.shelfId}</code>
                 </div>
               </div>
               <span class="px-2 py-0.5 text-xs font-mono uppercase font-semibold border rounded shrink-0 {st.badge}">
@@ -208,9 +204,43 @@
               </span>
             </div>
 
-            <div class="text-[11px] font-mono text-slate-500 mt-1 flex items-center gap-1">
-              <span>Location:</span>
-              <code class="text-slate-800 bg-slate-100 px-1 py-0.5 rounded font-bold">{card.shelfId}</code>
+            <!-- SKU Detection Status -->
+            <div class="mt-2 pt-1.5 border-t border-slate-100">
+              {#if card.detectedSkuName}
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-1.5 py-0.5 text-[11px] font-semibold bg-emerald-50 text-emerald-800 rounded border border-emerald-200 font-mono">
+                    DETECTED: {card.detectedSkuName}
+                  </span>
+                  {#if card.detectedSkuId}
+                    <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-100 text-slate-600 rounded border border-slate-200">
+                      {card.detectedSkuId}
+                    </span>
+                  {/if}
+                  {#if card.brand || card.category}
+                    <span class="text-[11px] font-mono text-slate-400">
+                      {[card.brand, card.category].filter(Boolean).join(' • ')}
+                    </span>
+                  {/if}
+                  {#if !card.isPlanogramCompliant && card.expectedSkuName}
+                    <span class="px-1 py-0.2 text-[10px] font-mono bg-rose-50 text-rose-700 rounded border border-rose-200 font-semibold">
+                      MISPLACED (TARGET: {card.expectedSkuName})
+                    </span>
+                  {/if}
+                </div>
+              {:else if card.expectedSkuName}
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-1.5 py-0.5 text-[10px] font-mono bg-slate-50 text-slate-600 rounded border border-slate-200">
+                    Target SKU: <strong class="text-slate-800">{card.expectedSkuName}</strong> ({card.expectedSkuId})
+                  </span>
+                  <span class="px-1.5 py-0.2 text-[10px] font-mono bg-amber-50 text-amber-700 rounded border border-amber-200">
+                    NO PRODUCT RECOGNIZED
+                  </span>
+                </div>
+              {:else}
+                <span class="px-1.5 py-0.2 text-[10px] font-mono bg-slate-50 text-slate-400 rounded border border-slate-200 inline-block">
+                  NO SKU ASSIGNED
+                </span>
+              {/if}
             </div>
           </div>
 
