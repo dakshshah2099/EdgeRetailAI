@@ -86,6 +86,7 @@ def scale_zones_to_frame(
                 zone_type=z.zone_type,
                 polygon=scaled_poly,
                 label=z.label,
+                camera_id=z.camera_id,
             )
         )
     return scaled_zones
@@ -136,7 +137,9 @@ def generate_fallback_frame(src: str, width: int = 640, height: int = 480) -> np
 
 
 def draw_zones_overlay(
-    frame_bgr: npt.NDArray[np.uint8], config_path: str = "config.yaml"
+    frame_bgr: npt.NDArray[np.uint8],
+    config_path: str = "config.yaml",
+    camera_id: str | None = None,
 ) -> npt.NDArray[np.uint8]:
     """Draw configured zone polygons and labels onto a copy of the frame."""
     cfg = get_app_config(config_path)
@@ -149,6 +152,15 @@ def draw_zones_overlay(
     base_w = cfg.calibration_width if cfg else 640
     base_h = cfg.calibration_height if cfg else 480
     zones = scale_zones_to_frame(cfg.zones, w, h, base_w=base_w, base_h=base_h)
+
+    # Filter zones for target camera
+    if camera_id != "all":
+        if camera_id in (None, "cam_primary", "default", "primary"):
+            zones = [
+                z for z in zones if z.camera_id in (None, "cam_primary", "default", "primary")
+            ]
+        else:
+            zones = [z for z in zones if z.camera_id == camera_id]
 
     for zone in zones:
         pts = np.array(zone.polygon, dtype=np.int32).reshape((-1, 1, 2))
@@ -258,11 +270,53 @@ class StreamManager:
         self.latest_queue_events: dict[str, QueueEvent] = {}
         self.latest_facings: dict[str, int] = {}
 
+        self._camera_footfall_trackers: dict[str, FootfallTracker] = {
+            "cam_primary": self.footfall_tracker
+        }
+        self._camera_dwell_trackers: dict[str, DwellTracker] = {
+            "cam_primary": self.dwell_tracker
+        }
+        self._camera_queue_monitors: dict[str, QueueMonitor] = {
+            "cam_primary": self.queue_monitor
+        }
+
     def _get_tracker_for_camera(self, camera_id: str) -> Tracker:
         """Return dedicated ByteTrack Tracker instance per camera stream."""
         if camera_id not in self._camera_trackers:
             self._camera_trackers[camera_id] = Tracker()
         return self._camera_trackers[camera_id]
+
+    def _get_footfall_tracker_for_camera(self, camera_id: str) -> FootfallTracker:
+        """Return dedicated FootfallTracker instance per camera stream."""
+        if camera_id not in self._camera_footfall_trackers:
+            footfall_mode = os.environ.get("FOOTFALL_TRACKER_MODE", "directional")
+            footfall_emit_on = os.environ.get("FOOTFALL_EMIT_ON", "zone_enter")
+            self._camera_footfall_trackers[camera_id] = (
+                FootfallTracker(
+                    mode="directional",
+                    emit_on=("zone_enter" if footfall_emit_on == "zone_enter" else "zone_exit"),
+                )
+                if footfall_mode == "directional"
+                else FootfallTracker(mode="edge")
+            )
+        return self._camera_footfall_trackers[camera_id]
+
+    def _get_dwell_tracker_for_camera(self, camera_id: str) -> DwellTracker:
+        """Return dedicated DwellTracker instance per camera stream."""
+        if camera_id not in self._camera_dwell_trackers:
+            self._camera_dwell_trackers[camera_id] = DwellTracker()
+        return self._camera_dwell_trackers[camera_id]
+
+    def _get_queue_monitor_for_camera(self, camera_id: str) -> QueueMonitor:
+        """Return dedicated QueueMonitor instance per camera stream."""
+        if camera_id not in self._camera_queue_monitors:
+            self._camera_queue_monitors[camera_id] = QueueMonitor(
+                hourly_baseline_provider=lambda cid, hr: get_repository().get_hourly_queue_baseline(
+                    cid, hr
+                ),
+                congestion_threshold=self.alert_engine.queue_congestion_length,
+            )
+        return self._camera_queue_monitors[camera_id]
 
     def _ensure_workers_started(self) -> None:
         if self._capture_thread is None or not self._capture_thread.is_alive():
@@ -527,9 +581,6 @@ class StreamManager:
                 raw_zones = cached_cfg.zones if cached_cfg and cached_cfg.zones else []
                 base_w = cached_cfg.calibration_width if cached_cfg else 640
                 base_h = cached_cfg.calibration_height if cached_cfg else 480
-                zones = scale_zones_to_frame(
-                    raw_zones, curr_meta.width, curr_meta.height, base_w=base_w, base_h=base_h
-                )
 
                 if "LOW_STOCK_CONFIDENCE_THRESHOLD" in env_vars:
                     with contextlib.suppress(Exception):
@@ -542,58 +593,79 @@ class StreamManager:
                             env_vars["QUEUE_CONGESTION_LENGTH"]
                         )
 
-                # 5. Workload A: People Analytics (Footfall, Dwell, Queue)
-                if zones:
+                # Assemble active camera list for unified multi-source analytics
+                active_cameras: list[
+                    tuple[str, npt.NDArray[np.uint8], Frame, list[TrackedDetection]]
+                ] = [("cam_primary", curr_frame, curr_meta, tracked_dets)]
+
+                active_mesh = camera_mesh.get_active_frames()
+                for mesh_cam_id, mesh_frame in active_mesh:
+                    if mesh_cam_id in ("cam_primary", "default", "primary"):
+                        continue
+                    m_dets = self.per_camera_tracked.get(mesh_cam_id, [])
+                    m_meta = Frame(
+                        source_id=mesh_cam_id,
+                        timestamp=curr_meta.timestamp,
+                        width=mesh_frame.shape[1],
+                        height=mesh_frame.shape[0],
+                    )
+                    active_cameras.append((mesh_cam_id, mesh_frame, m_meta, m_dets))
+
+                # 5. Workload A: Multi-Camera People Analytics (Footfall, Dwell, Queue)
+                all_enters = 0
+                all_exits = 0
+                all_q_events: list[QueueEvent] = []
+                had_q_alert = False
+
+                for cam_id, _c_frame, c_meta, c_dets in active_cameras:
+                    if cam_id in ("cam_primary", "default", "primary"):
+                        cam_raw_zones = [
+                            z
+                            for z in raw_zones
+                            if z.camera_id in (None, "cam_primary", "default", "primary")
+                        ]
+                    else:
+                        cam_raw_zones = [z for z in raw_zones if z.camera_id == cam_id]
+
+                    if not cam_raw_zones:
+                        continue
+
+                    cam_zones = scale_zones_to_frame(
+                        cam_raw_zones, c_meta.width, c_meta.height, base_w=base_w, base_h=base_h
+                    )
+
                     try:
-                        footfall_events = self.footfall_tracker.update(
-                            curr_meta, tracked_dets, zones
-                        )
+                        ft = self._get_footfall_tracker_for_camera(cam_id)
+                        footfall_events = ft.update(c_meta, c_dets, cam_zones)
                         for ev in footfall_events:
                             repo.save_detection_event(ev)
                             if ev.event_type == "exit":
-                                self.tracker.remove_track(ev.track_id)
+                                c_tracker = self._get_tracker_for_camera(cam_id)
+                                c_tracker.remove_track(ev.track_id)
 
-                        dwell_events = self.dwell_tracker.update(footfall_events)
+                        dt = self._get_dwell_tracker_for_camera(cam_id)
+                        dwell_events = dt.update(footfall_events)
                         for d_ev in dwell_events:
                             repo.save_dwell_event(d_ev)
-                            # Event-triggered shelf inspection: customer finished dwell in shelf
                             is_shelf = any(
                                 z.zone_id == d_ev.zone_id and z.zone_type == "shelf"
-                                for z in zones
+                                for z in cam_zones
                             )
                             if is_shelf:
                                 pending_shelf_eval_zones.add(d_ev.zone_id)
 
-                        current_occupancy = len(tracked_dets)
-                        if footfall_events:
-                            enters = sum(1 for e in footfall_events if e.event_type == "enter")
-                            exits = sum(1 for e in footfall_events if e.event_type == "exit")
-                            if enters > 0 or exits > 0:
-                                ws_manager.broadcast_sync({
-                                    "type": "footfall",
-                                    "total_enters": enters,
-                                    "total_exits": exits,
-                                    "new_enters": enters,
-                                    "new_exits": exits,
-                                    "is_delta": True,
-                                    "net_occupancy": current_occupancy,
-                                    "data": {
-                                        "total_enters": enters,
-                                        "total_exits": exits,
-                                        "net_occupancy": current_occupancy,
-                                    },
-                                })
+                        all_enters += sum(1 for e in footfall_events if e.event_type == "enter")
+                        all_exits += sum(1 for e in footfall_events if e.event_type == "exit")
                     except Exception as e:
-                        logger.error("Footfall/Dwell error: %s", e)
+                        logger.error("Footfall/Dwell error on camera '%s': %s", cam_id, e)
 
-                    checkout_zones = [z for z in zones if z.zone_type == "checkout"]
+                    checkout_zones = [z for z in cam_zones if z.zone_type == "checkout"]
                     if checkout_zones:
                         try:
-                            q_events = self.queue_monitor.update(
-                                curr_meta, tracked_dets, checkout_zones
-                            )
-                            had_q_alert = False
+                            qm = self._get_queue_monitor_for_camera(cam_id)
+                            q_events = qm.update(c_meta, c_dets, checkout_zones)
                             for q_ev in q_events:
+                                all_q_events.append(q_ev)
                                 prev_q = self.latest_queue_events.get(q_ev.counter_id)
                                 q_changed = (
                                     prev_q is not None
@@ -609,72 +681,89 @@ class StreamManager:
                                 if q_alert:
                                     repo.upsert_alert(q_alert)
                                     had_q_alert = True
-
-                            if q_events:
-                                counters_payload = [
-                                    {
-                                        "counter_id": q.counter_id,
-                                        "queue_length": q.queue_length,
-                                        "avg_wait": q.avg_wait_est_sec,
-                                    }
-                                    for q in q_events
-                                ]
-                                ws_manager.broadcast_sync({
-                                    "type": "queue",
-                                    "counters": counters_payload,
-                                    "data": counters_payload,
-                                })
-                                if had_q_alert:
-                                    ws_manager.broadcast_sync({"type": "alerts_update"})
                         except Exception as e:
-                            logger.error("Queue error: %s", e)
+                            logger.error("Queue error on camera '%s': %s", cam_id, e)
 
-                # Broadcast real-time centroid coordinates for instant dwell heatmap accumulation
-                if tracked_dets:
+                # Total storewide occupancy across all mesh cameras
+                current_occupancy = sum(len(dets) for dets in self.per_camera_tracked.values())
+
+                if all_enters > 0 or all_exits > 0:
+                    ws_manager.broadcast_sync({
+                        "type": "footfall",
+                        "total_enters": all_enters,
+                        "total_exits": all_exits,
+                        "new_enters": all_enters,
+                        "new_exits": all_exits,
+                        "is_delta": True,
+                        "net_occupancy": current_occupancy,
+                        "data": {
+                            "total_enters": all_enters,
+                            "total_exits": all_exits,
+                            "net_occupancy": current_occupancy,
+                        },
+                    })
+
+                if all_q_events:
+                    counters_payload = [
+                        {
+                            "counter_id": q.counter_id,
+                            "queue_length": q.queue_length,
+                            "avg_wait": q.avg_wait_est_sec,
+                        }
+                        for q in all_q_events
+                    ]
+                    ws_manager.broadcast_sync({
+                        "type": "queue",
+                        "counters": counters_payload,
+                        "data": counters_payload,
+                    })
+                    if had_q_alert:
+                        ws_manager.broadcast_sync({"type": "alerts_update"})
+
+                # Broadcast real-time centroid coordinates across all cameras
+                # for instant dwell heatmap accumulation
+                all_dwell_points = []
+                for cam_id, cam_dets in self.per_camera_tracked.items():
+                    for det in cam_dets:
+                        all_dwell_points.append({
+                            "x": int(det.bbox[0] + det.bbox[2] / 2),
+                            "y": int(det.bbox[1] + det.bbox[3] / 2),
+                            "track_id": det.track_id,
+                            "camera_id": cam_id,
+                        })
+                if all_dwell_points:
                     ws_manager.broadcast_sync({
                         "type": "dwell_points",
-                        "points": [
-                            {
-                                "x": int(det.bbox[0] + det.bbox[2] / 2),
-                                "y": int(det.bbox[1] + det.bbox[3] / 2),
-                                "track_id": det.track_id,
-                            }
-                            for det in tracked_dets
-                        ],
+                        "points": all_dwell_points,
                     })
 
                 # Broadcast live camera occupancy to all telemetry clients
                 now = time.monotonic()
-                current_occ = len(tracked_dets)
                 if (
-                    current_occ != getattr(self, "_last_broadcast_occ", -1)
+                    current_occupancy != getattr(self, "_last_broadcast_occ", -1)
                     or (now - getattr(self, "_last_occ_ts", 0.0) >= 2.0)
                 ):
-                    self._last_broadcast_occ = current_occ
+                    self._last_broadcast_occ = current_occupancy
                     self._last_occ_ts = now
                     ws_manager.broadcast_sync({
                         "type": "occupancy",
-                        "net_occupancy": current_occ,
+                        "net_occupancy": current_occupancy,
                     })
 
                 # 6. Unified Shelf Stock & SKU Analysis: Event-Triggered + 30s Watchdog
                 now = time.monotonic()
-                shelf_zones = [z for z in zones if z.zone_type == "shelf"]
+                shelf_zones_raw = [z for z in raw_zones if z.zone_type == "shelf"]
                 is_watchdog_due = (now - last_shelf_time >= shelf_interval)
                 has_pending = bool(pending_shelf_eval_zones)
                 should_eval_shelves = bool(
                     self.is_connected
                     and curr_frame is not None
-                    and shelf_zones
+                    and shelf_zones_raw
                     and (has_pending or is_watchdog_due)
                 )
 
                 if should_eval_shelves:
-                    target_shelves = (
-                        [z for z in shelf_zones if z.zone_id in pending_shelf_eval_zones]
-                        if (pending_shelf_eval_zones and not is_watchdog_due)
-                        else shelf_zones
-                    )
+                    pending_target_ids = set(pending_shelf_eval_zones)
                     pending_shelf_eval_zones.clear()
                     last_shelf_time = now
 
@@ -686,19 +775,57 @@ class StreamManager:
                         ):
                             frames_to_eval.insert(0, ("cam_primary", curr_frame))
 
-                        if frames_to_eval:
+                        cam_frame_map: dict[str, npt.NDArray[np.uint8]] = {
+                            cid: f for cid, f in frames_to_eval if f is not None
+                        }
+
+                        # Scale each shelf zone to the resolution of the camera viewing that shelf
+                        scaled_shelf_zones: list[ZoneConfig] = []
+                        for sz in shelf_zones_raw:
+                            if (
+                                pending_target_ids
+                                and not is_watchdog_due
+                                and sz.zone_id not in pending_target_ids
+                            ):
+                                continue
+                            cam_for_shelf = (
+                                sz.camera_id
+                                if sz.camera_id
+                                and sz.camera_id not in ("cam_primary", "default", "primary")
+                                else "cam_primary"
+                            )
+                            target_f = cam_frame_map.get(cam_for_shelf, curr_frame)
+                            fw = target_f.shape[1] if target_f is not None else curr_meta.width
+                            fh = target_f.shape[0] if target_f is not None else curr_meta.height
+                            scaled_s = scale_zones_to_frame(
+                                [sz], fw, fh, base_w=base_w, base_h=base_h
+                            )
+                            scaled_shelf_zones.extend(scaled_s)
+
+                        if frames_to_eval and scaled_shelf_zones:
                             sku_report = sku_segregator.evaluate_all_shelves(
                                 frames_by_camera=frames_to_eval,
-                                zones=target_shelves,
+                                zones=scaled_shelf_zones,
                                 force=has_pending,
                             )
                             stock_events_emitted = []
+                            had_stock_alert = False
                             for item in sku_report.items:
                                 matching_zone = next(
-                                    (z for z in zones if z.zone_id == item.shelf_id), None
+                                    (z for z in scaled_shelf_zones if z.zone_id == item.shelf_id),
+                                    None,
                                 )
+                                zone_cam = (
+                                    matching_zone.camera_id
+                                    if matching_zone
+                                    and matching_zone.camera_id
+                                    and matching_zone.camera_id
+                                    not in ("cam_primary", "default", "primary")
+                                    else "cam_primary"
+                                )
+                                zone_dets = self.per_camera_tracked.get(zone_cam, tracked_dets)
                                 is_occ = (
-                                    self.shelf_smoother.is_occluded(matching_zone, tracked_dets)
+                                    self.shelf_smoother.is_occluded(matching_zone, zone_dets)
                                     if matching_zone
                                     else False
                                 )
@@ -743,25 +870,22 @@ class StreamManager:
                                         is_occ,
                                     )
 
-                                    sku_prof = sku_segregator.get_sku_for_zone(item.shelf_id)
-                                    sku_name = item.detected_sku_name or (
-                                        sku_prof.name if sku_prof else None
-                                    )
-                                    sku_id = item.detected_sku_id or (
-                                        sku_prof.sku_id if sku_prof else None
-                                    )
-                                    # Only alert if custom SKU is registered or visually detected
-                                    if state_changed and (
-                                        sku_prof is not None or sku_id is not None
-                                    ):
-                                        s_alert = self.alert_engine.process_stock_event(
-                                            sku_ev,
-                                            sku_name=sku_name,
-                                            sku_id=sku_id,
-                                            facing_count=item.facing_count,
-                                        )
-                                        if s_alert:
-                                            repo.upsert_alert(s_alert)
+                                sku_prof = sku_segregator.get_sku_for_zone(item.shelf_id)
+                                sku_name = item.detected_sku_name or (
+                                    sku_prof.name if sku_prof else None
+                                )
+                                sku_id = item.detected_sku_id or (
+                                    sku_prof.sku_id if sku_prof else None
+                                )
+                                s_alert = self.alert_engine.process_stock_event(
+                                    sku_ev,
+                                    sku_name=sku_name,
+                                    sku_id=sku_id,
+                                    facing_count=item.facing_count,
+                                )
+                                if s_alert:
+                                    repo.upsert_alert(s_alert)
+                                    had_stock_alert = True
 
                             resolved_alerts = self.alert_engine.check_resolutions(
                                 self.latest_stock_events,
@@ -778,11 +902,16 @@ class StreamManager:
                                 score_planogram_compliance,
                             )
 
-                            for s_zone in target_shelves:
+                            for s_zone in scaled_shelf_zones:
                                 plano_layout = get_or_create_planogram_layout(s_zone.zone_id)
-                                plano_frame = curr_frame
-                                if frames_to_eval:
-                                    plano_frame = frames_to_eval[0][1]
+                                target_cam = (
+                                    s_zone.camera_id
+                                    if s_zone.camera_id
+                                    and s_zone.camera_id
+                                    not in ("cam_primary", "default", "primary")
+                                    else "cam_primary"
+                                )
+                                plano_frame = cam_frame_map.get(target_cam, curr_frame)
                                 if plano_frame is not None:
                                     with contextlib.suppress(Exception):
                                         p_comp = score_planogram_compliance(
@@ -797,7 +926,7 @@ class StreamManager:
                                             "zone_id": s_zone.zone_id,
                                         })
 
-                            if stock_events_emitted or resolved_alerts:
+                            if stock_events_emitted or resolved_alerts or had_stock_alert:
                                 all_shelves = [
                                     s.shelf_id for s in self.latest_stock_events.values()
                                 ]
@@ -809,7 +938,7 @@ class StreamManager:
                                         for s in self.latest_stock_events.values()
                                     ],
                                 })
-                                if resolved_alerts:
+                                if resolved_alerts or had_stock_alert:
                                     ws_manager.broadcast_sync({"type": "alerts_update"})
                     except Exception as e:
                         logger.error("Unified shelf analysis error: %s", e)
@@ -875,6 +1004,14 @@ class StreamManager:
             else FootfallTracker(mode="edge")
         )
         self.dwell_tracker = DwellTracker()
+        self.queue_monitor = QueueMonitor(
+            hourly_baseline_provider=lambda cid, hr: get_repository().get_hourly_queue_baseline(
+                cid, hr
+            )
+        )
+        self._camera_footfall_trackers = {"cam_primary": self.footfall_tracker}
+        self._camera_dwell_trackers = {"cam_primary": self.dwell_tracker}
+        self._camera_queue_monitors = {"cam_primary": self.queue_monitor}
 
     def get_latest_frame(
         self,

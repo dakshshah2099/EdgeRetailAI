@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 import time
 from datetime import UTC, datetime
 from typing import Literal
@@ -83,10 +82,9 @@ class SKUSegregator:
         self._last_report: SKUSegregationReport | None = None
         self.shelf_classifier = HybridShelfClassifier()
 
-        is_testing = "pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ
         should_seed = os.environ.get(
             "ENABLE_DEMO_SKUS",
-            "true" if is_testing else "false",
+            "true",
         ).lower() in ("true", "1", "yes")
         if should_seed:
             self._seed_default_catalog()
@@ -344,8 +342,12 @@ class SKUSegregator:
             if frame is None or frame.size == 0:
                 continue
             h, w = frame.shape[:2]
+            primary_cam_id = frames_by_camera[0][0] if frames_by_camera else "cam_primary"
             for zone in shelf_zones:
-                if zone.camera_id and zone.camera_id != cam_id:
+                if zone.camera_id:
+                    if zone.camera_id != cam_id:
+                        continue
+                elif cam_id != primary_cam_id:
                     continue
                 try:
                     xs = [p[0] for p in zone.polygon]

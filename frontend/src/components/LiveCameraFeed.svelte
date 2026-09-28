@@ -43,6 +43,8 @@
 
   // Visual Zone Calibration
   let isEditingZones = $state(false);
+  let activeCalibratingCamId = $state("cam_primary");
+  let cameraResolutions = $state({}); // { [camId]: { width, height } }
   let zones = $state([]);
   let selectedZoneIdx = $state(0);
   let activeDragHandle = $state(null); // { zoneIdx, ptIdx }
@@ -156,30 +158,47 @@
     streamTimestamp = Date.now();
   }
 
-  function handleImageLoad(e) {
+  function setCalibratingCamera(camId) {
+    activeCalibratingCamId = camId;
+    if (cameraResolutions[camId]) {
+      viewWidth = cameraResolutions[camId].width;
+      viewHeight = cameraResolutions[camId].height;
+    }
+  }
+
+  function isZoneOnActiveCamera(zone, camId) {
+    const zoneCam = zone.camera_id || "cam_primary";
+    const targetCam = camId || "cam_primary";
+    return zoneCam === targetCam;
+  }
+
+  function handleImageLoad(camId, e) {
     isStreamLoading = false;
     isStreamError = false;
     if (e.target && e.target.naturalWidth) {
       const newW = e.target.naturalWidth;
       const newH = e.target.naturalHeight;
-      if (newW > 0 && newH > 0 && (newW !== viewWidth || newH !== viewHeight)) {
-        const oldW = calibrationBaseWidth || viewWidth;
-        const oldH = calibrationBaseHeight || viewHeight;
+      if (newW > 0 && newH > 0) {
+        cameraResolutions[camId] = { width: newW, height: newH };
+        if (camId === activeCalibratingCamId && (newW !== viewWidth || newH !== viewHeight)) {
+          const oldW = calibrationBaseWidth || viewWidth;
+          const oldH = calibrationBaseHeight || viewHeight;
 
-        viewWidth = newW;
-        viewHeight = newH;
-        calibrationBaseWidth = newW;
-        calibrationBaseHeight = newH;
+          viewWidth = newW;
+          viewHeight = newH;
+          calibrationBaseWidth = newW;
+          calibrationBaseHeight = newH;
 
-        // Proportionally scale any existing zones in memory to match new stream dimensions
-        if (zones && zones.length > 0 && oldW > 0 && oldH > 0 && (oldW !== newW || oldH !== newH)) {
-          zones = zones.map((z) => ({
-            ...z,
-            polygon: z.polygon.map(([px, py]) => [
-              Math.round(Math.max(0, Math.min(newW - 1, (px * newW) / oldW))),
-              Math.round(Math.max(0, Math.min(newH - 1, (py * newH) / oldH))),
-            ]),
-          }));
+          // Proportionally scale any existing zones in memory to match new stream dimensions
+          if (zones && zones.length > 0 && oldW > 0 && oldH > 0 && (oldW !== newW || oldH !== newH)) {
+            zones = zones.map((z) => ({
+              ...z,
+              polygon: z.polygon.map(([px, py]) => [
+                Math.round(Math.max(0, Math.min(newW - 1, (px * newW) / oldW))),
+                Math.round(Math.max(0, Math.min(newH - 1, (py * newH) / oldH))),
+              ]),
+            }));
+          }
         }
       }
     }
@@ -204,9 +223,10 @@
   }
 
   function takeSnapshot() {
+    const targetCam = activeCalibratingCamId || "cam_primary";
     const link = document.createElement("a");
-    link.href = `/video/snapshot?camera_id=cam_primary&overlay_zones=${overlayZones}&overlay_detections=${overlayDetections}&t=${Date.now()}`;
-    link.download = `retail_snapshot_${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+    link.href = `/video/snapshot?camera_id=${targetCam}&overlay_zones=${overlayZones}&overlay_detections=${overlayDetections}&t=${Date.now()}`;
+    link.download = `retail_snapshot_${targetCam}_${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
     link.target = "_blank";
     document.body.appendChild(link);
     link.click();
@@ -253,6 +273,7 @@
       zone_id: newId,
       zone_type: "shelf",
       label: `Shelf ${zones.length + 1}`,
+      camera_id: activeCalibratingCamId,
       polygon: [
         [x1, y1],
         [x2, y1],
@@ -415,6 +436,18 @@
           <span>CALIBRATE</span>
         </button>
       {:else}
+        <div class="flex items-center bg-amber-50 border border-amber-300 rounded px-2 py-0.5 text-xs font-mono text-amber-900">
+          <span class="text-amber-700 mr-1 uppercase font-semibold">Cam:</span>
+          <select 
+            bind:value={activeCalibratingCamId} 
+            onchange={(e) => setCalibratingCamera(e.target.value)}
+            class="bg-transparent font-bold text-amber-950 focus:outline-none cursor-pointer"
+          >
+            {#each cameras as c (c.camera_id)}
+              <option value={c.camera_id}>{c.label || c.camera_id}</option>
+            {/each}
+          </select>
+        </div>
         <button 
           type="button" 
           class="px-2.5 py-1 text-xs font-mono bg-sky-50 text-sky-800 border border-sky-200 rounded hover:bg-sky-100 font-semibold cursor-pointer"
@@ -623,13 +656,14 @@
   <!-- Dynamic Multi-Camera Stream Grid -->
   <div class="grid gap-3 w-full {cameras.length <= 1 ? 'grid-cols-1' : cameras.length === 2 ? 'grid-cols-1 md:grid-cols-2' : cameras.length === 3 ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3'}">
     {#each cameras as cam (cam.camera_id)}
-      {@const camStreamUrl = `/video/stream?camera_id=${cam.camera_id}&overlay_zones=${cam.camera_id === 'cam_primary' && !isEditingZones && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`}
-      <div class="relative w-full aspect-video bg-slate-950 rounded-md overflow-hidden flex items-center justify-center border border-slate-800">
+      {@const isCalibratingThis = isEditingZones && cam.camera_id === activeCalibratingCamId}
+      {@const camStreamUrl = `/video/stream?camera_id=${cam.camera_id}&overlay_zones=${!isCalibratingThis && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`}
+      <div class="relative w-full aspect-video bg-slate-950 rounded-md overflow-hidden flex items-center justify-center border {isCalibratingThis ? 'border-amber-500 ring-2 ring-amber-500/50' : 'border-slate-800'}">
         <img 
           src={camStreamUrl} 
           alt={cam.label || cam.camera_id} 
           class="w-full h-full object-contain select-none"
-          onload={handleImageLoad}
+          onload={(e) => handleImageLoad(cam.camera_id, e)}
           onerror={handleImageError}
         />
 
@@ -637,10 +671,8 @@
         <div class="absolute top-2 sm:top-2.5 left-2 sm:left-2.5 right-2 sm:right-2.5 flex items-center justify-between gap-1 pointer-events-none text-xs font-mono z-10">
           <div class="flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
             <span class="text-slate-300 font-semibold">{cam.label || cam.camera_id.toUpperCase()}</span>
-            {#if cam.camera_id === 'cam_primary'}
-              <span class="text-slate-600">•</span>
-              <span class="text-emerald-400 font-semibold">{occupancy} IN STORE</span>
-            {/if}
+            <span class="text-slate-600">•</span>
+            <span class="text-emerald-400 font-semibold">{occupancy} IN STORE</span>
           </div>
 
           <div class="flex items-center gap-1.5">
@@ -655,17 +687,26 @@
               </button>
             {/if}
 
-            {#if cam.camera_id === 'cam_primary' && isEditingZones}
+            {#if isCalibratingThis}
               <div class="flex items-center gap-1.5 bg-amber-950/80 backdrop-blur-xs border border-amber-600/50 text-amber-200 px-2 sm:px-2.5 py-0.5 rounded shadow-sm">
                 <span>CALIBRATING</span>
                 <span class="text-amber-400 font-bold">X:{cursorX} Y:{cursorY}</span>
               </div>
+            {:else if isEditingZones}
+              <button
+                type="button"
+                class="pointer-events-auto bg-amber-950/80 hover:bg-amber-900 text-amber-300 hover:text-amber-200 border border-amber-600/60 px-2 py-0.5 rounded transition-colors cursor-pointer text-[10px] font-semibold"
+                title="Switch calibration to this camera"
+                onclick={() => setCalibratingCamera(cam.camera_id)}
+              >
+                CALIBRATE THIS
+              </button>
             {/if}
           </div>
         </div>
 
-        <!-- Interactive SVG ROI polygon editor for primary camera in calibration mode -->
-        {#if cam.camera_id === 'cam_primary' && isEditingZones}
+        <!-- Interactive SVG ROI polygon editor for active camera in calibration mode -->
+        {#if isCalibratingThis}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <svg 
             class="absolute inset-0 w-full h-full cursor-crosshair select-none z-20 pointer-events-auto" 
@@ -677,46 +718,48 @@
             onmouseleave={handleSvgMouseUp}
           >
             {#each zones as zone, zIdx (zone.zone_id || zIdx)}
-              {@const isSel = zIdx === selectedZoneIdx}
-              {@const theme = getZoneTheme(zone.zone_type)}
-              {@const ptsStr = zone.polygon.map((p) => p.join(',')).join(' ')}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <polygon
-                points={ptsStr}
-                stroke={theme.stroke}
-                stroke-width={isSel ? '2.5' : '1.5'}
-                stroke-dasharray={isSel ? '4 2' : 'none'}
-                fill={theme.fill}
-                role="button"
-                tabindex="0"
-                aria-label={zone.label || `Zone ${zIdx + 1}`}
-                class="transition-all cursor-pointer focus:outline-none"
-                onmousedown={() => selectedZoneIdx = zIdx}
-                onkeydown={(e) => e.key === 'Enter' && (selectedZoneIdx = zIdx)}
-              />
-              <text
-                x={zone.polygon[0][0]}
-                y={Math.max(18, zone.polygon[0][1] - 8)}
-                class="fill-white font-mono text-xs font-bold drop-shadow"
-              >
-                {zone.label} ({zone.zone_type})
-              </text>
+              {#if isZoneOnActiveCamera(zone, cam.camera_id)}
+                {@const isSel = zIdx === selectedZoneIdx}
+                {@const theme = getZoneTheme(zone.zone_type)}
+                {@const ptsStr = zone.polygon.map((p) => p.join(',')).join(' ')}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <polygon
+                  points={ptsStr}
+                  stroke={theme.stroke}
+                  stroke-width={isSel ? '2.5' : '1.5'}
+                  stroke-dasharray={isSel ? '4 2' : 'none'}
+                  fill={theme.fill}
+                  role="button"
+                  tabindex="0"
+                  aria-label={zone.label || `Zone ${zIdx + 1}`}
+                  class="transition-all cursor-pointer focus:outline-none"
+                  onmousedown={() => selectedZoneIdx = zIdx}
+                  onkeydown={(e) => e.key === 'Enter' && (selectedZoneIdx = zIdx)}
+                />
+                <text
+                  x={zone.polygon[0][0]}
+                  y={Math.max(18, zone.polygon[0][1] - 8)}
+                  class="fill-white font-mono text-xs font-bold drop-shadow"
+                >
+                  {zone.label} ({zone.zone_type})
+                </text>
 
-              {#if isSel}
-                {#each zone.polygon as pt, ptIdx (`${zone.zone_id || zIdx}_pt_${ptIdx}`)}
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <circle
-                    cx={pt[0]}
-                    cy={pt[1]}
-                    r="6"
-                    fill={theme.stroke}
-                    role="button"
-                    tabindex="0"
-                    aria-label={`Vertex ${ptIdx + 1} of ${zone.label || `Zone ${zIdx + 1}`}`}
-                    class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform focus:outline-none"
-                    onmousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
-                  />
-                {/each}
+                {#if isSel}
+                  {#each zone.polygon as pt, ptIdx (`${zone.zone_id || zIdx}_pt_${ptIdx}`)}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <circle
+                      cx={pt[0]}
+                      cy={pt[1]}
+                      r="6"
+                      fill={theme.stroke}
+                      role="button"
+                      tabindex="0"
+                      aria-label={`Vertex ${ptIdx + 1} of ${zone.label || `Zone ${zIdx + 1}`}`}
+                      class="stroke-2 stroke-white cursor-grab hover:scale-125 transition-transform focus:outline-none"
+                      onmousedown={(e) => handleSvgMouseDown(zIdx, ptIdx, e)}
+                    />
+                  {/each}
+                {/if}
               {/if}
             {/each}
           </svg>
@@ -727,13 +770,13 @@
           <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md truncate">
             <span>{targetFps} FPS</span>
             <span class="text-slate-500">|</span>
-            <span class="text-slate-300">{viewWidth}×{viewHeight}</span>
+            <span class="text-slate-300">{(cameraResolutions[cam.camera_id]?.width || viewWidth)}×{(cameraResolutions[cam.camera_id]?.height || viewHeight)}</span>
             <span class="text-slate-500 hidden sm:inline">|</span>
             <span class="text-sky-400 hidden sm:inline">YOLOv26n</span>
           </div>
 
           <div class="flex items-center gap-1 sm:gap-1.5 bg-slate-900/90 backdrop-blur-xs border border-slate-700 text-slate-300 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded shadow-md shrink-0">
-            {#if overlayZones && cam.camera_id === 'cam_primary'}
+            {#if overlayZones}
               <span class="text-sky-400 hidden md:inline">ZONES: ON</span>
             {/if}
             {#if overlayDetections}
@@ -753,9 +796,36 @@
         <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <div class="flex items-center gap-1">
             <label for="zone-select" class="text-slate-600 font-semibold">Zone:</label>
-            <select id="zone-select" bind:value={selectedZoneIdx} class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900">
+            <select 
+              id="zone-select" 
+              bind:value={selectedZoneIdx} 
+              onchange={(e) => {
+                const idx = parseInt(e.target.value, 10);
+                if (zones[idx]) {
+                  const zCam = zones[idx].camera_id || "cam_primary";
+                  setCalibratingCamera(zCam);
+                }
+              }}
+              class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900"
+            >
               {#each zones as z, i (z.zone_id || i)}
-                <option value={i}>{z.label || `Zone ${i + 1}`} ({z.zone_type})</option>
+                <option value={i}>[{z.camera_id || 'cam_primary'}] {z.label || `Zone ${i + 1}`} ({z.zone_type})</option>
+              {/each}
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <label for="zone-cam-select" class="text-slate-600 font-semibold">Camera:</label>
+            <select 
+              id="zone-cam-select" 
+              bind:value={zones[selectedZoneIdx].camera_id} 
+              onchange={(e) => {
+                setCalibratingCamera(e.target.value);
+              }}
+              class="bg-white border border-slate-200 rounded px-2 py-1 text-slate-900"
+            >
+              {#each cameras as c (c.camera_id)}
+                <option value={c.camera_id}>{c.label || c.camera_id}</option>
               {/each}
             </select>
           </div>
