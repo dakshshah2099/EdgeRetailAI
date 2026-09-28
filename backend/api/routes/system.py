@@ -121,6 +121,7 @@ def update_system_zones(
             "zone_type": z.zone_type,
             "polygon": [list(pt) for pt in z.polygon],
             "label": z.label,
+            **({"camera_id": z.camera_id} if z.camera_id else {}),
         }
         for z in req.zones
     ]

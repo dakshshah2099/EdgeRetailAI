@@ -47,11 +47,12 @@ def process_and_encode_frame(
     overlay_zones: bool,
     overlay_detections: bool,
     quality: int = 80,
+    camera_id: str | None = None,
 ) -> bytes:
     """Draw configured overlays and encode frame to JPEG bytes."""
     display_frame = frame.copy()
     if overlay_zones:
-        display_frame = draw_zones_overlay(display_frame)
+        display_frame = draw_zones_overlay(display_frame, camera_id=camera_id)
     if overlay_detections:
         display_frame = draw_tracked_overlay(display_frame, tracked)
     ret, jpeg = cv2.imencode(".jpg", display_frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
@@ -64,11 +65,12 @@ def process_and_encode_fallback(
     height: int,
     overlay_zones: bool,
     quality: int = 80,
+    camera_id: str | None = None,
 ) -> bytes:
     """Generate fallback canvas with optional zones overlay and encode to JPEG bytes."""
     fallback = generate_fallback_frame(src, width=width, height=height)
     if overlay_zones:
-        fallback = draw_zones_overlay(fallback)
+        fallback = draw_zones_overlay(fallback, camera_id=camera_id)
     ret, jpeg = cv2.imencode(".jpg", fallback, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
     return jpeg.tobytes() if ret else b""
 
@@ -108,6 +110,7 @@ async def frame_streamer(
                     eff_overlay_zones,
                     eff_overlay_det,
                     80,
+                    camera_id,
                 )
             else:
                 now = asyncio.get_event_loop().time()
@@ -121,6 +124,7 @@ async def frame_streamer(
                         h,
                         overlay_zones if camera_id != "mosaic" else False,
                         80,
+                        camera_id,
                     )
                     last_fallback_time = now
                 frame_bytes = cached_fallback_bytes
@@ -226,10 +230,12 @@ def video_snapshot(
     if is_conn and cached_bgr is not None:
         eff_zones = overlay_zones if camera_id != "mosaic" else False
         eff_det = overlay_detections if camera_id != "mosaic" else False
-        frame_bytes = process_and_encode_frame(cached_bgr, tracked, eff_zones, eff_det, quality=90)
+        frame_bytes = process_and_encode_frame(
+            cached_bgr, tracked, eff_zones, eff_det, quality=90, camera_id=camera_id
+        )
     else:
         frame_bytes = process_and_encode_fallback(
-            src, width=w, height=h, overlay_zones=overlay_zones, quality=90
+            src, width=w, height=h, overlay_zones=overlay_zones, quality=90, camera_id=camera_id
         )
 
     if not frame_bytes:

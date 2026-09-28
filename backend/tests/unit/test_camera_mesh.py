@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -123,3 +125,50 @@ def test_camera_mesh_api_endpoints() -> None:
     # 6. Unregister non-existent returns 404
     del_404 = client.delete("/video/cameras/cam_nonexistent")
     assert del_404.status_code == 404
+
+
+def test_multicam_calibration_and_zone_overlays(tmp_path: Path) -> None:
+    import yaml
+
+    from api.stream_manager import draw_zones_overlay
+
+    cfg_file = tmp_path / "config.yaml"
+    cfg_data = {
+        "camera": {"source": "rtsp://dummy/cam"},
+        "calibration_width": 640,
+        "calibration_height": 480,
+        "zones": [
+            {
+                "zone_id": "z_primary",
+                "zone_type": "entry_exit",
+                "polygon": [[10, 10], [50, 10], [50, 50], [10, 50]],
+                "label": "Entrance Primary",
+                "camera_id": "cam_primary",
+            },
+            {
+                "zone_id": "z_sec",
+                "zone_type": "shelf",
+                "polygon": [[100, 100], [200, 100], [200, 200], [100, 200]],
+                "label": "Shelf Secondary",
+                "camera_id": "cam_aisle_2",
+            },
+        ],
+        "low_stock_confidence_threshold": 0.6,
+        "queue_congestion_length": 4,
+    }
+    with open(cfg_file, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg_data, f)
+
+    canvas = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    # Secondary camera overlay should ONLY draw z_sec, not z_primary
+    annotated_sec = draw_zones_overlay(canvas, config_path=str(cfg_file), camera_id="cam_aisle_2")
+    # Primary region (10, 10) to (50, 50) should be untouched black in annotated_sec
+    assert np.all(annotated_sec[20:40, 20:40] == 0)
+    # Secondary region (100, 100) to (200, 200) should have drawn overlay
+    assert np.any(annotated_sec[110:190, 110:190] != 0)
+
+    # Primary camera overlay should ONLY draw z_primary, not z_sec
+    annotated_pri = draw_zones_overlay(canvas, config_path=str(cfg_file), camera_id="cam_primary")
+    assert np.any(annotated_pri[20:40, 20:40] != 0)
+    assert np.all(annotated_pri[110:190, 110:190] == 0)
