@@ -14,7 +14,6 @@ zones:
     - 705
   - - 80
     - 705
-  label: Main Entrance / Exit
 - zone_id: zone_shelf_beverages
   zone_type: shelf
   polygon:
@@ -26,7 +25,6 @@ zones:
     - 248
   - - 35
     - 364
-  label: Shelf 1 - Cold Beverages
 - zone_id: zone_shelf_snacks
   zone_type: shelf
   polygon:
@@ -38,7 +36,6 @@ zones:
     - 693
   - - 500
     - 718
-  label: Shelf 2 - Snacks & Bakery
 - zone_id: zone_queue_checkout_1
   zone_type: checkout
   polygon:
@@ -50,6 +47,5 @@ zones:
     - 690
   - - 820
     - 690
-  label: Checkout Counter 1
 low_stock_confidence_threshold: 0.6
 queue_congestion_length: 4

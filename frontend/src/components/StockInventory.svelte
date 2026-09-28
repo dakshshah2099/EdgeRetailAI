@@ -91,13 +91,11 @@
 
     const skuItem = skuByShelf[shelfId];
     const catItem = catalogByZone[shelfId];
-    const matchingZone = Array.isArray(shelfZones) ? shelfZones.find(z => z.zone_id === shelfId) : null;
 
     const hasData = skuItem != null || sEv != null;
     const status = (skuItem && (skuItem.status === 'misplaced' ? 'ok' : skuItem.status)) || (sEv && sEv.status) || 'unknown';
     const confidence = (skuItem && skuItem.confidence) || (sEv && sEv.confidence) || 0.0;
     const timestamp = (skuItem && skuItem.timestamp) || (sEv && sEv.timestamp);
-    const shelfLabel = matchingZone?.label || `Shelf (${shelfId})`;
     const detectedSkuName = skuItem?.detected_sku_name || null;
     const detectedSkuId = skuItem?.detected_sku_id || null;
     const expectedSkuName = catItem?.name || null;
@@ -132,7 +130,6 @@
       status,
       confidence,
       timestamp,
-      shelfLabel,
       detectedSkuName,
       detectedSkuId,
       expectedSkuName,
@@ -191,13 +188,9 @@
           <div>
             <div class="flex items-start justify-between gap-2 mb-1">
               <div>
-                <span class="text-xs font-bold text-slate-900 leading-tight block">
-                  {card.shelfLabel}
-                </span>
-                <div class="text-[10px] font-mono text-slate-500 mt-0.5 flex items-center gap-1">
-                  <span>Location:</span>
-                  <code class="text-slate-800 bg-slate-100 px-1 py-0.5 rounded font-bold">{card.shelfId}</code>
-                </div>
+                <code class="text-xs font-bold text-slate-900 leading-tight block font-mono">
+                  {card.shelfId}
+                </code>
               </div>
               <span class="px-2 py-0.5 text-xs font-mono uppercase font-semibold border rounded shrink-0 {st.badge}">
                 {st.label}

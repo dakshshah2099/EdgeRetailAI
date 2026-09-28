@@ -23,7 +23,7 @@ class ZoneConfig(BaseModel):
     zone_id: str
     zone_type: Literal["entry_exit", "product_display", "shelf", "checkout"]
     polygon: list[tuple[int, int]] = Field(min_length=3)  # pixel coords, min 3 points
-    label: str
+    label: str = ""
     camera_id: str | None = None
 
 
