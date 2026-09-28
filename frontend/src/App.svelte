@@ -12,7 +12,6 @@
   import StockInventory from "./components/StockInventory.svelte";
   import DebugControlPanel from "./components/DebugControlPanel.svelte";
   import PlanogramCompliance from "./components/PlanogramCompliance.svelte";
-  import StaffEfficiency from "./components/StaffEfficiency.svelte";
   import ReportsManager from "./components/ReportsManager.svelte";
   import {
     fetchKPIFootfall,
@@ -20,7 +19,6 @@
     fetchKPIStock,
     fetchKPISKU,
     fetchPlanogramCompliance,
-    fetchKPIStaff,
     fetchAlerts,
     fetchHeatmap,
     fetchSystemEnv,
@@ -65,12 +63,11 @@
   let stockData = $state.raw([]);
   let skuReport = $state.raw(null);
   let planogramData = $state.raw(null);
-  let staffData = $state.raw(null);
   let alertsData = $state.raw([]);
   let heatmapData = $state.raw(null);
 
   // Active Route Identifier
-  let activeTab = $state("camera"); // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'planogram' | 'staff' | 'reports' | 'alerts' | 'settings'
+  let activeTab = $state("camera"); // 'camera' | 'heatmap' | 'footfall' | 'queues' | 'stock' | 'planogram' | 'reports' | 'alerts' | 'settings'
 
   const validRoutes = [
     "camera",
@@ -79,7 +76,6 @@
     "queues",
     "stock",
     "planogram",
-    "staff",
     "reports",
     "alerts",
     "settings",
@@ -116,15 +112,10 @@
       category: "Store Intelligence",
       desc: "Shelf facing grid subdivision, expected layout compliance, and empty facing detection",
     },
-    staff: {
-      title: "Staff Efficiency Analytics",
-      category: "Store Intelligence",
-      desc: "Counter utilization, recommendation follow rates, and operational alert response speed",
-    },
     reports: {
-      title: "Automated Daily Reports",
+      title: "Incident Triage Reports",
       category: "Operations",
-      desc: "On-demand shift and daily analytics compilation with CSV & PDF report downloads",
+      desc: "Daily operational incident logs, resolution metrics & triage audit downloads",
     },
     alerts: {
       title: "Operations Incident Log",
@@ -190,7 +181,7 @@
       (shelfZones.length > 0 ? shelfZones[0].zone_id : "zone_shelf_beverages");
 
     try {
-      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, staff, zonesRes, catalogRes] = await Promise.allSettled([
+      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, zonesRes, catalogRes] = await Promise.allSettled([
         checkHealth({ signal: ac.signal }),
         fetchKPIFootfall({ ...params, group_by: groupBy }, { signal: ac.signal }),
         fetchKPIQueue(params, { signal: ac.signal }),
@@ -200,14 +191,13 @@
         fetchSystemEnv({ signal: ac.signal }),
         fetchKPISKU(params, { signal: ac.signal }),
         fetchPlanogramCompliance(targetPlanoShelf, { signal: ac.signal }),
-        fetchKPIStaff(params, { signal: ac.signal }),
         fetchSystemZones({ signal: ac.signal }),
         fetchSKUCatalog({}, { signal: ac.signal }),
       ]);
 
       if (ac.signal.aborted) return;
 
-      [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, staff, zonesRes, catalogRes].forEach((r, i) => {
+      [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, zonesRes, catalogRes].forEach((r, i) => {
         if (r.status === 'rejected') console.warn(`Dashboard fetch [${i}] failed:`, r.reason);
       });
 
@@ -219,7 +209,6 @@
       if (heatmap.status === "fulfilled") heatmapData = heatmap.value;
       if (sku.status === "fulfilled") skuReport = sku.value;
       if (plano.status === "fulfilled") planogramData = plano.value;
-      if (staff.status === "fulfilled") staffData = staff.value;
       if (sysEnv.status === "fulfilled") {
         envVariables = sysEnv.value.variables;
       }
@@ -614,12 +603,6 @@
               selectedPlanogramShelf = sId;
               loadAllData();
             }}
-            onRefresh={loadAllData} 
-          />
-        {:else if activeTab === "staff"}
-          <StaffEfficiency 
-            {staffData} 
-            isLoading={isRefreshing} 
             onRefresh={loadAllData} 
           />
         {:else if activeTab === "reports"}

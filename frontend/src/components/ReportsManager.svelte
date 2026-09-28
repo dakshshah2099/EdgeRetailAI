@@ -53,9 +53,9 @@
 <div class="bg-white border border-slate-200 rounded-lg p-4 sm:p-6 shadow-xs flex flex-col gap-5">
   <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100">
     <div>
-      <h3 class="text-base font-semibold text-slate-900">Automated Analytics Reports</h3>
+      <h3 class="text-base font-semibold text-slate-900">Incident Triage & Resolution Reports</h3>
       <p class="text-xs text-slate-500 font-mono mt-0.5">
-        Export comprehensive daily store activity snapshots to CSV or PDF
+        Export comprehensive operational incident logs, resolution velocity & triage audit metrics
       </p>
     </div>
   </div>
@@ -73,7 +73,7 @@
           bind:value={selectedDate}
         />
         <p class="text-[11px] font-mono text-slate-500">
-          Aggregates all footfall, queue lengths, inventory depletions, and alert response times for [00:00, 23:59:59).
+          Compiles all operational incident alerts, resolution velocity, clearance timestamps, and breach logs for [00:00, 23:59:59).
         </p>
       </div>
 
@@ -116,21 +116,21 @@
       {/if}
     </div>
 
-    <!-- Features Overview -->
+    <!-- Triage Audit Sections Overview -->
     <div class="flex flex-col gap-3 text-xs text-slate-600">
-      <h4 class="font-mono font-semibold text-slate-700 uppercase">Included Audit Sections</h4>
+      <h4 class="font-mono font-semibold text-slate-700 uppercase">Triage Audit Metrics</h4>
       <div class="space-y-2 font-mono">
         <div class="p-2.5 rounded border border-slate-200 bg-white">
-          <strong class="text-slate-900">1. Store Flow & Footfall:</strong> Total enters, exits, net occupancy, and peak traffic hours.
+          <strong class="text-slate-900">1. Incident Lifecycle & Volume:</strong> Complete count of opened, escalated, and resolved alerts across the store.
         </div>
         <div class="p-2.5 rounded border border-slate-200 bg-white">
-          <strong class="text-slate-900">2. Register Queues:</strong> Counter line lengths, estimated wait times, and bottleneck alerts.
+          <strong class="text-slate-900">2. Resolution Velocity:</strong> Accurate duration tracking from breach initiation to clearance (time-to-resolve in seconds).
         </div>
         <div class="p-2.5 rounded border border-slate-200 bg-white">
-          <strong class="text-slate-900">3. Shelf Depletions:</strong> Stock levels, replenishment alerts, and planogram facing status.
+          <strong class="text-slate-900">3. Zone Triage Breakdown:</strong> Incident distributions across checkout registers, product shelves, and dwell zones.
         </div>
         <div class="p-2.5 rounded border border-slate-200 bg-white">
-          <strong class="text-slate-900">4. Staff Efficiency:</strong> Alert resolution speed, active counter metrics, and recommendation follow rates.
+          <strong class="text-slate-900">4. SLA & Operational Compliance:</strong> Ratio of resolved incidents vs active alerts with timestamped operator audit records.
         </div>
       </div>
     </div>
