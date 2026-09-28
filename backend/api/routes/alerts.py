@@ -43,6 +43,16 @@ def get_audit_trail(
 def resolve_all_alerts(repo: RepoDep) -> ResolveAllAlertsResponse:
     """Resolve all currently open operational alerts in persistence."""
     count = repo.resolve_all_open_alerts()
+    try:
+        from api.stream_manager import stream_manager
+        stream_manager.alert_engine.clear_all_open_alerts()
+    except Exception:
+        pass
+    try:
+        from api.routes.ws import ws_manager
+        ws_manager.broadcast_sync({"type": "alerts_update"})
+    except Exception:
+        pass
     return ResolveAllAlertsResponse(status="ok", count=count, resolved_count=count)
 
 
@@ -58,4 +68,14 @@ def resolve_single_alert(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Alert {alert_id} not found or already resolved",
         )
+    try:
+        from api.stream_manager import stream_manager
+        stream_manager.alert_engine.resolve_alert(alert_id)
+    except Exception:
+        pass
+    try:
+        from api.routes.ws import ws_manager
+        ws_manager.broadcast_sync({"type": "alerts_update"})
+    except Exception:
+        pass
     return ResolveAlertResponse(status="ok", alert_id=alert_id)

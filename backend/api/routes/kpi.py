@@ -131,14 +131,66 @@ def get_stock_kpi(
     limit: Annotated[int, Query(ge=1, le=1000, description="Max raw stock events to query")] = 100,
 ) -> list[StockEvent]:
     """Return the latest stock level status (empty, low, ok) per shelf."""
-    events = repo.get_recent_stock_events(limit=limit, shelf_id=shelf_id)
+    if shelf_id is not None:
+        events = repo.get_recent_stock_events(limit=limit, shelf_id=shelf_id)
+        if events:
+            return events[:1]
+        all_recent = repo.get_recent_stock_events(limit=max(limit, 500))
+        facing_evs = [e for e in all_recent if e.shelf_id.startswith(f"{shelf_id}:facing:")]
+        if facing_evs:
+            has_empty = any(e.status == "empty" for e in facing_evs)
+            has_low = any(e.status == "low" for e in facing_evs)
+            derived_status: Literal["empty", "low", "ok"] = (
+                "empty" if has_empty else ("low" if has_low else "ok")
+            )
+            avg_conf = sum(e.confidence for e in facing_evs) / len(facing_evs)
+            return [
+                StockEvent(
+                    event_id=f"rollup_{shelf_id}",
+                    shelf_id=shelf_id,
+                    timestamp=facing_evs[0].timestamp,
+                    status=derived_status,
+                    confidence=round(avg_conf, 2),
+                )
+            ]
+        return []
 
+    events = repo.get_recent_stock_events(limit=max(limit, 1000))
     seen_shelves: set[str] = set()
     latest_per_shelf: list[StockEvent] = []
+
+    # 1. Direct parent shelf events
     for ev in events:
-        if ev.shelf_id not in seen_shelves:
+        if ":facing:" not in ev.shelf_id and ev.shelf_id not in seen_shelves:
             seen_shelves.add(ev.shelf_id)
             latest_per_shelf.append(ev)
+
+    # 2. For shelves only having sub-facing events, synthesize a rolled-up parent event
+    facings_by_shelf: dict[str, list[StockEvent]] = {}
+    for ev in events:
+        if ":facing:" in ev.shelf_id:
+            parent_id = ev.shelf_id.split(":facing:")[0]
+            if parent_id not in seen_shelves:
+                facings_by_shelf.setdefault(parent_id, []).append(ev)
+
+    for parent_id, f_list in facings_by_shelf.items():
+        if parent_id not in seen_shelves:
+            seen_shelves.add(parent_id)
+            has_empty = any(e.status == "empty" for e in f_list)
+            has_low = any(e.status == "low" for e in f_list)
+            d_status: Literal["empty", "low", "ok"] = (
+                "empty" if has_empty else ("low" if has_low else "ok")
+            )
+            avg_conf = sum(e.confidence for e in f_list) / len(f_list)
+            latest_per_shelf.append(
+                StockEvent(
+                    event_id=f"rollup_{parent_id}",
+                    shelf_id=parent_id,
+                    timestamp=f_list[0].timestamp,
+                    status=d_status,
+                    confidence=round(avg_conf, 2),
+                )
+            )
 
     return latest_per_shelf
 

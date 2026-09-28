@@ -43,13 +43,22 @@
           bar: 'bg-amber-500',
           alertText: 'WARNING: Prepare replenishment'
         };
-      default:
+      case 'ok':
         return {
           label: 'IN STOCK',
           border: 'border-slate-200 hover:border-slate-300',
           bg: 'bg-white',
           badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
           bar: 'bg-emerald-500',
+          alertText: null
+        };
+      default:
+        return {
+          label: 'PENDING INGEST',
+          border: 'border-slate-200',
+          bg: 'bg-slate-50/50',
+          badge: 'bg-slate-100 text-slate-600 border-slate-200',
+          bar: 'bg-slate-300',
           alertText: null
         };
     }
@@ -60,26 +69,59 @@
     Array.isArray(shelfZones) && shelfZones.length > 0
       ? shelfZones.map(z => z.zone_id)
       : Array.from(new Set([
-          ...stockEvents.map(s => s.shelf_id),
+          ...stockEvents.map(s => s.shelf_id.split(':facing:')[0]),
           ...(skuReport && skuReport.items ? skuReport.items.map(i => i.shelf_id) : [])
         ]))
   );
 
   let cardsData = $derived(allShelfIds.map(shelfId => {
-    const sEv = stockEvents.find(s => s.shelf_id === shelfId);
+    let sEv = stockEvents.find(s => s.shelf_id === shelfId);
+    const facingEvs = stockEvents.filter(s => s.shelf_id.startsWith(`${shelfId}:facing:`));
+    if (!sEv && facingEvs.length > 0) {
+      const hasEmpty = facingEvs.some(f => f.status === 'empty');
+      const hasLow = facingEvs.some(f => f.status === 'low');
+      const avgConf = facingEvs.reduce((acc, f) => acc + f.confidence, 0) / facingEvs.length;
+      sEv = {
+        shelf_id: shelfId,
+        status: hasEmpty ? 'empty' : (hasLow ? 'low' : 'ok'),
+        confidence: avgConf,
+        timestamp: facingEvs[0].timestamp
+      };
+    }
+
     const skuItem = skuByShelf[shelfId];
     const catItem = catalogByZone[shelfId];
     const matchingZone = Array.isArray(shelfZones) ? shelfZones.find(z => z.zone_id === shelfId) : null;
 
-    const status = (skuItem && (skuItem.status === 'misplaced' ? 'ok' : skuItem.status)) || (sEv && sEv.status) || 'empty';
+    const hasData = skuItem != null || sEv != null;
+    const status = (skuItem && (skuItem.status === 'misplaced' ? 'ok' : skuItem.status)) || (sEv && sEv.status) || 'unknown';
     const confidence = (skuItem && skuItem.confidence) || (sEv && sEv.confidence) || 0.0;
     const timestamp = (skuItem && skuItem.timestamp) || (sEv && sEv.timestamp);
     const skuName = skuItem?.detected_sku_name || catItem?.name || matchingZone?.label || `Shelf (${shelfId})`;
     const skuId = skuItem?.detected_sku_id || skuItem?.expected_sku_id || catItem?.sku_id || null;
     const brand = catItem?.brand || null;
     const category = catItem?.category || null;
-    const facingCount = skuItem ? skuItem.facing_count : 0;
-    const fillPct = skuItem ? Math.round(skuItem.fill_percentage * 100) : 0;
+
+    let facingCount = 0;
+    let fillPct = 0;
+    if (skuItem && typeof skuItem.facing_count === 'number') {
+      facingCount = skuItem.facing_count;
+      fillPct = Math.round((skuItem.fill_percentage ?? 0) * 100);
+    } else if (facingEvs.length > 0) {
+      facingCount = facingEvs.filter(f => f.status === 'ok').length;
+      fillPct = Math.round((facingCount / facingEvs.length) * 100);
+    } else if (sEv) {
+      if (sEv.status === 'ok') {
+        fillPct = 100;
+        facingCount = 1;
+      } else if (sEv.status === 'low') {
+        fillPct = 40;
+        facingCount = 1;
+      } else if (sEv.status === 'empty') {
+        fillPct = 0;
+        facingCount = 0;
+      }
+    }
 
     return {
       shelfId,
@@ -91,7 +133,8 @@
       brand,
       category,
       facingCount,
-      fillPct
+      fillPct,
+      hasData
     };
   }));
 
@@ -176,7 +219,11 @@
             <div class="flex items-center justify-between">
               <span class="text-slate-500">Visible Facings</span>
               <span class="text-slate-900 font-bold">
-                {card.facingCount} {card.facingCount === 1 ? 'unit' : 'units'}
+                {#if card.hasData}
+                  {card.facingCount} {card.facingCount === 1 ? 'unit' : 'units'}
+                {:else}
+                  <span class="text-slate-400 font-normal">Awaiting stream</span>
+                {/if}
               </span>
             </div>
 
@@ -184,17 +231,17 @@
               <div class="flex items-center justify-between text-[11px]">
                 <span class="text-slate-500">Shelf Fill Level</span>
                 <span class="font-semibold {card.fillPct < 35 ? 'text-rose-700' : card.fillPct < 60 ? 'text-amber-700' : 'text-emerald-700'}">
-                  {card.fillPct}%
+                  {card.hasData ? `${card.fillPct}%` : '—'}
                 </span>
               </div>
               <div class="w-full bg-slate-200 h-2 rounded-sm overflow-hidden">
-                <div class="h-full rounded-sm {st.bar} transition-all duration-300" style="width: {card.fillPct}%;"></div>
+                <div class="h-full rounded-sm {st.bar} transition-all duration-300" style="width: {card.hasData ? card.fillPct : 0}%;"></div>
               </div>
             </div>
 
             <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200 text-slate-400">
               <span>Classifier Conf</span>
-              <span class="text-slate-700 font-semibold">{Math.round(card.confidence * 100)}%</span>
+              <span class="text-slate-700 font-semibold">{card.hasData ? `${Math.round(card.confidence * 100)}%` : '—'}</span>
             </div>
           </div>
 
@@ -208,8 +255,8 @@
 
           <!-- Footer -->
           <div class="text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-100 flex justify-between">
-            <span>Cadence: 10s Edge</span>
-            <span>{formatTime(card.timestamp)}</span>
+            <span>Inspection: Edge AI</span>
+            <span>{card.timestamp ? formatTime(card.timestamp) : 'Awaiting Ingest'}</span>
           </div>
         </div>
       {/each}

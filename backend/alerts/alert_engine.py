@@ -395,6 +395,20 @@ class AlertEngine:
         """Return list of all currently active/open alerts."""
         return list(self._open_stock_alerts.values()) + list(self._open_queue_alerts.values())
 
+    def resolve_alert(self, alert_id: str) -> None:
+        """Manually mark an alert as resolved in memory by removing from open state."""
+        for shelf_id, a in list(self._open_stock_alerts.items()):
+            if a.alert_id == alert_id:
+                del self._open_stock_alerts[shelf_id]
+        for counter_id, a in list(self._open_queue_alerts.items()):
+            if a.alert_id == alert_id:
+                del self._open_queue_alerts[counter_id]
+
+    def clear_all_open_alerts(self) -> None:
+        """Clear all active debounced open alerts in memory."""
+        self._open_stock_alerts.clear()
+        self._open_queue_alerts.clear()
+
     def reset(self) -> None:
         """Clear all internal tracking states for open alerts."""
         self._open_stock_alerts.clear()
