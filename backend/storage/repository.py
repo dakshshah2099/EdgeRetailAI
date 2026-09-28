@@ -249,10 +249,13 @@ class EventRepository:
                 cursor = conn.execute(
                     """
                     UPDATE alerts
-                    SET resolved_at = ?
+                    SET resolved_at = CASE
+                        WHEN created_at > ? THEN created_at
+                        ELSE ?
+                    END
                     WHERE resolved_at IS NULL;
                     """,
-                    (res_time,),
+                    (res_time, res_time),
                 )
                 return cursor.rowcount
         finally:
@@ -268,10 +271,13 @@ class EventRepository:
                 cursor = conn.execute(
                     """
                     UPDATE alerts
-                    SET resolved_at = ?
+                    SET resolved_at = CASE
+                        WHEN created_at > ? THEN created_at
+                        ELSE ?
+                    END
                     WHERE alert_id = ? AND resolved_at IS NULL;
                     """,
-                    (res_time, alert_id),
+                    (res_time, res_time, alert_id),
                 )
                 return cursor.rowcount > 0
         finally:
@@ -334,22 +340,28 @@ class EventRepository:
                 (limit,),
             )
             rows = cursor.fetchall()
-            return [
-                Alert(
-                    alert_id=row["alert_id"],
-                    alert_type=row["alert_type"],
-                    severity=row["severity"],
-                    zone_id=row["zone_id"],
-                    message=row["message"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    resolved_at=(
-                        datetime.fromisoformat(row["resolved_at"])
-                        if row["resolved_at"] is not None
-                        else None
-                    ),
+            alerts: list[Alert] = []
+            for row in rows:
+                c_at = datetime.fromisoformat(row["created_at"])
+                r_at = (
+                    datetime.fromisoformat(row["resolved_at"])
+                    if row["resolved_at"] is not None
+                    else None
                 )
-                for row in rows
-            ]
+                if r_at is not None and r_at < c_at:
+                    r_at = c_at
+                alerts.append(
+                    Alert(
+                        alert_id=row["alert_id"],
+                        alert_type=row["alert_type"],
+                        severity=row["severity"],
+                        zone_id=row["zone_id"],
+                        message=row["message"],
+                        created_at=c_at,
+                        resolved_at=r_at,
+                    )
+                )
+            return alerts
         finally:
             conn.close()
 
@@ -367,22 +379,28 @@ class EventRepository:
                 (limit,),
             )
             rows = cursor.fetchall()
-            return [
-                Alert(
-                    alert_id=row["alert_id"],
-                    alert_type=row["alert_type"],
-                    severity=row["severity"],
-                    zone_id=row["zone_id"],
-                    message=row["message"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    resolved_at=(
-                        datetime.fromisoformat(row["resolved_at"])
-                        if row["resolved_at"] is not None
-                        else None
-                    ),
+            alerts: list[Alert] = []
+            for row in rows:
+                c_at = datetime.fromisoformat(row["created_at"])
+                r_at = (
+                    datetime.fromisoformat(row["resolved_at"])
+                    if row["resolved_at"] is not None
+                    else None
                 )
-                for row in rows
-            ]
+                if r_at is not None and r_at < c_at:
+                    r_at = c_at
+                alerts.append(
+                    Alert(
+                        alert_id=row["alert_id"],
+                        alert_type=row["alert_type"],
+                        severity=row["severity"],
+                        zone_id=row["zone_id"],
+                        message=row["message"],
+                        created_at=c_at,
+                        resolved_at=r_at,
+                    )
+                )
+            return alerts
         finally:
             conn.close()
 

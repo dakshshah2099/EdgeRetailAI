@@ -323,6 +323,11 @@ class AlertEngine:
 
                 if is_cleared:
                     popped = self._open_stock_alerts.pop(shelf_id)
+                    res_time = (
+                        stock_ev.timestamp
+                        if stock_ev.timestamp >= popped.created_at
+                        else popped.created_at
+                    )
                     resolved_alert = Alert(
                         alert_id=popped.alert_id,
                         alert_type=popped.alert_type,
@@ -330,13 +335,13 @@ class AlertEngine:
                         zone_id=popped.zone_id,
                         message=popped.message,
                         created_at=popped.created_at,
-                        resolved_at=stock_ev.timestamp,
+                        resolved_at=res_time,
                     )
                     resolved.append(resolved_alert)
                     self._audit_log.append(
                         AuditLogEntry(
                             log_id=f"audit_{uuid.uuid4().hex[:12]}",
-                            timestamp=stock_ev.timestamp,
+                            timestamp=res_time,
                             event_type="auto_cleared",
                             alert_id=resolved_alert.alert_id,
                             alert_type=resolved_alert.alert_type,
@@ -359,6 +364,11 @@ class AlertEngine:
                 )
                 if is_cleared:
                     open_alert = self._open_queue_alerts.pop(counter_id)
+                    q_res_time = (
+                        queue_ev.timestamp
+                        if queue_ev.timestamp >= open_alert.created_at
+                        else open_alert.created_at
+                    )
                     resolved_alert = Alert(
                         alert_id=open_alert.alert_id,
                         alert_type=open_alert.alert_type,
@@ -366,7 +376,7 @@ class AlertEngine:
                         zone_id=open_alert.zone_id,
                         message=open_alert.message,
                         created_at=open_alert.created_at,
-                        resolved_at=queue_ev.timestamp,
+                        resolved_at=q_res_time,
                     )
                     resolved.append(resolved_alert)
                     cleared_reason = (
@@ -376,7 +386,7 @@ class AlertEngine:
                     self._audit_log.append(
                         AuditLogEntry(
                             log_id=f"audit_{uuid.uuid4().hex[:12]}",
-                            timestamp=queue_ev.timestamp,
+                            timestamp=q_res_time,
                             event_type="auto_cleared",
                             alert_id=resolved_alert.alert_id,
                             alert_type=resolved_alert.alert_type,

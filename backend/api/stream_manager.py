@@ -681,6 +681,10 @@ class StreamManager:
                                 if q_alert:
                                     repo.upsert_alert(q_alert)
                                     had_q_alert = True
+                                    ws_manager.broadcast_sync({
+                                        "type": "alert",
+                                        "alert": q_alert.model_dump(mode="json"),
+                                    })
                         except Exception as e:
                             logger.error("Queue error on camera '%s': %s", cam_id, e)
 
@@ -717,7 +721,14 @@ class StreamManager:
                         "counters": counters_payload,
                         "data": counters_payload,
                     })
-                    if had_q_alert:
+                    q_resolutions = self.alert_engine.check_resolutions(
+                        self.latest_stock_events,
+                        self.latest_queue_events,
+                        latest_facings=self.latest_facings,
+                    )
+                    for q_res in q_resolutions:
+                        repo.upsert_alert(q_res)
+                    if had_q_alert or q_resolutions:
                         ws_manager.broadcast_sync({"type": "alerts_update"})
 
                 # Broadcast real-time centroid coordinates across all cameras
@@ -886,6 +897,10 @@ class StreamManager:
                                 if s_alert:
                                     repo.upsert_alert(s_alert)
                                     had_stock_alert = True
+                                    ws_manager.broadcast_sync({
+                                        "type": "alert",
+                                        "alert": s_alert.model_dump(mode="json"),
+                                    })
 
                             resolved_alerts = self.alert_engine.check_resolutions(
                                 self.latest_stock_events,
