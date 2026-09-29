@@ -50,7 +50,7 @@ def get_config_path() -> Path:
         target = p
     else:
         target = BACKEND_DIR / cfg_str
-    if not target.is_file() or target.stat().st_size == 0:
+    if not target.is_file():
         ensure_default_config(target)
     return target
 
@@ -85,7 +85,19 @@ _cached_cfg_path: Path | None = None
 def get_app_config(config_path: str | Path | None = None) -> AppConfig | None:
     """Load and return application configuration if present, cached by file mtime."""
     global _cached_cfg, _cached_cfg_mtime, _cached_cfg_path
-    path = get_config_path() if config_path is None else Path(config_path)
+    if config_path is None or str(config_path) in ("config.yaml", "backend/config.yaml"):
+        path = get_config_path()
+    else:
+        p = Path(config_path)
+        if not p.is_absolute():
+            if (BACKEND_DIR / p).is_file():
+                path = BACKEND_DIR / p
+            elif p.is_file():
+                path = p
+            else:
+                path = BACKEND_DIR / p
+        else:
+            path = p
     try:
         resolved_path = path.resolve()
     except OSError:

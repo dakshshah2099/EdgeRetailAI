@@ -1,6 +1,9 @@
+import contextlib
+import os
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -211,12 +214,38 @@ queue_congestion_length: 4
 """
 
 
+def write_file_atomic(path: str | Path, content: str, encoding: str = "utf-8") -> Path:
+    """Atomically write text content to path via temporary file and os.replace."""
+    target_path = Path(path).resolve()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_name = f".{target_path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp"
+    temp_path = target_path.parent / temp_name
+    try:
+        with temp_path.open("w", encoding=encoding) as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, target_path)
+    except Exception:
+        if temp_path.is_file():
+            with contextlib.suppress(OSError):
+                temp_path.unlink()
+        raise
+    return target_path
+
+
+def write_yaml_atomic(path: str | Path, data: dict[str, Any], encoding: str = "utf-8") -> Path:
+    """Atomically serialize dictionary to YAML and write to destination path."""
+    content = yaml.safe_dump(data, default_flow_style=False, sort_keys=False)
+    return write_file_atomic(path, content, encoding=encoding)
+
+
 def ensure_default_config(path: str | Path) -> Path:
     """Ensure config file exists and is populated with default configuration."""
     config_path = Path(path)
-    if not config_path.is_file() or config_path.stat().st_size == 0:
+    if not config_path.is_file():
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(DEFAULT_CONFIG_YAML, encoding="utf-8")
+        write_file_atomic(config_path, DEFAULT_CONFIG_YAML)
     return config_path
 
 
@@ -227,9 +256,6 @@ def load_config(path: str | Path) -> AppConfig:
             ensure_default_config(config_path)
         else:
             raise FileNotFoundError(f"Config file not found: {path}")
-
-    if config_path.stat().st_size == 0:
-        ensure_default_config(config_path)
 
     with config_path.open("r", encoding="utf-8") as f:
         raw_data = yaml.safe_load(f)

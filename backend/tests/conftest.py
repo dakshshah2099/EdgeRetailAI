@@ -57,6 +57,20 @@ def isolate_test_environment(
     em._cached_env = {}
     em._cached_env_path = None
 
+    test_cfg = tmp_path / "config.yaml"
+    real_cfg = em.BACKEND_DIR / "config.yaml"
+    if real_cfg.is_file():
+        test_cfg.write_text(real_cfg.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        from core.schemas import DEFAULT_CONFIG_YAML
+        test_cfg.write_text(DEFAULT_CONFIG_YAML, encoding="utf-8")
+    monkeypatch.setenv("CONFIG_PATH", str(test_cfg))
+
+    import api.dependencies as deps
+    deps._cached_cfg = None
+    deps._cached_cfg_mtime = -1.0
+    deps._cached_cfg_path = None
+
     yield
 
     from api.stream_manager import stream_manager

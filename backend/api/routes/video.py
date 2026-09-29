@@ -27,6 +27,7 @@ from api.stream_manager import (
     resolve_camera_source,
     stream_manager,
 )
+from core.schemas import write_yaml_atomic
 from vision.camera_mesh import camera_mesh
 from vision.rtsp_source import mask_rtsp_credentials
 from vision.tracker import TrackedDetection
@@ -54,8 +55,7 @@ def save_mesh_cameras_to_config(cfg_path: FilePath) -> None:
         if c.camera_id not in ("cam_primary", "default", "primary")
     ]
     raw_cfg["cameras"] = mesh_cams
-    with cfg_path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+    write_yaml_atomic(cfg_path, raw_cfg)
 
 
 class CameraStatusResponse(BaseModel):
@@ -245,8 +245,7 @@ def update_camera_source(
         if "camera" not in raw_cfg or not isinstance(raw_cfg["camera"], dict):
             raw_cfg["camera"] = {}
         raw_cfg["camera"]["source"] = clean_source
-        with cfg_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+        write_yaml_atomic(cfg_path, raw_cfg)
         if "CAMERA_SOURCE" in os.environ:
             os.environ["CAMERA_SOURCE"] = clean_source
         stream_manager.active_src = ""
@@ -287,8 +286,7 @@ def update_camera_source(
             )
 
     raw_cfg["cameras"] = raw_cameras
-    with cfg_path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+    write_yaml_atomic(cfg_path, raw_cfg)
 
     role = req.role or (node.role if node else "general")
     label = req.label or (node.label if node else camera_id)

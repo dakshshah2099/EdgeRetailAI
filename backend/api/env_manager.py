@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from core.schemas import write_file_atomic
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -86,8 +88,8 @@ def write_env_file(updates: dict[str, str], path: Path | None = None) -> dict[st
             new_lines.append(f"{k}={v}\n")
             os.environ[k] = str(v)
 
-    with target_path.open("w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+    content = "".join(new_lines)
+    write_file_atomic(target_path, content)
 
     global _cached_env_mtime
     _cached_env_mtime = -1.0
