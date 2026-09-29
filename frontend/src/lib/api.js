@@ -263,6 +263,20 @@ export async function unregisterCamera(cameraId, options = {}) {
   return res.json();
 }
 
+export async function updatePrimaryCameraSource(source, options = {}) {
+  const res = await fetch(`${API_BASE}/video/primary-source`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source }),
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to update primary camera source');
+  }
+  return res.json();
+}
+
 export function connectTelemetryWebSocket(onMessage, onStatusChange) {
   let ws = null;
   let isClosedManually = false;

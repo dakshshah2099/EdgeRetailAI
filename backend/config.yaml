@@ -1,5 +1,6 @@
 camera:
   source: rtsp://192.168.1.100:8080/h264_pcm.sdp
+cameras: []
 calibration_width: 1280
 calibration_height: 720
 zones:
@@ -15,7 +16,7 @@ zones:
   - - 80
     - 705
   label: ''
-- zone_id: empty
+- zone_id: zone_shelf_beverages
   zone_type: shelf
   polygon:
   - - 0

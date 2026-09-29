@@ -1,5 +1,5 @@
 <script>
-  import { updateSystemEnv, resetTelemetry, resolveAllAlerts } from '../lib/api.js';
+  import { updateSystemEnv, resetTelemetry, resolveAllAlerts, updatePrimaryCameraSource } from '../lib/api.js';
 
   let {
     envVariables = {},
@@ -35,6 +35,19 @@
     editVars = { ...editVars, [key]: val };
     isDirty = true;
     statusMessage = '';
+  }
+
+  async function setCameraPreset(val) {
+    statusMessage = 'Updating primary camera source...';
+    try {
+      await updatePrimaryCameraSource(val);
+      statusMessage = `✓ Primary camera source set to ${val} in config.yaml`;
+      isError = false;
+      isDirty = false;
+    } catch (err) {
+      statusMessage = `Error updating camera source: ${err.message}`;
+      isError = true;
+    }
   }
 
   function resetEdits() {
@@ -274,21 +287,21 @@
       <button 
         type="button"
         class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-        onclick={() => setPreset('CAMERA_SOURCE', 'rtsp://192.168.1.100:8080/h264_pcm.sdp')}
+        onclick={() => setCameraPreset('rtsp://192.168.1.100:8080/h264_pcm.sdp')}
       >
         Phone RTSP
       </button>
       <button 
         type="button"
         class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-        onclick={() => setPreset('CAMERA_SOURCE', '0')}
+        onclick={() => setCameraPreset('0')}
       >
         Webcam (0)
       </button>
       <button 
         type="button"
         class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-        onclick={() => setPreset('CAMERA_SOURCE', 'tests/fixtures/demo_store_walkthrough.mp4')}
+        onclick={() => setCameraPreset('tests/fixtures/demo_store_walkthrough.mp4')}
       >
         Demo Video
       </button>
