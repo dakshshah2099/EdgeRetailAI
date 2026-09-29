@@ -1,0 +1,11 @@
+{
+    "schema_version": 2,
+    "commit": "f2ff00df0d7d4adb5ea1ee854e9707f394726466",
+    "indexed_at": "2026-09-29T15:33:51Z",
+    "project": "EdgeRetailAI",
+    "nodes": 2023,
+    "edges": 8911,
+    "original_size": 7602176,
+    "compressed_size": 1607575,
+    "compression_level": 9
+}
