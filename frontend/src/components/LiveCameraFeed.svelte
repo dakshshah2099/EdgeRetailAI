@@ -1073,25 +1073,5 @@
         </div>
       {/if}
     {/each}
-
-    <!-- Quick Add Stream Tile (if in grid view) -->
-    {#if !focusedCamId && !isAddCameraOpen}
-      <button
-        type="button"
-        class="border-2 border-dashed border-slate-200 hover:border-sky-400 bg-slate-50/50 hover:bg-sky-50/30 rounded-lg p-6 flex flex-col items-center justify-center gap-2.5 text-slate-500 hover:text-sky-700 transition-colors cursor-pointer min-h-[220px]"
-        onclick={() => isAddCameraOpen = true}
-      >
-        <div class="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-xs text-sky-600">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </div>
-        <div class="text-center font-mono">
-          <p class="text-xs font-semibold text-slate-800 uppercase">+ Connect New Camera Stream</p>
-          <p class="text-[11px] text-slate-400 font-sans mt-0.5">RTSP CCTV, USB Webcam, or File Feed</p>
-        </div>
-      </button>
-    {/if}
   </div>
 </div>
