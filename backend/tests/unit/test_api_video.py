@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,3 +35,37 @@ async def test_frame_streamer_generator() -> None:
     assert b"Content-Type: image/jpeg\r\n" in chunk
     assert len(chunk) > 100
     await gen.aclose()
+
+
+def test_video_cameras_and_primary_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    test_cfg = tmp_path / "config.yaml"
+    test_cfg.write_text(
+        "camera:\n  source: 'rtsp://old'\ncameras: []\ncalibration_width: 640\n"
+        "calibration_height: 480\nzones: []\nlow_stock_confidence_threshold: 0.6\n"
+        "queue_congestion_length: 4\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CONFIG_PATH", str(test_cfg))
+
+    # Update primary source
+    resp = client.put("/video/primary-source", json={"source": "rtsp://new_source"})
+    assert resp.status_code == 200
+    assert resp.json()["source"] == "rtsp://new_source"
+    assert "rtsp://new_source" in test_cfg.read_text(encoding="utf-8")
+
+    # Register camera
+    resp = client.post(
+        "/video/cameras",
+        json={"camera_id": "test_cam_2", "source": "0", "role": "shelf", "label": "Shelf Cam"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["camera_id"] == "test_cam_2"
+    assert "test_cam_2" in test_cfg.read_text(encoding="utf-8")
+
+    # Unregister camera
+    resp = client.delete("/video/cameras/test_cam_2")
+    assert resp.status_code == 200
+    assert resp.json()["unregistered"] == "test_cam_2"
+    assert "test_cam_2" not in test_cfg.read_text(encoding="utf-8")

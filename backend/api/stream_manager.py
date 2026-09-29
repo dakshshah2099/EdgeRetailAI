@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -38,15 +39,18 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_camera_source() -> str:
-    """Resolve camera source from os.environ, .env file, then config.yaml, default to '0'."""
+    """Resolve camera source from config.yaml, then os.environ override, default to '0'."""
+    cfg = get_app_config()
+    if cfg and cfg.camera and cfg.camera.source:
+        # Check if environment override is specifically provided (e.g. pytest monkeypatch)
+        if os.environ.get("CAMERA_SOURCE") and os.environ.get("CAMERA_SOURCE") != cfg.camera.source:
+            return os.environ["CAMERA_SOURCE"]
+        return cfg.camera.source
     if os.environ.get("CAMERA_SOURCE"):
         return os.environ["CAMERA_SOURCE"]
     env_vars = read_env_file()
     if "CAMERA_SOURCE" in env_vars and env_vars["CAMERA_SOURCE"]:
         return env_vars["CAMERA_SOURCE"]
-    cfg = get_app_config()
-    if cfg and cfg.camera and cfg.camera.source:
-        return cfg.camera.source
     return "0"
 
 
@@ -319,6 +323,7 @@ class StreamManager:
         return self._camera_queue_monitors[camera_id]
 
     def _ensure_workers_started(self) -> None:
+        camera_mesh.load_from_config()
         if self._capture_thread is None or not self._capture_thread.is_alive():
             self._shutdown_event.clear()
             self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
@@ -358,6 +363,7 @@ class StreamManager:
                             label="Primary Store Camera",
                             auto_start=False,
                         )
+                    camera_mesh.load_from_config()
                     last_check_time = now
 
                 # Initialize or swap camera if source changed
@@ -539,7 +545,8 @@ class StreamManager:
                         curr_meta = self._slot_meta
                         last_processed_seq = self._frame_seq
 
-                if curr_frame is None or curr_meta is None:
+                active_mesh = camera_mesh.get_active_frames()
+                if (curr_frame is None or curr_meta is None) and not active_mesh:
                     time.sleep(0.08)
                     continue
 
@@ -547,7 +554,7 @@ class StreamManager:
 
                 # 3. Person Detection & ByteTracking across primary and mesh cameras
                 tracked_dets: list[TrackedDetection] = []
-                if self.detector is not None:
+                if self.detector is not None and curr_frame is not None:
                     try:
                         raw_dets = self.detector.detect(curr_frame)
                         primary_tracker = self._get_tracker_for_camera("cam_primary")
@@ -561,7 +568,6 @@ class StreamManager:
 
                 # Multi-source inference: run detection on registered secondary mesh camera streams
                 if self.detector is not None:
-                    active_mesh = camera_mesh.get_active_frames()
                     for mesh_cam_id, mesh_frame in active_mesh:
                         if mesh_cam_id in ("cam_primary", "default", "primary"):
                             continue
@@ -596,16 +602,18 @@ class StreamManager:
                 # Assemble active camera list for unified multi-source analytics
                 active_cameras: list[
                     tuple[str, npt.NDArray[np.uint8], Frame, list[TrackedDetection]]
-                ] = [("cam_primary", curr_frame, curr_meta, tracked_dets)]
+                ] = []
+                if curr_frame is not None and curr_meta is not None:
+                    active_cameras.append(("cam_primary", curr_frame, curr_meta, tracked_dets))
 
-                active_mesh = camera_mesh.get_active_frames()
+                now_utc = datetime.now(UTC)
                 for mesh_cam_id, mesh_frame in active_mesh:
                     if mesh_cam_id in ("cam_primary", "default", "primary"):
                         continue
                     m_dets = self.per_camera_tracked.get(mesh_cam_id, [])
                     m_meta = Frame(
                         source_id=mesh_cam_id,
-                        timestamp=curr_meta.timestamp,
+                        timestamp=curr_meta.timestamp if curr_meta else now_utc,
                         width=mesh_frame.shape[1],
                         height=mesh_frame.shape[0],
                     )
@@ -722,9 +730,10 @@ class StreamManager:
                         "data": counters_payload,
                     })
                     q_resolutions = self.alert_engine.check_resolutions(
-                        self.latest_stock_events,
+                        {},
                         self.latest_queue_events,
-                        latest_facings=self.latest_facings,
+                        eval_stock=False,
+                        eval_queue=True,
                     )
                     for q_res in q_resolutions:
                         repo.upsert_alert(q_res)
@@ -766,9 +775,11 @@ class StreamManager:
                 shelf_zones_raw = [z for z in raw_zones if z.zone_type == "shelf"]
                 is_watchdog_due = (now - last_shelf_time >= shelf_interval)
                 has_pending = bool(pending_shelf_eval_zones)
+                has_active_frames = (curr_frame is not None) or bool(
+                    camera_mesh.get_active_frames()
+                )
                 should_eval_shelves = bool(
-                    self.is_connected
-                    and curr_frame is not None
+                    has_active_frames
                     and shelf_zones_raw
                     and (has_pending or is_watchdog_due)
                 )
@@ -806,8 +817,10 @@ class StreamManager:
                                 else "cam_primary"
                             )
                             target_f = cam_frame_map.get(cam_for_shelf, curr_frame)
-                            fw = target_f.shape[1] if target_f is not None else curr_meta.width
-                            fh = target_f.shape[0] if target_f is not None else curr_meta.height
+                            if target_f is None:
+                                continue
+                            fw = target_f.shape[1]
+                            fh = target_f.shape[0]
                             scaled_s = scale_zones_to_frame(
                                 [sz], fw, fh, base_w=base_w, base_h=base_h
                             )
@@ -904,8 +917,10 @@ class StreamManager:
 
                             resolved_alerts = self.alert_engine.check_resolutions(
                                 self.latest_stock_events,
-                                self.latest_queue_events,
+                                {},
                                 latest_facings=self.latest_facings,
+                                eval_stock=True,
+                                eval_queue=False,
                             )
                             for res_alert in resolved_alerts:
                                 repo.upsert_alert(res_alert)

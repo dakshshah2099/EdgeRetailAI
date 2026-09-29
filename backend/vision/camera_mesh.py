@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import math
+import os
 import threading
 import time
 from collections.abc import Mapping, Sequence
@@ -10,10 +11,11 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
+from api.env_manager import read_env_file
 from api.schemas_api import CameraMeshNodeConfig, CameraMeshSummary
 from vision.camera_base import CameraSource
 from vision.http_source import HTTPSource
-from vision.rtsp_source import RTSPSource, mask_rtsp_credentials
+from vision.rtsp_source import RTSPSource, format_authenticated_rtsp_url, mask_rtsp_credentials
 from vision.usb_source import USBSource
 
 logger = logging.getLogger(__name__)
@@ -131,8 +133,20 @@ class CameraNode:
                             non_blocking=True,
                         )
                     elif src.startswith(("rtsp://", "rtsps://")):
+                        env_vars = read_env_file()
+                        rtsp_user = (
+                            env_vars["RTSP_USERNAME"]
+                            if "RTSP_USERNAME" in env_vars
+                            else os.environ.get("RTSP_USERNAME")
+                        )
+                        rtsp_pass = (
+                            env_vars["RTSP_PASSWORD"]
+                            if "RTSP_PASSWORD" in env_vars
+                            else os.environ.get("RTSP_PASSWORD")
+                        )
+                        formatted_src = format_authenticated_rtsp_url(src, rtsp_user, rtsp_pass)
                         self.camera_source = RTSPSource(
-                            source_url=src,
+                            source_url=formatted_src,
                             source_id=self.camera_id,
                             timeout_msec=2000,
                             initial_backoff_sec=1.5,
@@ -141,7 +155,12 @@ class CameraNode:
                         )
                     else:
                         dev_idx: int | str = int(src) if src.isdigit() else src
-                        self.camera_source = USBSource(device_index=dev_idx, pace=True)
+                        self.camera_source = USBSource(
+                            device_index=dev_idx,
+                            source_id=self.camera_id,
+                            loop=True,
+                            pace=True,
+                        )
 
                 # Attempt non-blocking frame read
                 res = self.camera_source.get_frame()
@@ -233,6 +252,26 @@ class CameraMesh:
         """Return list of all registered cameras and their live health."""
         with self._lock:
             return [node.to_config() for node in self._nodes.values()]
+
+    def load_from_config(self) -> None:
+        """Initialize or synchronize mesh camera nodes from config.yaml."""
+        from api.dependencies import get_config_path
+        from core.schemas import load_config
+
+        try:
+            cfg = load_config(get_config_path())
+            if cfg and cfg.cameras:
+                for cam_def in cfg.cameras:
+                    if not self.get_camera(cam_def.camera_id):
+                        self.register_camera(
+                            camera_id=cam_def.camera_id,
+                            source=cam_def.source,
+                            role=cam_def.role,
+                            label=cam_def.label,
+                            auto_start=True,
+                        )
+        except Exception as e:
+            logger.debug("CameraMesh: could not load cameras from config: %s", e)
 
     def get_summary(self) -> CameraMeshSummary:
         """Return aggregated summary of the mesh network."""

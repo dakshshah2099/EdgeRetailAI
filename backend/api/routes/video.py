@@ -1,16 +1,18 @@
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
-from typing import Annotated
+from pathlib import Path as FilePath
+from typing import Annotated, Any
 
 import cv2
 import numpy as np
 import numpy.typing as npt
+import yaml
 from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from api.dependencies import AppConfigDep
+from api.dependencies import AppConfigDep, ConfigPathDep
 from api.schemas_api import (
     CameraMeshNodeConfig,
     CameraMeshSummary,
@@ -31,6 +33,28 @@ from vision.tracker import TrackedDetection
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/video", tags=["video"])
+
+
+def save_mesh_cameras_to_config(cfg_path: FilePath) -> None:
+    """Persist all registered non-primary camera nodes into config.yaml."""
+    if not cfg_path.is_file():
+        return
+    with cfg_path.open("r", encoding="utf-8") as f:
+        raw_cfg: dict[str, Any] = yaml.safe_load(f) or {}
+
+    mesh_cams = [
+        {
+            "camera_id": c.camera_id,
+            "source": c.source,
+            "role": c.role,
+            "label": c.label,
+        }
+        for c in camera_mesh.list_cameras()
+        if c.camera_id not in ("cam_primary", "default", "primary")
+    ]
+    raw_cfg["cameras"] = mesh_cams
+    with cfg_path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
 
 
 class CameraStatusResponse(BaseModel):
@@ -116,7 +140,13 @@ async def frame_streamer(
                 now = asyncio.get_event_loop().time()
                 # Cache synthetic standby frame for 1s to prevent repeated OpenCV encodings
                 if not cached_fallback_bytes or now - last_fallback_time > 1.0:
-                    src = resolve_camera_source()
+                    cam_node = (
+                        camera_mesh.get_camera(camera_id)
+                        if camera_id
+                        and camera_id not in ("cam_primary", "default", "primary", "mosaic")
+                        else None
+                    )
+                    src = cam_node.source if cam_node else resolve_camera_source()
                     cached_fallback_bytes = await asyncio.to_thread(
                         process_and_encode_fallback,
                         src,
@@ -158,7 +188,10 @@ def list_mesh_cameras() -> CameraMeshSummary:
 
 
 @router.post("/cameras")
-def register_mesh_camera(req: RegisterCameraRequest) -> CameraMeshNodeConfig:
+def register_mesh_camera(
+    req: RegisterCameraRequest,
+    cfg_path: ConfigPathDep,
+) -> CameraMeshNodeConfig:
     """Register and start an edge camera node in the retail camera mesh."""
     node = camera_mesh.register_camera(
         camera_id=req.camera_id,
@@ -166,12 +199,14 @@ def register_mesh_camera(req: RegisterCameraRequest) -> CameraMeshNodeConfig:
         role=req.role,
         label=req.label,
     )
+    save_mesh_cameras_to_config(cfg_path)
     return node.to_config()
 
 
 @router.delete("/cameras/{camera_id}")
 def unregister_mesh_camera(
     camera_id: Annotated[str, Path(description="Camera node ID to unregister from mesh")],
+    cfg_path: ConfigPathDep,
 ) -> UnregisterCameraResponse:
     """Remove and shut down a camera node from the mesh topology."""
     success = camera_mesh.unregister_camera(camera_id)
@@ -180,7 +215,35 @@ def unregister_mesh_camera(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Camera node '{camera_id}' not found in mesh.",
         )
+    save_mesh_cameras_to_config(cfg_path)
     return UnregisterCameraResponse(status="ok", unregistered=camera_id)
+
+
+class UpdatePrimarySourceRequest(BaseModel):
+    source: str
+
+
+@router.put("/primary-source")
+def update_primary_camera_source(
+    req: UpdatePrimarySourceRequest,
+    cfg_path: ConfigPathDep,
+) -> dict[str, str]:
+    """Update primary camera stream source directly in config.yaml."""
+    if not cfg_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="config.yaml not found",
+        )
+    with cfg_path.open("r", encoding="utf-8") as f:
+        raw_cfg: dict[str, Any] = yaml.safe_load(f) or {}
+    if "camera" not in raw_cfg or not isinstance(raw_cfg["camera"], dict):
+        raw_cfg["camera"] = {}
+    raw_cfg["camera"]["source"] = req.source
+    with cfg_path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+    # Signal StreamManager to re-open with new source
+    stream_manager.active_src = ""
+    return {"status": "ok", "source": req.source}
 
 
 @router.get("/stream")
