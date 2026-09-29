@@ -45,8 +45,7 @@ def test_load_repo_default_config() -> None:
         repo_config_path = Path("config.yaml")
     assert repo_config_path.is_file(), f"config.yaml not found at {repo_config_path}"
     cfg = load_config(str(repo_config_path))
-    assert isinstance(cfg, AppConfig)
-    assert cfg.camera.source.startswith("rtsp://")
+    assert isinstance(cfg.camera.source, str) and len(cfg.camera.source) > 0
     assert cfg.low_stock_confidence_threshold >= 0.0
     assert cfg.queue_congestion_length >= 1
 

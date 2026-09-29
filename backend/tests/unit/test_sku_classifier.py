@@ -54,8 +54,17 @@ def test_sku_segregator_init_and_catalog() -> None:
     seg = SKUSegregator(interval_seconds=10.0)
     assert seg.interval_seconds == MIN_CADENCE_SECONDS
     catalog = seg.get_catalog()
-    assert len(catalog) >= 3
+    assert len(catalog) == 0
 
+    seg.register_sku(
+        sku_id="sku_bev_cola_330",
+        name="Classic Cola Can 330ml",
+        brand="EdgeCola",
+        expected_zone_id="zone_shelf_beverages",
+        category="beverages",
+        base_hsv=(0, 200, 180),
+    )
+    assert len(seg.get_catalog()) == 1
     cola = seg.get_sku("sku_bev_cola_330")
     assert cola is not None
     assert cola.brand == "EdgeCola"
@@ -121,6 +130,22 @@ def test_facing_count_estimation() -> None:
 
 def test_planogram_misplacement_detection() -> None:
     seg = SKUSegregator()
+    seg.register_sku(
+        sku_id="sku_bev_cola_330",
+        name="Classic Cola Can 330ml",
+        brand="EdgeCola",
+        expected_zone_id="zone_shelf_beverages",
+        category="beverages",
+        base_hsv=(0, 200, 180),
+    )
+    seg.register_sku(
+        sku_id="sku_snack_chips_gold",
+        name="Artisan Potato Chips 50g",
+        brand="CrunchCo",
+        expected_zone_id="zone_shelf_snacks",
+        category="snacks",
+        base_hsv=(30, 210, 200),
+    )
     red_crop = np.zeros((60, 80, 3), dtype=np.uint8)
     red_crop[:, :] = (20, 25, 200)
     for x in range(10, 70, 15):
@@ -134,6 +159,14 @@ def test_planogram_misplacement_detection() -> None:
 
 def test_compliant_shelf() -> None:
     seg = SKUSegregator()
+    seg.register_sku(
+        sku_id="sku_snack_chips_gold",
+        name="Artisan Potato Chips 50g",
+        brand="CrunchCo",
+        expected_zone_id="zone_shelf_snacks",
+        category="snacks",
+        base_hsv=(30, 210, 200),
+    )
     yellow_crop = np.zeros((60, 80, 3), dtype=np.uint8)
     yellow_crop[:, :] = (30, 200, 220)
     for x in range(10, 70, 15):
@@ -162,11 +195,21 @@ def test_api_get_sku_report(client: TestClient) -> None:
 
 
 def test_api_get_sku_catalog(client: TestClient) -> None:
+    client.post(
+        "/kpi/sku/catalog",
+        json={
+            "sku_id": "sku_bev_cola_330",
+            "name": "Classic Cola Can 330ml",
+            "brand": "EdgeCola",
+            "expected_zone_id": "zone_shelf_beverages",
+            "category": "beverages",
+        },
+    )
     response = client.get("/kpi/sku/catalog")
     assert response.status_code == 200
     catalog = response.json()
     assert isinstance(catalog, list)
-    assert len(catalog) >= 3
+    assert len(catalog) >= 1
     ids = [item["sku_id"] for item in catalog]
     assert "sku_bev_cola_330" in ids
 

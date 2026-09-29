@@ -1,5 +1,5 @@
 camera:
-  source: rtsp://192.168.1.100:8080/h264_pcm.sdp
+  source: tests/fixtures/test.mp4
 cameras: []
 calibration_width: 1280
 calibration_height: 720

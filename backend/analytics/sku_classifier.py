@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from datetime import UTC, datetime
 from typing import Literal
@@ -81,40 +80,6 @@ class SKUSegregator:
         self._last_eval_time: float = 0.0
         self._last_report: SKUSegregationReport | None = None
         self.shelf_classifier = HybridShelfClassifier()
-
-        should_seed = os.environ.get(
-            "ENABLE_DEMO_SKUS",
-            "true",
-        ).lower() in ("true", "1", "yes")
-        if should_seed:
-            self._seed_default_catalog()
-
-    def _seed_default_catalog(self) -> None:
-        """Seed default retail catalog SKUs for edge demo."""
-        self.register_sku(
-            sku_id="sku_bev_cola_330",
-            name="Classic Cola Can 330ml",
-            brand="EdgeCola",
-            expected_zone_id="zone_shelf_beverages",
-            category="beverages",
-            base_hsv=(0, 200, 180),
-        )
-        self.register_sku(
-            sku_id="sku_snack_chips_gold",
-            name="Artisan Potato Chips 50g",
-            brand="CrunchCo",
-            expected_zone_id="zone_shelf_snacks",
-            category="snacks",
-            base_hsv=(30, 210, 200),
-        )
-        self.register_sku(
-            sku_id="sku_elec_cable_usbc",
-            name="Braided USB-C Cable 1m",
-            brand="VoltTech",
-            expected_zone_id="zone_shelf_electronics",
-            category="electronics",
-            base_hsv=(110, 190, 160),
-        )
 
     def register_sku(
         self,
