@@ -191,12 +191,21 @@
     isSavingEnv = true;
     statusMessage = '';
     isError = false;
+    let cameraUpdated = false;
     try {
+      if (primarySource.trim() && primarySource.trim() !== (liveVideoStatus?.source || cameraStatus?.source || '')) {
+        await updatePrimaryCameraSource(primarySource.trim());
+        cameraUpdated = true;
+      }
       const res = await updateSystemEnv(editVars);
-      statusMessage = '✓ System environment variables saved and synced to .env.';
+      statusMessage = cameraUpdated
+        ? '✓ Configuration saved: Primary camera source updated and .env synced.'
+        : '✓ Configuration saved: System environment variables synced to .env.';
       isError = false;
       isDirty = false;
       onSave(res);
+      onCameraSourceUpdated();
+      await refreshCameraDetails();
     } catch (err) {
       statusMessage = `Error saving configuration: ${err.message}`;
       isError = true;

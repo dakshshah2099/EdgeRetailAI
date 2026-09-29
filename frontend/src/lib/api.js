@@ -1,4 +1,33 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const RAW_API_BASE = import.meta.env.VITE_API_URL || '';
+
+/**
+ * Cleanly construct an API URL guaranteed to NEVER include credentials in the URL
+ * (which throws TypeError in WHATWG Fetch API).
+ */
+export function buildApiUrl(endpoint) {
+  let base = RAW_API_BASE;
+  if (!base && typeof window !== 'undefined') {
+    // window.location.origin is hostname + port without any username/password credentials
+    base = window.location.origin;
+  }
+  try {
+    const parsed = new URL(endpoint, base || 'http://localhost');
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return endpoint;
+  }
+}
+
+/**
+ * Standard fetch wrapper that strips any user credentials from URL before fetching
+ * to avoid browser TypeError: "Request cannot be constructed from a URL that includes credentials".
+ */
+export async function apiFetch(endpoint, init = {}) {
+  const url = buildApiUrl(endpoint);
+  return fetch(url, init);
+}
 
 export async function fetchKPIFootfall(params = {}, options = {}) {
   const search = new URLSearchParams();
@@ -8,7 +37,7 @@ export async function fetchKPIFootfall(params = {}, options = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/footfall${query}`, { signal: options.signal || params.signal });
+  const res = await apiFetch(`/kpi/footfall${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Footfall KPI error: ${res.statusText}`);
   return res.json();
 }
@@ -19,7 +48,7 @@ export async function fetchKPIQueue(params = {}, options = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/queue${query}`, { signal: options.signal || params.signal });
+  const res = await apiFetch(`/kpi/queue${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Queue KPI error: ${res.statusText}`);
   return res.json();
 }
@@ -30,19 +59,19 @@ export async function fetchKPIStock(params = {}, options = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/stock${query}`, { signal: options.signal || params.signal });
+  const res = await apiFetch(`/kpi/stock${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Stock KPI error: ${res.statusText}`);
   return res.json();
 }
 
 export async function fetchKPISKU(params = {}, options = {}) {
-  const res = await fetch(`${API_BASE}/kpi/sku`, { signal: options.signal || params.signal });
+  const res = await apiFetch('/kpi/sku', { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`SKU KPI error: ${res.statusText}`);
   return res.json();
 }
 
 export async function fetchSKUCatalog(params = {}, options = {}) {
-  const res = await fetch(`${API_BASE}/kpi/sku/catalog`, { signal: options.signal || params.signal });
+  const res = await apiFetch('/kpi/sku/catalog', { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`SKU catalog error: ${res.statusText}`);
   return res.json();
 }
@@ -53,7 +82,7 @@ export async function fetchAlerts(params = {}, options = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/alerts${query}`, { signal: options.signal || params.signal });
+  const res = await apiFetch(`/alerts${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Alerts error: ${res.statusText}`);
   return res.json();
 }
@@ -65,7 +94,7 @@ export async function fetchAlertAudit(params = {}, options = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/alerts/audit${query}`, { signal: options.signal || params.signal });
+  const res = await apiFetch(`/alerts/audit${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Alert audit error: ${res.statusText}`);
   return res.json();
 }
@@ -80,19 +109,19 @@ export async function fetchHeatmap(params = {}, options = {}) {
   if (params.limit) search.set('limit', String(params.limit));
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/heatmap${query}`, { signal: options.signal || params.signal });
+  const res = await apiFetch(`/heatmap${query}`, { signal: options.signal || params.signal });
   if (!res.ok) throw new Error(`Heatmap error: ${res.statusText}`);
   return res.json();
 }
 
 export async function fetchSystemEnv(options = {}) {
-  const res = await fetch(`${API_BASE}/system/env`, { signal: options.signal });
+  const res = await apiFetch('/system/env', { signal: options.signal });
   if (!res.ok) throw new Error(`System env error: ${res.statusText}`);
   return res.json();
 }
 
 export async function updateSystemEnv(variables, options = {}) {
-  const res = await fetch(`${API_BASE}/system/env`, {
+  const res = await apiFetch('/system/env', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ variables }),
@@ -106,7 +135,7 @@ export async function updateSystemEnv(variables, options = {}) {
 }
 
 export async function toggleDebugMode(options = {}) {
-  const res = await fetch(`${API_BASE}/system/toggle-debug`, {
+  const res = await apiFetch('/system/toggle-debug', {
     method: 'POST',
     signal: options.signal,
   });
@@ -121,7 +150,7 @@ export async function fetchSystemZones(params = {}, options = {}) {
 
   const query = search.toString() ? `?${search.toString()}` : '';
   const signal = options.signal || (params && params.signal);
-  const res = await fetch(`${API_BASE}/system/zones${query}`, { signal });
+  const res = await apiFetch(`/system/zones${query}`, { signal });
   if (!res.ok) throw new Error(`Fetch zones error: ${res.statusText}`);
 
   const calW = parseInt(res.headers.get('x-calibration-width') || '640', 10);
@@ -139,7 +168,7 @@ export async function updateSystemZones(zones, calibrationWidth = null, calibrat
   if (calibrationWidth) payload.calibration_width = calibrationWidth;
   if (calibrationHeight) payload.calibration_height = calibrationHeight;
 
-  const res = await fetch(`${API_BASE}/system/zones`, {
+  const res = await apiFetch('/system/zones', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -162,7 +191,7 @@ export async function updateSystemZones(zones, calibrationWidth = null, calibrat
 export async function checkHealth(options = {}) {
   try {
     const signal = options.signal || AbortSignal.timeout(3000);
-    const res = await fetch(`${API_BASE}/health`, { signal });
+    const res = await apiFetch('/health', { signal });
     return res.ok;
   } catch {
     return false;
@@ -170,7 +199,7 @@ export async function checkHealth(options = {}) {
 }
 
 export async function fetchPlanogramCompliance(zoneId, options = {}) {
-  const res = await fetch(`${API_BASE}/kpi/planogram?zone_id=${encodeURIComponent(zoneId)}`, {
+  const res = await apiFetch(`/kpi/planogram?zone_id=${encodeURIComponent(zoneId)}`, {
     signal: options.signal,
   });
   if (!res.ok) throw new Error(`Planogram KPI error: ${res.statusText}`);
@@ -183,17 +212,17 @@ export async function fetchKPIStaff(params = {}, options = {}) {
   if (params.until) search.set('until', params.until);
 
   const query = search.toString() ? `?${search.toString()}` : '';
-  const res = await fetch(`${API_BASE}/kpi/staff${query}`, { signal: options.signal });
+  const res = await apiFetch(`/kpi/staff${query}`, { signal: options.signal });
   if (!res.ok) throw new Error(`Staff KPI error: ${res.statusText}`);
   return res.json();
 }
 
 export function getDailyReportDownloadUrl(dateStr, format = 'csv') {
-  return `${API_BASE}/reports/daily?date=${encodeURIComponent(dateStr)}&format=${encodeURIComponent(format)}&_t=${Date.now()}`;
+  return buildApiUrl(`/reports/daily?date=${encodeURIComponent(dateStr)}&format=${encodeURIComponent(format)}&_t=${Date.now()}`);
 }
 
 export async function resetTelemetry(options = {}) {
-  const res = await fetch(`${API_BASE}/kpi/reset`, {
+  const res = await apiFetch('/kpi/reset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal: options.signal || AbortSignal.timeout(10000),
@@ -206,7 +235,7 @@ export async function resetTelemetry(options = {}) {
 }
 
 export async function resolveAllAlerts(options = {}) {
-  const res = await fetch(`${API_BASE}/alerts/resolve-all`, {
+  const res = await apiFetch('/alerts/resolve-all', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal: options.signal || AbortSignal.timeout(10000),
@@ -219,7 +248,7 @@ export async function resolveAllAlerts(options = {}) {
 }
 
 export async function resolveAlert(alertId, options = {}) {
-  const res = await fetch(`${API_BASE}/alerts/${encodeURIComponent(alertId)}/resolve`, {
+  const res = await apiFetch(`/alerts/${encodeURIComponent(alertId)}/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal: options.signal || AbortSignal.timeout(10000),
@@ -232,13 +261,13 @@ export async function resolveAlert(alertId, options = {}) {
 }
 
 export async function fetchCameras(options = {}) {
-  const res = await fetch(`${API_BASE}/video/cameras`, { signal: options.signal });
+  const res = await apiFetch('/video/cameras', { signal: options.signal });
   if (!res.ok) throw new Error(`Fetch cameras error: ${res.statusText}`);
   return res.json();
 }
 
 export async function registerCamera(cameraData, options = {}) {
-  const res = await fetch(`${API_BASE}/video/cameras`, {
+  const res = await apiFetch('/video/cameras', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cameraData),
@@ -252,7 +281,7 @@ export async function registerCamera(cameraData, options = {}) {
 }
 
 export async function unregisterCamera(cameraId, options = {}) {
-  const res = await fetch(`${API_BASE}/video/cameras/${encodeURIComponent(cameraId)}`, {
+  const res = await apiFetch(`/video/cameras/${encodeURIComponent(cameraId)}`, {
     method: 'DELETE',
     signal: options.signal || AbortSignal.timeout(10000),
   });
@@ -264,7 +293,7 @@ export async function unregisterCamera(cameraId, options = {}) {
 }
 
 export async function updatePrimaryCameraSource(source, options = {}) {
-  const res = await fetch(`${API_BASE}/video/primary-source`, {
+  const res = await apiFetch('/video/primary-source', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ source }),
@@ -278,13 +307,13 @@ export async function updatePrimaryCameraSource(source, options = {}) {
 }
 
 export async function fetchPrimaryCameraSource(options = {}) {
-  const res = await fetch(`${API_BASE}/video/primary-source`, { signal: options.signal });
+  const res = await apiFetch('/video/primary-source', { signal: options.signal });
   if (!res.ok) throw new Error(`Primary camera source error: ${res.statusText}`);
   return res.json();
 }
 
 export async function fetchVideoStatus(options = {}) {
-  const res = await fetch(`${API_BASE}/video/status`, { signal: options.signal });
+  const res = await apiFetch('/video/status', { signal: options.signal });
   if (!res.ok) throw new Error(`Video status error: ${res.statusText}`);
   return res.json();
 }
@@ -298,12 +327,19 @@ export function connectTelemetryWebSocket(onMessage, onStatusChange) {
   const getWsUrl = () => {
     if (typeof window === 'undefined') return '';
     const loc = window.location;
-    let url = API_BASE;
+    let url = RAW_API_BASE;
     if (!url) {
       const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
       return `${proto}//${loc.host}/ws/telemetry`;
     }
-    return url.replace(/^http/, 'ws') + '/ws/telemetry';
+    try {
+      const parsed = new URL(url);
+      parsed.username = '';
+      parsed.password = '';
+      return parsed.toString().replace(/^http/, 'ws') + '/ws/telemetry';
+    } catch {
+      return url.replace(/^http/, 'ws') + '/ws/telemetry';
+    }
   };
 
   function connect() {
@@ -372,11 +408,10 @@ export function connectTelemetryWebSocket(onMessage, onStatusChange) {
 
 export async function fetchCentralStores(options = {}) {
   try {
-    const res = await fetch(`${API_BASE}/central/api/stores`, { signal: options.signal });
+    const res = await apiFetch('/central/api/stores', { signal: options.signal });
     if (!res.ok) return [];
     return res.json();
   } catch {
     return [];
   }
 }
-
