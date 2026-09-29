@@ -142,7 +142,7 @@ def generate_fallback_frame(src: str, width: int = 640, height: int = 480) -> np
 
 def draw_zones_overlay(
     frame_bgr: npt.NDArray[np.uint8],
-    config_path: str = "config.yaml",
+    config_path: str | Path | None = None,
     camera_id: str | None = None,
 ) -> npt.NDArray[np.uint8]:
     """Draw configured zone polygons and labels onto a copy of the frame."""

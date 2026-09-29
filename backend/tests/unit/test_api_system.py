@@ -238,3 +238,64 @@ def test_root_endpoint_redirects_or_returns_json() -> None:
     else:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
+
+
+def test_update_zones_scoped_to_camera(tmp_path: Path) -> None:
+    import yaml
+
+    import api.dependencies as dep
+
+    temp_cfg = tmp_path / "config.yaml"
+    initial_yaml = {
+        "camera": {"source": "0"},
+        "calibration_width": 640,
+        "calibration_height": 480,
+        "low_stock_confidence_threshold": 0.6,
+        "queue_congestion_length": 4,
+        "zones": [
+            {
+                "zone_id": "primary_entrance",
+                "zone_type": "entry_exit",
+                "polygon": [[10, 10], [100, 10], [100, 100], [10, 100]],
+                "label": "Entrance",
+                "camera_id": "cam_primary",
+            },
+            {
+                "zone_id": "aisle_shelf",
+                "zone_type": "shelf",
+                "polygon": [[200, 200], [300, 200], [300, 300], [200, 300]],
+                "label": "Old Aisle Shelf",
+                "camera_id": "cam_aisle_1",
+            },
+        ],
+    }
+    temp_cfg.write_text(yaml.safe_dump(initial_yaml), encoding="utf-8")
+    app.dependency_overrides[dep.get_config_path] = lambda: temp_cfg
+
+    try:
+        write_env_file({"DEBUG_MODE": "true"})
+        # Update only cam_aisle_1 zones
+        new_aisle_zones = [
+            {
+                "zone_id": "new_aisle_shelf",
+                "zone_type": "shelf",
+                "polygon": [[250, 250], [350, 250], [350, 350], [250, 350]],
+                "label": "New Aisle Shelf",
+            }
+        ]
+        resp = client.put("/system/zones?camera_id=cam_aisle_1", json={"zones": new_aisle_zones})
+        assert resp.status_code == 200
+
+        with temp_cfg.open("r", encoding="utf-8") as f:
+            saved_cfg = yaml.safe_load(f)
+
+        saved_zones = saved_cfg["zones"]
+        assert len(saved_zones) == 2
+        # Primary zone is preserved intact
+        assert any(z["zone_id"] == "primary_entrance" for z in saved_zones)
+        # Old aisle zone replaced by new aisle zone
+        assert not any(z["zone_id"] == "aisle_shelf" for z in saved_zones)
+        new_saved = next(z for z in saved_zones if z["zone_id"] == "new_aisle_shelf")
+        assert new_saved["camera_id"] == "cam_aisle_1"
+    finally:
+        app.dependency_overrides.pop(dep.get_config_path, None)

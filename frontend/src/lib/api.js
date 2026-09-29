@@ -168,7 +168,11 @@ export async function updateSystemZones(zones, calibrationWidth = null, calibrat
   if (calibrationWidth) payload.calibration_width = calibrationWidth;
   if (calibrationHeight) payload.calibration_height = calibrationHeight;
 
-  const res = await apiFetch('/system/zones', {
+  const search = new URLSearchParams();
+  if (options && options.camera_id) search.set('camera_id', options.camera_id);
+  const query = search.toString() ? `?${search.toString()}` : '';
+
+  const res = await apiFetch(`/system/zones${query}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

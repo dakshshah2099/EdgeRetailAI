@@ -8,7 +8,7 @@ from api.dependencies import AppConfigDep, ConfigPathDep, RequireDebugModeDep
 from api.env_manager import is_debug_mode, read_env_file, write_env_file
 from api.schemas_api import SystemEnvResponse, UpdateEnvRequest, UpdateZonesRequest
 from api.stream_manager import scale_zones_to_frame
-from core.schemas import ZoneConfig
+from core.schemas import ZoneConfig, write_yaml_atomic
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -107,6 +107,10 @@ def update_system_zones(
     cfg_path: ConfigPathDep,
     response: Response,
     _: RequireDebugModeDep,
+    camera_id: Annotated[
+        str | None,
+        Query(description="Optional camera ID to update zones specifically for this camera"),
+    ] = None,
 ) -> list[ZoneConfig]:
     """Save modified zone polygons directly into config.yaml."""
     raw_cfg: dict[str, Any] = {}
@@ -115,24 +119,42 @@ def update_system_zones(
         with cfg_path.open("r", encoding="utf-8") as f:
             raw_cfg = yaml.safe_load(f) or {}
 
-    raw_cfg["zones"] = [
+    new_zones = [
         {
             "zone_id": z.zone_id,
             "zone_type": z.zone_type,
             "polygon": [list(pt) for pt in z.polygon],
             "label": z.label,
-            **({"camera_id": z.camera_id} if z.camera_id else {}),
+            **({"camera_id": z.camera_id or camera_id} if (z.camera_id or camera_id) else {}),
         }
         for z in req.zones
     ]
+
+    if camera_id:
+        existing = raw_cfg.get("zones", [])
+        if not isinstance(existing, list):
+            existing = []
+        is_primary = camera_id in ("cam_primary", "default", "primary")
+        kept_zones = [
+            z
+            for z in existing
+            if isinstance(z, dict)
+            and (
+                (z.get("camera_id") not in (None, "cam_primary", "default", "primary"))
+                if is_primary
+                else z.get("camera_id") != camera_id
+            )
+        ]
+        raw_cfg["zones"] = kept_zones + new_zones
+    else:
+        raw_cfg["zones"] = new_zones
 
     cal_w = req.calibration_width or raw_cfg.get("calibration_width", 640)
     cal_h = req.calibration_height or raw_cfg.get("calibration_height", 480)
     raw_cfg["calibration_width"] = cal_w
     raw_cfg["calibration_height"] = cal_h
 
-    with cfg_path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+    write_yaml_atomic(cfg_path, raw_cfg)
 
     response.headers["X-Calibration-Width"] = str(cal_w)
     response.headers["X-Calibration-Height"] = str(cal_h)
