@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import os
-import threading
 import time
 import urllib.parse
 from datetime import UTC, datetime
@@ -15,8 +14,6 @@ from core.schemas import Frame
 from vision.camera_base import CameraSource
 
 logger = logging.getLogger(__name__)
-_ffmpeg_env_lock = threading.Lock()
-
 
 
 def format_authenticated_rtsp_url(
@@ -94,9 +91,6 @@ class RTSPSource(CameraSource):
         self._next_reconnect_time: float = 0.0
         self._cap: cv2.VideoCapture | None = None
         self._is_closed: bool = False
-        self._connect_lock = threading.Lock()
-        self._consecutive_read_failures: int = 0
-        self._max_read_failures: int = 5 if non_blocking else 1
 
         if not self._non_blocking:
             self._connect()
@@ -106,62 +100,58 @@ class RTSPSource(CameraSource):
         if self._is_closed:
             return False
 
-        with self._connect_lock:
-            if self._cap is not None:
-                with contextlib.suppress(Exception):
-                    self._cap.release()
-                self._cap = None
+        if self._cap is not None:
+            with contextlib.suppress(Exception):
+                self._cap.release()
+            self._cap = None
 
-            transport = os.environ.get("RTSP_TRANSPORT", "tcp").lower()
-            if transport not in ("tcp", "udp"):
-                transport = "tcp"
-            timeout_us = int(self._timeout_msec * 1000)
+        timeout_us = int(self._timeout_msec * 1000)
+        transport = os.environ.get("RTSP_TRANSPORT", "tcp").lower()
+        if transport not in ("tcp", "udp"):
+            transport = "tcp"
+        # Set ffmpeg socket and connection timeouts in microseconds for OpenCV,
+        # with nobuffer and low delay
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+            f"rtsp_transport;{transport}|timeout;{timeout_us}|stimeout;{timeout_us}|"
+            f"rw_timeout;{timeout_us}|max_delay;500000|fflags;nobuffer|flags;low_delay|"
+            "probesize;1000000|analyzeduration;1000000"
+        )
 
-            logger.info("Connecting to RTSP stream: %s", mask_rtsp_credentials(self.source_url))
-            params = [
-                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
-                self._timeout_msec,
-                cv2.CAP_PROP_READ_TIMEOUT_MSEC,
-                self._timeout_msec,
-            ]
-            with _ffmpeg_env_lock:
-                os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-                    f"rtsp_transport;{transport}|timeout;{timeout_us}|stimeout;{timeout_us}|"
-                    f"rw_timeout;{timeout_us}|max_delay;500000|fflags;nobuffer|flags;low_delay|"
-                    "probesize;1000000|analyzeduration;1000000"
+        logger.info("Connecting to RTSP stream: %s", mask_rtsp_credentials(self.source_url))
+        params = [
+            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+            self._timeout_msec,
+            cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+            self._timeout_msec,
+        ]
+        cap = cv2.VideoCapture(self.source_url, cv2.CAP_FFMPEG, params)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self._timeout_msec)
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self._timeout_msec)
+        if not cap.isOpened():
+            if not self._is_closed:
+                logger.warning(
+                    "Failed to open RTSP stream at %s", mask_rtsp_credentials(self.source_url)
                 )
-                cap = cv2.VideoCapture(self.source_url, cv2.CAP_FFMPEG, params)
+            with contextlib.suppress(Exception):
+                cap.release()
+            self._cap = None
+            return False
 
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self._timeout_msec)
-            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, self._timeout_msec)
+        if self._is_closed:
+            with contextlib.suppress(Exception):
+                cap.release()
+            self._cap = None
+            return False
 
-            if not cap.isOpened():
-                if not self._is_closed:
-                    logger.warning(
-                        "Failed to open RTSP stream at %s", mask_rtsp_credentials(self.source_url)
-                    )
-                with contextlib.suppress(Exception):
-                    cap.release()
-                self._cap = None
-                return False
-
-            if self._is_closed:
-                with contextlib.suppress(Exception):
-                    cap.release()
-                self._cap = None
-                return False
-
-            self._cap = cap
-            self._consecutive_read_failures = 0
-            return True
+        self._cap = cap
+        return True
 
     def _handle_disconnect_and_backoff(self) -> None:
         """Handle stream disconnect, release resource, sleep with backoff, and reconnect."""
         if self._is_closed:
             return
 
-        self._consecutive_read_failures = 0
         logger.warning(
             "RTSP stream %s disconnected or failed to read. Backing off for %.2fs",
             self.source_id,
@@ -210,13 +200,11 @@ class RTSPSource(CameraSource):
 
         ret, frame = self._cap.read()
         if not ret or frame is None or frame.size == 0:
-            self._consecutive_read_failures += 1
-            if self._consecutive_read_failures >= self._max_read_failures and not self._is_closed:
+            if not self._is_closed:
                 self._handle_disconnect_and_backoff()
             return None
 
-        # Reset failure counter on successful frame read
-        self._consecutive_read_failures = 0
+        # Reset backoff on successful frame read
         self._current_backoff = self._initial_backoff_sec
         self._next_reconnect_time = 0.0
 

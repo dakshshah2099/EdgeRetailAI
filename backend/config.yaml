@@ -14,7 +14,8 @@ zones:
     - 705
   - - 80
     - 705
-- zone_id: zone_shelf_beverages
+  label: ''
+- zone_id: empty
   zone_type: shelf
   polygon:
   - - 0
@@ -25,6 +26,8 @@ zones:
     - 248
   - - 35
     - 364
+  label: ''
+  camera_id: cam_primary
 - zone_id: zone_shelf_snacks
   zone_type: shelf
   polygon:
@@ -36,6 +39,7 @@ zones:
     - 693
   - - 500
     - 718
+  label: ''
 - zone_id: zone_queue_checkout_1
   zone_type: checkout
   polygon:
@@ -47,5 +51,6 @@ zones:
     - 690
   - - 820
     - 690
+  label: ''
 low_stock_confidence_threshold: 0.6
 queue_congestion_length: 4

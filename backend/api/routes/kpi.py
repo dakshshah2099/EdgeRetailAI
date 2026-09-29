@@ -49,10 +49,10 @@ def get_footfall_kpi(
 
     if (
         "PYTEST_CURRENT_TEST" not in os.environ
-        and stream_manager.is_any_camera_connected()
+        and stream_manager.is_connected
         and zone_id is None
     ):
-        net_occupancy = stream_manager.get_total_occupancy()
+        net_occupancy = len(stream_manager.latest_tracked)
         total_enters = enters if enters > 0 else net_occupancy
     elif enters > 0 or exits > 0:
         net_occupancy = max(0, enters - exits)

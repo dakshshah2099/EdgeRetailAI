@@ -336,7 +336,7 @@ class StreamManager:
         while not self._shutdown_event.is_set():
             try:
                 now = time.monotonic()
-                if now - last_check_time > 10.0 or not formatted_src:
+                if now - last_check_time > 1.5 or not formatted_src:
                     target_src = resolve_camera_source()
                     env_vars = read_env_file()
                     rtsp_user = (
@@ -539,34 +539,7 @@ class StreamManager:
                         curr_meta = self._slot_meta
                         last_processed_seq = self._frame_seq
 
-                # If primary has no frame, check if any mesh cameras are active before sleeping
                 if curr_frame is None or curr_meta is None:
-                    if self.detector is not None:
-                        active_mesh_check = camera_mesh.get_active_frames()
-                        secondary_active = [
-                            (cid, f) for cid, f in active_mesh_check
-                            if cid not in ("cam_primary", "default", "primary")
-                        ]
-                        if secondary_active:
-                            # Process secondary cameras even without primary frame
-                            for mesh_cam_id, mesh_frame in secondary_active:
-                                try:
-                                    mesh_raw = self.detector.detect(mesh_frame)
-                                    mesh_tracker = self._get_tracker_for_camera(mesh_cam_id)
-                                    self.per_camera_tracked[mesh_cam_id] = (
-                                        mesh_tracker.update(mesh_raw)
-                                    )
-                                except Exception as e:
-                                    logger.error(
-                                        "Mesh camera '%s' detection error: %s", mesh_cam_id, e
-                                    )
-                            current_occupancy = sum(
-                                len(dets) for dets in self.per_camera_tracked.values()
-                            )
-                            ws_manager.broadcast_sync({
-                                "type": "occupancy",
-                                "net_occupancy": current_occupancy,
-                            })
                     time.sleep(0.08)
                     continue
 
@@ -596,14 +569,8 @@ class StreamManager:
                             mesh_raw = self.detector.detect(mesh_frame)
                             mesh_tracker = self._get_tracker_for_camera(mesh_cam_id)
                             self.per_camera_tracked[mesh_cam_id] = mesh_tracker.update(mesh_raw)
-                            logger.debug(
-                                "Mesh cam '%s': %d detections tracked",
-                                mesh_cam_id,
-                                len(self.per_camera_tracked[mesh_cam_id]),
-                            )
                         except Exception as e:
                             logger.error("Mesh camera '%s' detection error: %s", mesh_cam_id, e)
-
 
                 # 4. Fetch zones and thresholds
                 now = time.monotonic()
@@ -792,11 +759,6 @@ class StreamManager:
                     ws_manager.broadcast_sync({
                         "type": "occupancy",
                         "net_occupancy": current_occupancy,
-                        # Per-camera breakdown for multi-source verification
-                        "camera_counts": {
-                            cam_id: len(dets)
-                            for cam_id, dets in self.per_camera_tracked.items()
-                        },
                     })
 
                 # 6. Unified Shelf Stock & SKU Analysis: Event-Triggered + 30s Watchdog
@@ -1015,19 +977,6 @@ class StreamManager:
     def is_stopped(self) -> bool:
         """Return whether background processing is shutting down or stopped."""
         return self._shutdown_event.is_set()
-
-    def get_total_occupancy(self) -> int:
-        """Return aggregated storewide tracked occupancy across all active mesh cameras."""
-        with self._slot_lock:
-            if not self.per_camera_tracked:
-                return len(self.latest_tracked)
-            return sum(len(dets) for dets in self.per_camera_tracked.values())
-
-    def is_any_camera_connected(self) -> bool:
-        """Return True if primary camera or any secondary mesh camera is connected."""
-        if self.is_connected:
-            return True
-        return camera_mesh.get_summary().active_cameras > 0
 
     def start(self) -> None:
         """Explicitly start background processing worker threads."""

@@ -56,8 +56,6 @@
 
   // Camera Feed Page Subpanel Tab
   let cameraSideTab = $state("alerts"); // 'alerts' | 'telemetry'
-  let cameraCounts = $state({});
-
 
   // Large API Data Store using $state.raw for maximum performance without proxy overhead
   let footfallData = $state.raw(null);
@@ -276,9 +274,6 @@
           liveDwellPoints = msg.points || [];
         } else if (msg.type === "occupancy") {
           const occ = typeof msg.net_occupancy === "number" ? msg.net_occupancy : 0;
-          if (msg.camera_counts && typeof msg.camera_counts === "object") {
-            cameraCounts = msg.camera_counts;
-          }
           if (footfallData) {
             footfallData = {
               ...footfallData,
@@ -466,7 +461,7 @@
         {#if activeTab === "camera"}
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
             <div class="lg:col-span-2">
-              <LiveCameraFeed {isConnected} {occupancy} {cameraCounts} />
+              <LiveCameraFeed {isConnected} {occupancy} />
             </div>
             <div class="lg:col-span-1 flex flex-col gap-2.5">
               <!-- Camera Page Subpanel Switcher -->
