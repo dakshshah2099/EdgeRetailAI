@@ -149,7 +149,7 @@ def spawn_real_store(
             db_path = temp_dir / f"{store_id}_{port}.db"
 
         init_db(db_path)
-        _seed_store_database(db_path, store_id, port)
+        # Store databases initialize with clean schemas without synthetic seed data
 
         # 2. Create real store FastAPI application
         store_app = create_app()

@@ -198,7 +198,7 @@
           <path d="M12 6v6l4 2" />
         </svg>
         <span class="text-slate-600 font-semibold uppercase">No Shopper Dwell In Selected Window</span>
-        <span class="text-slate-400 text-xs max-w-sm">Switch time range to "All" or seed fresh telemetry to view dwell density.</span>
+        <span class="text-slate-400 text-xs max-w-sm">Switch time range to "All" or run live camera stream to accumulate dwell density.</span>
       </div>
     {/if}
 

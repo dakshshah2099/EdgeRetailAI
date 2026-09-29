@@ -29,10 +29,12 @@
     resolveAllAlerts,
     resolveAlert,
     connectTelemetryWebSocket,
+    fetchVideoStatus,
   } from "./lib/api.js";
 
   // App State
   let isConnected = $state(false);
+  let cameraStatus = $state(null);
   let isWsConnected = $state(false);
   let liveDwellPoints = $state([]);
   let isRefreshing = $state(false);
@@ -181,7 +183,7 @@
       (shelfZones.length > 0 ? shelfZones[0].zone_id : "zone_shelf_beverages");
 
     try {
-      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, zonesRes, catalogRes] = await Promise.allSettled([
+      const [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, zonesRes, catalogRes, vidStatusRes] = await Promise.allSettled([
         checkHealth({ signal: ac.signal }),
         fetchKPIFootfall({ ...params, group_by: groupBy }, { signal: ac.signal }),
         fetchKPIQueue(params, { signal: ac.signal }),
@@ -193,15 +195,17 @@
         fetchPlanogramCompliance(targetPlanoShelf, { signal: ac.signal }),
         fetchSystemZones({ signal: ac.signal }),
         fetchSKUCatalog({}, { signal: ac.signal }),
+        fetchVideoStatus({ signal: ac.signal }),
       ]);
 
       if (ac.signal.aborted) return;
 
-      [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, zonesRes, catalogRes].forEach((r, i) => {
+      [healthy, footfall, queue, stock, alerts, heatmap, sysEnv, sku, plano, zonesRes, catalogRes, vidStatusRes].forEach((r, i) => {
         if (r.status === 'rejected') console.warn(`Dashboard fetch [${i}] failed:`, r.reason);
       });
 
       isConnected = healthy.status === "fulfilled" && healthy.value;
+      if (vidStatusRes.status === "fulfilled") cameraStatus = vidStatusRes.value;
       if (footfall.status === "fulfilled") footfallData = footfall.value;
       if (queue.status === "fulfilled") queueData = queue.value;
       if (stock.status === "fulfilled") stockData = stock.value;
@@ -505,16 +509,16 @@
                 <div class="bg-white border border-slate-200 rounded-md shadow-xs p-4 flex flex-col gap-3 font-mono text-xs">
                   <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
                     <span class="font-semibold text-slate-900 uppercase">Camera Ingest Telemetry</span>
-                    <span class="px-2 py-0.5 rounded border text-xs {isConnected ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}">
-                      {isConnected ? 'FEED ACTIVE' : 'FEED OFFLINE'}
+                    <span class="px-2 py-0.5 rounded border text-xs {cameraStatus?.is_connected ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}">
+                      {cameraStatus?.is_connected ? 'FEED ACTIVE' : 'FEED STANDBY'}
                     </span>
                   </div>
 
                   <div class="space-y-2.5">
                     <div class="flex items-center justify-between py-1 border-b border-slate-100">
                       <span class="text-slate-500">Video Ingest Source</span>
-                      <span class="text-slate-800 font-semibold truncate max-w-[180px]" title={envVariables.VIDEO_SOURCE || "0 (USB Camera / RTSP)"}>
-                        {envVariables.VIDEO_SOURCE || "0 (Default Camera)"}
+                      <span class="text-slate-800 font-semibold truncate max-w-[180px]" title={cameraStatus?.source || "0 (Default Camera)"}>
+                        {cameraStatus?.source || "0 (Default Camera)"}
                       </span>
                     </div>
 
@@ -618,7 +622,9 @@
         {:else if activeTab === "settings"}
           <DebugControlPanel 
             {envVariables} 
+            {cameraStatus}
             onSave={handleEnvSaved} 
+            onCameraSourceUpdated={() => loadAllData()}
           />
         {/if}
       </section>

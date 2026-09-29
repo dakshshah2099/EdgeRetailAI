@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from collections.abc import AsyncGenerator
 from pathlib import Path as FilePath
 from typing import Annotated, Any
@@ -223,6 +224,13 @@ class UpdatePrimarySourceRequest(BaseModel):
     source: str
 
 
+@router.get("/primary-source")
+def get_primary_camera_source(cfg: AppConfigDep) -> dict[str, str]:
+    """Return currently active primary camera stream source from config.yaml."""
+    src = resolve_camera_source()
+    return {"source": src}
+
+
 @router.put("/primary-source")
 def update_primary_camera_source(
     req: UpdatePrimarySourceRequest,
@@ -241,6 +249,8 @@ def update_primary_camera_source(
     raw_cfg["camera"]["source"] = req.source
     with cfg_path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+    if "CAMERA_SOURCE" in os.environ:
+        os.environ["CAMERA_SOURCE"] = req.source
     # Signal StreamManager to re-open with new source
     stream_manager.active_src = ""
     return {"status": "ok", "source": req.source}

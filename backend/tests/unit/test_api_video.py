@@ -55,6 +55,11 @@ def test_video_cameras_and_primary_source(
     assert resp.json()["source"] == "rtsp://new_source"
     assert "rtsp://new_source" in test_cfg.read_text(encoding="utf-8")
 
+    # Get primary source
+    resp_get = client.get("/video/primary-source")
+    assert resp_get.status_code == 200
+    assert resp_get.json()["source"] == "rtsp://new_source"
+
     # Register camera
     resp = client.post(
         "/video/cameras",

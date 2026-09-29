@@ -277,6 +277,18 @@ export async function updatePrimaryCameraSource(source, options = {}) {
   return res.json();
 }
 
+export async function fetchPrimaryCameraSource(options = {}) {
+  const res = await fetch(`${API_BASE}/video/primary-source`, { signal: options.signal });
+  if (!res.ok) throw new Error(`Primary camera source error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchVideoStatus(options = {}) {
+  const res = await fetch(`${API_BASE}/video/status`, { signal: options.signal });
+  if (!res.ok) throw new Error(`Video status error: ${res.statusText}`);
+  return res.json();
+}
+
 export function connectTelemetryWebSocket(onMessage, onStatusChange) {
   let ws = null;
   let isClosedManually = false;
