@@ -20,6 +20,7 @@
   // Video and Mesh Status State
   let liveVideoStatus = $state(null);
   let meshCameras = $state([]);
+  let secondaryCameras = $derived(meshCameras.filter(c => c.camera_id !== 'cam_primary'));
   let isLoadingCameras = $state(false);
 
   // Mesh Camera Registration
@@ -413,7 +414,7 @@
         <div class="flex items-center gap-2">
           <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Multi-Camera Mesh Network</h3>
           <span class="px-2 py-0.5 text-xs font-mono bg-sky-50 text-sky-800 border border-sky-200 rounded">
-            {meshCameras.length + 1} NODES
+            {1 + secondaryCameras.length} {1 + secondaryCameras.length === 1 ? 'NODE' : 'NODES'}
           </span>
         </div>
         <p class="text-xs text-slate-500 font-mono mt-0.5">Registered edge cameras analyzing entrance, checkout lanes, and shelf aisles.</p>
@@ -526,7 +527,7 @@
       </div>
 
       <!-- Secondary Mesh Cameras Rows -->
-      {#each meshCameras as cam (cam.camera_id)}
+      {#each secondaryCameras as cam (cam.camera_id)}
         <div class="grid grid-cols-12 gap-2 p-2.5 bg-white border-b border-slate-100 items-center hover:bg-slate-50/50">
           <div class="col-span-3 font-semibold text-slate-900 flex items-center gap-1.5 truncate">
             <span class="w-2 h-2 rounded-full {cam.is_connected ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
