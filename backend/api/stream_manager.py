@@ -1024,6 +1024,7 @@ class StreamManager:
         self.alert_engine._open_stock_alerts.clear()
         self.alert_engine._open_queue_alerts.clear()
         self.alert_engine._audit_log.clear()
+        sku_segregator.clear_catalog()
         self.shelf_smoother.reset()
         self.tracker = Tracker()
         footfall_mode = os.environ.get("FOOTFALL_TRACKER_MODE", "directional")

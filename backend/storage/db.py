@@ -136,5 +136,23 @@ def init_db(db_path: str | Path) -> None:
                 conn.execute("ALTER TABLE queue_events ADD COLUMN predicted_queue_length INTEGER;")
             if "predicted_wait_sec" not in cols:
                 conn.execute("ALTER TABLE queue_events ADD COLUMN predicted_wait_sec REAL;")
+            # Clean up any legacy seeded demo SKU audit/alert records
+            conn.execute(
+                """
+                DELETE FROM audit_logs
+                WHERE sku_id IN ('sku_bev_cola_330', 'sku_snack_chips_gold', 'sku_elec_cable_usbc')
+                   OR message LIKE '%sku_bev_cola_330%'
+                   OR message LIKE '%sku_snack_chips_gold%'
+                   OR message LIKE '%sku_elec_cable_usbc%';
+                """
+            )
+            conn.execute(
+                """
+                DELETE FROM alerts
+                WHERE message LIKE '%sku_bev_cola_330%'
+                   OR message LIKE '%sku_snack_chips_gold%'
+                   OR message LIKE '%sku_elec_cable_usbc%';
+                """
+            )
     finally:
         conn.close()

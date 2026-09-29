@@ -106,6 +106,12 @@ class SKUSegregator:
         self._zone_expected_sku[expected_zone_id] = sku_id
         logger.info("SKUSegregator: registered SKU %s for shelf %s", sku_id, expected_zone_id)
 
+    def clear_catalog(self) -> None:
+        """Purge all registered catalog SKUs and zone assignments."""
+        self._catalog.clear()
+        self._zone_expected_sku.clear()
+        self._last_report = None
+
     def get_catalog(self) -> list[SKUProfile]:
         """Return all registered catalog SKUs."""
         return [
