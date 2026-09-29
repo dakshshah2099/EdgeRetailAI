@@ -58,6 +58,7 @@
 
   // Camera Feed Page Subpanel Tab
   let cameraSideTab = $state("alerts"); // 'alerts' | 'telemetry'
+  let showCameraSidebar = $state(false);
 
   // Large API Data Store using $state.raw for maximum performance without proxy overhead
   let footfallData = $state.raw(null);
@@ -455,19 +456,32 @@
           <span class="text-slate-300">/</span>
           <h1 class="text-sm font-semibold text-slate-900">{routeMeta[activeTab]?.title || "Dashboard"}</h1>
         </div>
-        <p class="text-xs text-slate-500 font-sans hidden sm:block">
-          {routeMeta[activeTab]?.desc || ""}
-        </p>
+        <div class="flex items-center gap-2">
+          {#if activeTab === "camera"}
+            <button
+              type="button"
+              class="px-2.5 py-1 text-xs font-mono rounded border transition-colors cursor-pointer {showCameraSidebar ? 'bg-sky-50 text-sky-800 border-sky-300 font-semibold' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}"
+              onclick={() => showCameraSidebar = !showCameraSidebar}
+              title="Toggle alerts and telemetry sidepanel"
+            >
+              {showCameraSidebar ? '◧ Hide Sidepanel' : '◫ Show Sidepanel'}
+            </button>
+          {/if}
+          <p class="text-xs text-slate-500 font-sans hidden sm:block">
+            {routeMeta[activeTab]?.desc || ""}
+          </p>
+        </div>
       </div>
 
       <!-- Primary Stage Viewport: Dedicated Routed Views -->
       <section class="flex-1 min-h-[460px]">
         {#if activeTab === "camera"}
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
-            <div class="lg:col-span-2">
-              <LiveCameraFeed {isConnected} {occupancy} />
-            </div>
-            <div class="lg:col-span-1 flex flex-col gap-2.5">
+          {#if showCameraSidebar}
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
+              <div class="lg:col-span-2">
+                <LiveCameraFeed {isConnected} {occupancy} />
+              </div>
+              <div class="lg:col-span-1 flex flex-col gap-2.5">
               <!-- Camera Page Subpanel Switcher -->
               <div class="flex items-center bg-white border border-slate-200 rounded-md p-1 shadow-xs">
                 <button
@@ -572,7 +586,12 @@
               {/if}
             </div>
           </div>
-        {:else if activeTab === "heatmap"}
+        {:else}
+          <div class="w-full h-full">
+            <LiveCameraFeed {isConnected} {occupancy} />
+          </div>
+        {/if}
+      {:else if activeTab === "heatmap"}
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
             <div class="lg:col-span-2">
               <HeatmapCanvas {heatmapData} isLoading={isRefreshing} livePoints={liveDwellPoints} />
