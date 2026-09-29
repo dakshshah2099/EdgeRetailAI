@@ -198,12 +198,15 @@ class CameraMesh:
                 # Stop and replace existing node
                 self._nodes[camera_id].stop()
 
+            is_primary = camera_id in ("cam_primary", "default", "primary")
+            effective_auto_start = False if is_primary else auto_start
+
             node = CameraNode(
                 camera_id=camera_id,
                 source=source,
                 role=role,
                 label=label or camera_id,
-                auto_start=auto_start,
+                auto_start=effective_auto_start,
             )
             self._nodes[camera_id] = node
             logger.info(

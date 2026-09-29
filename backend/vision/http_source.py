@@ -55,6 +55,8 @@ class HTTPSource(CameraSource):
         self._next_reconnect_time = 0.0
         self._cap: cv2.VideoCapture | None = None
         self._is_closed = False
+        self._consecutive_failures = 0
+        self._max_failures = 5
 
         # MJPEG byte stream fallback state
         self._stream_response: http.client.HTTPResponse | None = None
@@ -204,6 +206,10 @@ class HTTPSource(CameraSource):
         if raw_bgr is None:
             return None
 
+        self._consecutive_failures = 0
+        self._current_backoff = self._initial_backoff
+        self._next_reconnect_time = 0.0
+
         height, width = raw_bgr.shape[:2]
         meta = Frame(
             source_id=self.source_id,
@@ -214,7 +220,12 @@ class HTTPSource(CameraSource):
         return meta, raw_bgr
 
     def _handle_read_failure(self) -> None:
-        """Mark failure and initiate reconnect with backoff."""
+        """Mark failure and initiate reconnect with backoff after threshold exceeded."""
+        self._consecutive_failures += 1
+        if self._consecutive_failures < self._max_failures:
+            return
+
+        self._consecutive_failures = 0
         self._release_capture()
         now = time.monotonic()
         self._next_reconnect_time = now + self._current_backoff

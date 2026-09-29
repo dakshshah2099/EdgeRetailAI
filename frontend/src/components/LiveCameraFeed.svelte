@@ -7,7 +7,7 @@
     unregisterCamera 
   } from "../lib/api.js";
 
-  let { isConnected = true, occupancy = 0 } = $props();
+  let { isConnected = true, occupancy = 0, cameraCounts = {} } = $props();
 
   let cameras = $state([
     { camera_id: "cam_primary", label: "Primary (Overhead Entrance)", is_active: true }
@@ -658,6 +658,7 @@
     {#each cameras as cam (cam.camera_id)}
       {@const isCalibratingThis = isEditingZones && cam.camera_id === activeCalibratingCamId}
       {@const camStreamUrl = `/video/stream?camera_id=${cam.camera_id}&overlay_zones=${!isCalibratingThis && overlayZones}&overlay_detections=${overlayDetections}&fps=${targetFps}&t=${streamTimestamp}`}
+      {@const camZonesCount = zones.filter((z) => isZoneOnActiveCamera(z, cam.camera_id)).length}
       <div class="relative w-full aspect-video bg-slate-950 rounded-md overflow-hidden flex items-center justify-center border {isCalibratingThis ? 'border-amber-500 ring-2 ring-amber-500/50' : 'border-slate-800'}">
         <img 
           src={camStreamUrl} 
@@ -672,7 +673,14 @@
           <div class="flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-xs border border-slate-800 text-slate-200 px-2 py-0.5 rounded shadow-sm">
             <span class="text-slate-300 font-semibold">{cam.label || cam.camera_id.toUpperCase()}</span>
             <span class="text-slate-600">•</span>
-            <span class="text-emerald-400 font-semibold">{occupancy} IN STORE</span>
+            <span class="text-emerald-400 font-semibold">{cameraCounts[cam.camera_id] ?? 0} DETECTED</span>
+            <span class="text-slate-500 font-normal">({occupancy} TOTAL)</span>
+            <span class="text-slate-600">•</span>
+            {#if camZonesCount > 0}
+              <span class="text-sky-400 font-medium">{camZonesCount} ROI</span>
+            {:else}
+              <span class="text-amber-400/90 font-medium">0 ROI</span>
+            {/if}
           </div>
 
           <div class="flex items-center gap-1.5">
