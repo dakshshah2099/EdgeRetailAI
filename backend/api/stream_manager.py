@@ -284,6 +284,9 @@ class StreamManager:
             "cam_primary": self.queue_monitor
         }
 
+        # Cumulative enter/exit delta occupancy counter (edge-triggered, not bbox count)
+        self._net_occupancy: int = 0
+
     def _get_tracker_for_camera(self, camera_id: str) -> Tracker:
         """Return dedicated ByteTrack Tracker instance per camera stream."""
         if camera_id not in self._camera_trackers:
@@ -696,8 +699,9 @@ class StreamManager:
                         except Exception as e:
                             logger.error("Queue error on camera '%s': %s", cam_id, e)
 
-                # Total storewide occupancy across all mesh cameras
-                current_occupancy = sum(len(dets) for dets in self.per_camera_tracked.values())
+                # Total storewide occupancy: cumulative enter/exit delta (edge-triggered)
+                self._net_occupancy = max(0, self._net_occupancy + all_enters - all_exits)
+                current_occupancy = self._net_occupancy
 
                 if all_enters > 0 or all_exits > 0:
                     ws_manager.broadcast_sync({
@@ -1046,6 +1050,7 @@ class StreamManager:
         self._camera_footfall_trackers = {"cam_primary": self.footfall_tracker}
         self._camera_dwell_trackers = {"cam_primary": self.dwell_tracker}
         self._camera_queue_monitors = {"cam_primary": self.queue_monitor}
+        self._net_occupancy = 0
 
     def get_latest_frame(
         self,
