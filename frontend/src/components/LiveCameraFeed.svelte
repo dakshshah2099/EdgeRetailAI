@@ -1,10 +1,13 @@
 <script>
+  import { onMount } from "svelte";
   import { 
     fetchSystemZones, 
     updateSystemZones, 
     fetchCameras, 
     registerCamera, 
-    unregisterCamera 
+    unregisterCamera,
+    updateCameraSource,
+    fetchPrimaryCameraSource
   } from "../lib/api.js";
 
   let { isConnected = true, occupancy = 0 } = $props();
@@ -52,6 +55,27 @@
   let zoneStatusMsg = $state("");
   let isZoneError = $state(false);
 
+  // Camera Source in Calibration Mode
+  let activeCameraSource = $state("");
+  let lastSyncedCamId = $state("");
+  let isUpdatingCamSource = $state(false);
+  let camSourceStatus = $state("");
+  let isCamSourceError = $state(false);
+
+  $effect(() => {
+    if (activeCalibratingCamId !== lastSyncedCamId) {
+      lastSyncedCamId = activeCalibratingCamId;
+      const curCam = cameras.find((c) => c.camera_id === activeCalibratingCamId);
+      activeCameraSource = curCam && curCam.source ? curCam.source : "";
+      camSourceStatus = "";
+    }
+  });
+
+  onMount(async () => {
+    await loadCameras();
+    await loadZones();
+  });
+
   // Viewport dimensions & cursor tracker
   let viewWidth = $state(640);
   let viewHeight = $state(480);
@@ -87,18 +111,65 @@
   async function loadCameras() {
     try {
       const res = await fetchCameras();
-      if (res && Array.isArray(res.cameras) && res.cameras.length > 0) {
-        const hasPrimary = res.cameras.some((c) => c.camera_id === "cam_primary");
-        cameras = hasPrimary
-          ? res.cameras
-          : [
-              { camera_id: "cam_primary", label: "Primary (Overhead Entrance)", is_active: true },
-              ...res.cameras,
-            ];
+      let loaded = res && Array.isArray(res.cameras) ? [...res.cameras] : [];
+      const primaryIdx = loaded.findIndex((c) => c.camera_id === "cam_primary");
+      if (primaryIdx === -1) {
+        let primSrc = "0";
+        try {
+          const pRes = await fetchPrimaryCameraSource();
+          if (pRes && pRes.source) primSrc = pRes.source;
+        } catch {}
+        loaded.unshift({
+          camera_id: "cam_primary",
+          label: "Primary (Overhead Entrance)",
+          source: primSrc,
+          role: "entrance",
+          is_connected: isConnected,
+        });
+      }
+      cameras = loaded;
+      const curCam = cameras.find((c) => c.camera_id === activeCalibratingCamId);
+      if (curCam && curCam.source && !activeCameraSource) {
+        activeCameraSource = curCam.source;
       }
     } catch (err) {
       console.warn("Failed to load camera mesh list:", err);
     }
+  }
+
+  async function handleApplyCameraSource(targetSource = null) {
+    const src = (targetSource !== null ? targetSource : activeCameraSource).trim();
+    if (!src) {
+      camSourceStatus = "Camera source cannot be empty. Specify RTSP URL, device index (0), or video file.";
+      isCamSourceError = true;
+      return;
+    }
+
+    isUpdatingCamSource = true;
+    camSourceStatus = `Connecting to camera "${activeCalibratingCamId}" source...`;
+    isCamSourceError = false;
+
+    try {
+      await updateCameraSource(activeCalibratingCamId, src);
+      activeCameraSource = src;
+      cameras = cameras.map((c) =>
+        c.camera_id === activeCalibratingCamId ? { ...c, source: src } : c
+      );
+      camSourceStatus = `✓ Source updated for ${activeCalibratingCamId}: "${src}". Reconnecting feed...`;
+      isCamSourceError = false;
+      await loadCameras();
+      refreshStream();
+    } catch (err) {
+      camSourceStatus = `Error updating source: ${err.message}`;
+      isCamSourceError = true;
+    } finally {
+      isUpdatingCamSource = false;
+    }
+  }
+
+  function handleSelectSourcePreset(presetValue) {
+    activeCameraSource = presetValue;
+    handleApplyCameraSource(presetValue);
   }
 
   async function handleAddCamera(e) {
@@ -791,6 +862,125 @@
 
   <!-- Calibration Mode Editor Form -->
   {#if isEditingZones}
+    <!-- Panel 1: Per-Camera Stream Source Control -->
+    <div class="bg-amber-50/80 border border-amber-200 rounded-md p-3 sm:p-4 flex flex-col gap-2.5 font-mono text-xs shadow-xs">
+      <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-amber-200/70">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-amber-500 text-white text-2xs">
+            CALIBRATING CAMERA
+          </span>
+          <select 
+            bind:value={activeCalibratingCamId} 
+            onchange={(e) => setCalibratingCamera(e.target.value)}
+            class="bg-white border border-amber-300 font-bold rounded px-2.5 py-1 text-slate-900 cursor-pointer shadow-2xs focus:outline-none focus:border-amber-500"
+          >
+            {#each cameras as c (c.camera_id)}
+              <option value={c.camera_id}>
+                [{c.camera_id}] {c.label || c.camera_id} ({c.role || 'general'})
+              </option>
+            {/each}
+          </select>
+          <span class="text-slate-600 bg-white/80 border border-amber-200 px-2 py-0.5 rounded text-2xs font-semibold">
+            {(cameraResolutions[activeCalibratingCamId]?.width || viewWidth)}×{(cameraResolutions[activeCalibratingCamId]?.height || viewHeight)}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            class="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded cursor-pointer transition-colors shadow-2xs font-medium"
+            onclick={addZone}
+          >
+            + New Zone
+          </button>
+          <button 
+            type="button" 
+            class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded cursor-pointer transition-colors"
+            onclick={cancelZoneEdit}
+          >
+            Cancel
+          </button>
+          <button 
+            type="button" 
+            class="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded cursor-pointer transition-colors disabled:opacity-50 shadow-2xs"
+            onclick={saveZones} 
+            disabled={isSavingZones}
+          >
+            {isSavingZones ? 'Saving Zones...' : 'Save Zones'}
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Camera Stream Source URI / Device Index -->
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between text-2xs text-slate-600 font-semibold uppercase">
+          <span>Camera Stream Source URI / Device Index:</span>
+          <span class="text-amber-800 lowercase font-normal italic">updates config.yaml for [{activeCalibratingCamId}]</span>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input 
+            type="text" 
+            bind:value={activeCameraSource}
+            placeholder="e.g. rtsp://192.168.1.100:8080/h264_pcm.sdp or 0 or tests/fixtures/demo_store_walkthrough.mp4"
+            class="flex-1 bg-white border border-amber-300 rounded px-3 py-1.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-amber-500 shadow-2xs"
+            onkeydown={(e) => e.key === 'Enter' && handleApplyCameraSource()}
+          />
+          <button 
+            type="button" 
+            class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded cursor-pointer transition-colors disabled:opacity-50 shrink-0 shadow-2xs"
+            onclick={() => handleApplyCameraSource()}
+            disabled={isUpdatingCamSource}
+          >
+            {isUpdatingCamSource ? 'Connecting...' : 'Apply Camera Source'}
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Presets -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="text-slate-500 font-medium text-2xs uppercase">Quick Presets:</span>
+        <button 
+          type="button" 
+          class="px-2 py-0.5 bg-white border border-amber-200 hover:bg-amber-100/60 rounded text-2xs text-slate-700 cursor-pointer transition-colors shadow-2xs"
+          onclick={() => handleSelectSourcePreset('rtsp://192.168.1.100:8080/h264_pcm.sdp')}
+          title="Phone RTSP stream at 192.168.1.100:8080"
+        >
+          Phone RTSP
+        </button>
+        <button 
+          type="button" 
+          class="px-2 py-0.5 bg-white border border-amber-200 hover:bg-amber-100/60 rounded text-2xs text-slate-700 cursor-pointer transition-colors shadow-2xs"
+          onclick={() => handleSelectSourcePreset('0')}
+          title="Built-in laptop webcam index 0"
+        >
+          Webcam (0)
+        </button>
+        <button 
+          type="button" 
+          class="px-2 py-0.5 bg-white border border-amber-200 hover:bg-amber-100/60 rounded text-2xs text-slate-700 cursor-pointer transition-colors shadow-2xs"
+          onclick={() => handleSelectSourcePreset('1')}
+          title="External USB camera index 1"
+        >
+          USB Cam (1)
+        </button>
+        <button 
+          type="button" 
+          class="px-2 py-0.5 bg-white border border-amber-200 hover:bg-amber-100/60 rounded text-2xs text-slate-700 cursor-pointer transition-colors shadow-2xs"
+          onclick={() => handleSelectSourcePreset('tests/fixtures/demo_store_walkthrough.mp4')}
+          title="Retail walkthrough demo MP4 video file"
+        >
+          Demo Walkthrough MP4
+        </button>
+      </div>
+
+      {#if camSourceStatus}
+        <div class="px-2.5 py-1.5 text-xs rounded border {isCamSourceError ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}">
+          {camSourceStatus}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Panel 2: Zone Geometry & ROI Editor Form -->
     <div class="bg-slate-50 border border-slate-200 rounded p-2.5 sm:p-3 flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
       {#if zones.length > 0 && zones[selectedZoneIdx]}
         <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto">

@@ -4,8 +4,6 @@
     updateSystemEnv, 
     resetTelemetry, 
     resolveAllAlerts, 
-    updatePrimaryCameraSource, 
-    fetchPrimaryCameraSource, 
     fetchVideoStatus, 
     fetchCameras,
     registerCamera,
@@ -19,11 +17,7 @@
     onCameraSourceUpdated = () => {}
   } = $props();
 
-  // Primary Camera State
-  let primarySource = $state('');
-  let isSavingCamera = $state(false);
-  let cameraMessage = $state('');
-  let isCameraError = $state(false);
+  // Video and Mesh Status State
   let liveVideoStatus = $state(null);
   let meshCameras = $state([]);
   let isLoadingCameras = $state(false);
@@ -63,9 +57,6 @@
   $effect(() => {
     if (cameraStatus) {
       liveVideoStatus = cameraStatus;
-      if (!primarySource && cameraStatus.source) {
-        primarySource = cameraStatus.source;
-      }
     }
   });
 
@@ -76,17 +67,10 @@
   async function refreshCameraDetails() {
     isLoadingCameras = true;
     try {
-      const [srcRes, statRes, meshRes] = await Promise.allSettled([
-        fetchPrimaryCameraSource(),
+      const [statRes, meshRes] = await Promise.allSettled([
         fetchVideoStatus(),
         fetchCameras()
       ]);
-
-      if (srcRes.status === 'fulfilled' && srcRes.value?.source) {
-        primarySource = srcRes.value.source;
-      } else if (cameraStatus?.source) {
-        primarySource = cameraStatus.source;
-      }
 
       if (statRes.status === 'fulfilled') {
         liveVideoStatus = statRes.value;
@@ -100,38 +84,6 @@
     } finally {
       isLoadingCameras = false;
     }
-  }
-
-  async function handleApplyCameraSource(targetSource = null) {
-    const src = (targetSource !== null ? targetSource : primarySource).trim();
-    if (!src) {
-      cameraMessage = 'Camera source cannot be empty. Specify an RTSP URL, webcam index (0), or video path.';
-      isCameraError = true;
-      return;
-    }
-
-    isSavingCamera = true;
-    cameraMessage = 'Connecting to camera source and updating config.yaml...';
-    isCameraError = false;
-
-    try {
-      await updatePrimaryCameraSource(src);
-      primarySource = src;
-      cameraMessage = `✓ Primary camera source successfully set to "${src}". Pipeline reconnected.`;
-      isCameraError = false;
-      await refreshCameraDetails();
-      onCameraSourceUpdated();
-    } catch (err) {
-      cameraMessage = `Error updating camera source: ${err.message}`;
-      isCameraError = true;
-    } finally {
-      isSavingCamera = false;
-    }
-  }
-
-  function handleSelectPreset(presetValue) {
-    primarySource = presetValue;
-    handleApplyCameraSource(presetValue);
   }
 
   async function handleRegisterMeshCamera(e) {
@@ -191,20 +143,12 @@
     isSavingEnv = true;
     statusMessage = '';
     isError = false;
-    let cameraUpdated = false;
     try {
-      if (primarySource.trim() && primarySource.trim() !== (liveVideoStatus?.source || cameraStatus?.source || '')) {
-        await updatePrimaryCameraSource(primarySource.trim());
-        cameraUpdated = true;
-      }
       const res = await updateSystemEnv(editVars);
-      statusMessage = cameraUpdated
-        ? '✓ Configuration saved: Primary camera source updated and .env synced.'
-        : '✓ Configuration saved: System environment variables synced to .env.';
+      statusMessage = '✓ Configuration saved: System environment variables synced to .env.';
       isError = false;
       isDirty = false;
       onSave(res);
-      onCameraSourceUpdated();
       await refreshCameraDetails();
     } catch (err) {
       statusMessage = `Error saving configuration: ${err.message}`;
@@ -287,7 +231,7 @@
           {/if}
         </div>
         <p class="text-xs text-slate-500 font-mono">
-          Direct real-time control over camera source streams, YOLO vision hyperparameters, RTSP authentication, and system environment.
+          Direct real-time control over YOLO vision hyperparameters, RTSP authentication, and system environment. Camera sources and detection zones are calibrated in the Calibrate Zones interface.
         </p>
       </div>
 
@@ -341,122 +285,7 @@
     {/if}
   </div>
 
-  <!-- SECTION 1: Camera Stream Source Control (Primary Control) -->
-  <div class="bg-white border border-slate-200 rounded-md p-4 sm:p-5 flex flex-col gap-4 shadow-xs">
-    <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
-      <div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold uppercase tracking-wider text-slate-900">Primary Camera Stream Source</span>
-          <span class="px-2 py-0.5 text-xs font-mono rounded border {liveVideoStatus?.is_connected ? 'bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold' : 'bg-rose-50 text-rose-800 border-rose-200'}">
-            {liveVideoStatus?.is_connected ? 'STREAM ACTIVE' : 'STREAM STANDBY'}
-          </span>
-        </div>
-        <p class="text-xs text-slate-500 font-mono mt-0.5">
-          Controls the live video ingest analyzed by YOLOv26n. Managed directly in <code class="text-slate-800 bg-slate-100 px-1 py-0.5 rounded">config.yaml</code>.
-        </p>
-      </div>
-
-      <div class="flex items-center gap-3 text-xs font-mono text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5">
-        <span>RESOLUTION: <strong class="text-slate-900">{liveVideoStatus?.width || 1280}×{liveVideoStatus?.height || 720}</strong></span>
-        <span class="text-slate-300">|</span>
-        <span>ZONES: <strong class="text-sky-800">{liveVideoStatus?.zones_count || 0}</strong></span>
-      </div>
-    </div>
-
-    <!-- Active Source Input & Action -->
-    <div class="flex flex-col gap-2">
-      <label for="primary-camera-source-input" class="text-xs font-mono font-semibold uppercase text-slate-700">
-        Camera Source URI / Device Index / Video Path:
-      </label>
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input 
-          id="primary-camera-source-input"
-          type="text" 
-          class="flex-1 bg-white border border-slate-300 rounded-md px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500 shadow-xs" 
-          placeholder="e.g. rtsp://192.168.1.100:8080/h264_pcm.sdp or 0 or tests/fixtures/demo_store_walkthrough.mp4"
-          bind:value={primarySource}
-          onkeydown={(e) => e.key === 'Enter' && handleApplyCameraSource()}
-        />
-        <button 
-          type="button"
-          class="px-4 py-2 text-xs font-mono font-semibold rounded-md bg-sky-600 hover:bg-sky-700 text-white cursor-pointer transition-colors shadow-xs disabled:opacity-50 shrink-0"
-          onclick={() => handleApplyCameraSource()}
-          disabled={isSavingCamera}
-        >
-          {isSavingCamera ? 'Connecting...' : 'Apply Camera Source'}
-        </button>
-      </div>
-
-      {#if cameraMessage}
-        <div class="mt-1 px-3 py-2 text-xs font-mono rounded-md border {isCameraError ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}">
-          {cameraMessage}
-        </div>
-      {/if}
-    </div>
-
-    <!-- One-Click Camera Presets -->
-    <div class="flex items-center gap-2 p-2.5 sm:p-3 bg-slate-50 border border-slate-200 rounded-md flex-wrap text-xs font-mono">
-      <span class="text-slate-600 font-medium">Quick Source Presets:</span>
-      <div class="flex items-center gap-2 flex-wrap">
-        <button 
-          type="button"
-          class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-          onclick={() => handleSelectPreset('rtsp://192.168.1.100:8080/h264_pcm.sdp')}
-          title="Set phone RTSP stream at 192.168.1.100:8080"
-        >
-          Phone RTSP (192.168.1.100)
-        </button>
-        <button 
-          type="button"
-          class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-          onclick={() => handleSelectPreset('0')}
-          title="Connect to default integrated laptop webcam (Index 0)"
-        >
-          Webcam (Index 0)
-        </button>
-        <button 
-          type="button"
-          class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-          onclick={() => handleSelectPreset('1')}
-          title="Connect to external USB webcam (Index 1)"
-        >
-          USB Camera (Index 1)
-        </button>
-        <button 
-          type="button"
-          class="px-2.5 py-1 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-md transition-colors cursor-pointer" 
-          onclick={() => handleSelectPreset('tests/fixtures/demo_store_walkthrough.mp4')}
-          title="Loop local retail walkthrough video file"
-        >
-          Walkthrough MP4 Video
-        </button>
-      </div>
-    </div>
-
-    <!-- Camera Source Connection Guide -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 text-xs font-mono">
-      <div class="bg-slate-50 border border-slate-200 rounded p-2.5 flex flex-col gap-1">
-        <span class="font-semibold text-slate-800 uppercase">1. Phone RTSP (CCTV Substitute)</span>
-        <p class="text-slate-500 font-sans leading-relaxed">
-          Install an RTSP camera app on your phone (e.g., <em>IP Webcam</em> on Android, <em>Live-Reporter</em> on iOS). Start stream and enter URL: <code class="text-slate-800 font-mono">rtsp://&lt;phone-ip&gt;:8080/h264_pcm.sdp</code>.
-        </p>
-      </div>
-      <div class="bg-slate-50 border border-slate-200 rounded p-2.5 flex flex-col gap-1">
-        <span class="font-semibold text-slate-800 uppercase">2. Integrated / USB Webcam</span>
-        <p class="text-slate-500 font-sans leading-relaxed">
-          Enter device integer index <code class="text-slate-800 font-mono">0</code> for the default built-in laptop camera, or <code class="text-slate-800 font-mono">1</code> for external USB cameras.
-        </p>
-      </div>
-      <div class="bg-slate-50 border border-slate-200 rounded p-2.5 flex flex-col gap-1">
-        <span class="font-semibold text-slate-800 uppercase">3. Recorded Video Walkthrough</span>
-        <p class="text-slate-500 font-sans leading-relaxed">
-          Enter relative or absolute path to an MP4 video file, such as <code class="text-slate-800 font-mono">tests/fixtures/demo_store_walkthrough.mp4</code>.
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- SECTION 2: RTSP Authentication & Network -->
+  <!-- SECTION 1: RTSP Authentication & Network -->
   <div class="bg-white border border-slate-200 rounded-md p-4 sm:p-5 flex flex-col gap-3 shadow-xs">
     <div class="border-b border-slate-100 pb-2.5">
       <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-900">RTSP Stream Credentials & Network Transport</h3>
@@ -513,7 +342,7 @@
     </div>
   </div>
 
-  <!-- SECTION 3: Vision & Edge Analytics Hyperparameters -->
+  <!-- SECTION 2: Vision & Edge Analytics Hyperparameters -->
   <div class="bg-white border border-slate-200 rounded-md p-4 sm:p-5 flex flex-col gap-3 shadow-xs">
     <div class="border-b border-slate-100 pb-2.5">
       <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Detection & Analytics Hyperparameters</h3>
@@ -577,7 +406,7 @@
     </div>
   </div>
 
-  <!-- SECTION 4: Multi-Camera Mesh Network -->
+  <!-- SECTION 3: Multi-Camera Mesh Network -->
   <div class="bg-white border border-slate-200 rounded-md p-4 sm:p-5 flex flex-col gap-3 shadow-xs">
     <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5">
       <div>
@@ -683,8 +512,8 @@
           <span>cam_primary (Primary)</span>
         </div>
         <div class="col-span-2 text-slate-600 uppercase">primary</div>
-        <div class="col-span-4 text-slate-800 truncate" title={primarySource || '0'}>
-          {primarySource || '0'}
+        <div class="col-span-4 text-slate-800 truncate" title={liveVideoStatus?.source || '0'}>
+          {liveVideoStatus?.source || '0'}
         </div>
         <div class="col-span-2 text-center">
           <span class="px-2 py-0.5 rounded border {liveVideoStatus?.is_connected ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}">
@@ -729,7 +558,7 @@
     </div>
   </div>
 
-  <!-- SECTION 5: System Environment Variables (.env) -->
+  <!-- SECTION 4: System Environment Variables (.env) -->
   <div class="bg-white border border-slate-200 rounded-md p-4 sm:p-5 flex flex-col gap-3 shadow-xs">
     <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-2.5">
       <div>

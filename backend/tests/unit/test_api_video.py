@@ -74,3 +74,55 @@ def test_video_cameras_and_primary_source(
     assert resp.status_code == 200
     assert resp.json()["unregistered"] == "test_cam_2"
     assert "test_cam_2" not in test_cfg.read_text(encoding="utf-8")
+
+
+def test_update_camera_source_per_camera(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    test_cfg = tmp_path / "config.yaml"
+    test_cfg.write_text(
+        "camera:\n  source: 'rtsp://primary/initial'\n"
+        "cameras:\n"
+        "  - camera_id: cam_sec_1\n"
+        "    source: '0'\n"
+        "    role: shelf\n"
+        "    label: Shelf 1\n"
+        "calibration_width: 640\ncalibration_height: 480\nzones: []\n"
+        "low_stock_confidence_threshold: 0.6\nqueue_congestion_length: 4\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CONFIG_PATH", str(test_cfg))
+
+    # 1. Update primary camera source via per-camera endpoint
+    resp = client.put(
+        "/video/cameras/cam_primary/source",
+        json={"source": "rtsp://phone:8080/live.sdp"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["source"] == "rtsp://phone:8080/live.sdp"
+    assert "rtsp://phone:8080/live.sdp" in test_cfg.read_text(encoding="utf-8")
+
+    # 2. Update secondary mesh camera source
+    resp = client.put(
+        "/video/cameras/cam_sec_1/source",
+        json={"source": "rtsp://192.168.1.105:8554/shelf"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["camera_id"] == "cam_sec_1"
+    assert resp.json()["source"] == "rtsp://192.168.1.105:8554/shelf"
+    assert "rtsp://192.168.1.105:8554/shelf" in test_cfg.read_text(encoding="utf-8")
+
+    # 3. 404 for unknown camera
+    resp = client.put(
+        "/video/cameras/unknown_cam/source",
+        json={"source": "rtsp://nowhere"},
+    )
+    assert resp.status_code == 404
+
+    # 4. 422 for empty source
+    resp = client.put(
+        "/video/cameras/cam_primary/source",
+        json={"source": "   "},
+    )
+    assert resp.status_code == 422
+

@@ -559,13 +559,13 @@
                   </div>
 
                   <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-                    <span class="text-slate-400 text-xs">Need to change source or thresholds?</span>
+                    <span class="text-slate-400 text-xs">Need to tune hyperparameters or system .env?</span>
                     <button
                       type="button"
                       class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 cursor-pointer transition-colors"
                       onclick={() => navigateTo("settings")}
                     >
-                      Open Config →
+                      Settings →
                     </button>
                   </div>
                 </div>

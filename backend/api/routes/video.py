@@ -3,7 +3,7 @@ import logging
 import os
 from collections.abc import AsyncGenerator
 from pathlib import Path as FilePath
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import cv2
 import numpy as np
@@ -185,6 +185,14 @@ async def frame_streamer(
 @router.get("/cameras")
 def list_mesh_cameras() -> CameraMeshSummary:
     """Return live status of all camera nodes in the multi-camera mesh network."""
+    camera_mesh.load_from_config()
+    primary_node = camera_mesh.get_camera("cam_primary")
+    if primary_node:
+        primary_node.is_connected = stream_manager.is_connected
+        if stream_manager.width > 0:
+            primary_node.width = stream_manager.width
+        if stream_manager.height > 0:
+            primary_node.height = stream_manager.height
     return camera_mesh.get_summary()
 
 
@@ -202,6 +210,97 @@ def register_mesh_camera(
     )
     save_mesh_cameras_to_config(cfg_path)
     return node.to_config()
+
+
+class UpdateCameraSourceRequest(BaseModel):
+    source: str
+    role: Literal["entrance", "checkout", "shelf", "general"] | None = None
+    label: str | None = None
+
+
+@router.put("/cameras/{camera_id}/source")
+def update_camera_source(
+    camera_id: Annotated[str, Path(description="Camera node ID to update source for")],
+    req: UpdateCameraSourceRequest,
+    cfg_path: ConfigPathDep,
+) -> dict[str, Any]:
+    """Update camera stream source directly in config.yaml and reconnect stream."""
+    if not cfg_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="config.yaml not found",
+        )
+    with cfg_path.open("r", encoding="utf-8") as f:
+        raw_cfg: dict[str, Any] = yaml.safe_load(f) or {}
+
+    clean_source = req.source.strip()
+    if not clean_source:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Camera source cannot be empty.",
+        )
+
+    # Primary camera node
+    if camera_id in ("cam_primary", "default", "primary"):
+        if "camera" not in raw_cfg or not isinstance(raw_cfg["camera"], dict):
+            raw_cfg["camera"] = {}
+        raw_cfg["camera"]["source"] = clean_source
+        with cfg_path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+        if "CAMERA_SOURCE" in os.environ:
+            os.environ["CAMERA_SOURCE"] = clean_source
+        stream_manager.active_src = ""
+        primary_node = camera_mesh.get_camera("cam_primary")
+        if primary_node:
+            primary_node.source = clean_source
+        return {"status": "ok", "camera_id": "cam_primary", "source": clean_source}
+
+    # Secondary mesh camera node
+    node = camera_mesh.get_camera(camera_id)
+    raw_cameras = raw_cfg.get("cameras", [])
+    if not isinstance(raw_cameras, list):
+        raw_cameras = []
+
+    cam_found = False
+    for c in raw_cameras:
+        if isinstance(c, dict) and c.get("camera_id") == camera_id:
+            c["source"] = clean_source
+            if req.role:
+                c["role"] = req.role
+            if req.label:
+                c["label"] = req.label
+            cam_found = True
+            break
+
+    if not cam_found:
+        if node:
+            raw_cameras.append({
+                "camera_id": camera_id,
+                "source": clean_source,
+                "role": req.role or node.role,
+                "label": req.label or node.label,
+            })
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Camera node '{camera_id}' not found in mesh or config.",
+            )
+
+    raw_cfg["cameras"] = raw_cameras
+    with cfg_path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
+
+    role = req.role or (node.role if node else "general")
+    label = req.label or (node.label if node else camera_id)
+    camera_mesh.register_camera(
+        camera_id=camera_id,
+        source=clean_source,
+        role=role,
+        label=label,
+        auto_start=True,
+    )
+
+    return {"status": "ok", "camera_id": camera_id, "source": clean_source}
 
 
 @router.delete("/cameras/{camera_id}")
@@ -237,23 +336,12 @@ def update_primary_camera_source(
     cfg_path: ConfigPathDep,
 ) -> dict[str, str]:
     """Update primary camera stream source directly in config.yaml."""
-    if not cfg_path.is_file():
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="config.yaml not found",
-        )
-    with cfg_path.open("r", encoding="utf-8") as f:
-        raw_cfg: dict[str, Any] = yaml.safe_load(f) or {}
-    if "camera" not in raw_cfg or not isinstance(raw_cfg["camera"], dict):
-        raw_cfg["camera"] = {}
-    raw_cfg["camera"]["source"] = req.source
-    with cfg_path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(raw_cfg, f, default_flow_style=False, sort_keys=False)
-    if "CAMERA_SOURCE" in os.environ:
-        os.environ["CAMERA_SOURCE"] = req.source
-    # Signal StreamManager to re-open with new source
-    stream_manager.active_src = ""
-    return {"status": "ok", "source": req.source}
+    res = update_camera_source(
+        camera_id="cam_primary",
+        req=UpdateCameraSourceRequest(source=req.source),
+        cfg_path=cfg_path,
+    )
+    return {"status": "ok", "source": str(res["source"])}
 
 
 @router.get("/stream")

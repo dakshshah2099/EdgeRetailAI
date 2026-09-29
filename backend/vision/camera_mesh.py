@@ -260,16 +260,34 @@ class CameraMesh:
 
         try:
             cfg = load_config(get_config_path())
-            if cfg and cfg.cameras:
-                for cam_def in cfg.cameras:
-                    if not self.get_camera(cam_def.camera_id):
-                        self.register_camera(
-                            camera_id=cam_def.camera_id,
-                            source=cam_def.source,
-                            role=cam_def.role,
-                            label=cam_def.label,
-                            auto_start=True,
-                        )
+            if cfg:
+                primary_src = cfg.camera.source if cfg.camera and cfg.camera.source else "0"
+                with self._lock:
+                    primary_node = self._nodes.get("cam_primary")
+                if not primary_node:
+                    self.register_camera(
+                        camera_id="cam_primary",
+                        source=primary_src,
+                        role="entrance",
+                        label="Primary Store Camera",
+                        auto_start=False,
+                    )
+                else:
+                    primary_node.source = primary_src
+
+                if cfg.cameras:
+                    for cam_def in cfg.cameras:
+                        node = self.get_camera(cam_def.camera_id)
+                        if not node:
+                            self.register_camera(
+                                camera_id=cam_def.camera_id,
+                                source=cam_def.source,
+                                role=cam_def.role,
+                                label=cam_def.label,
+                                auto_start=True,
+                            )
+                        elif node.source != cam_def.source:
+                            node.source = cam_def.source
         except Exception as e:
             logger.debug("CameraMesh: could not load cameras from config: %s", e)
 
