@@ -656,3 +656,32 @@ def test_audit_log_tracking_on_queue_breach_and_clear(alert_engine: AlertEngine)
     assert len(logs_resolved) == 1
     assert logs_resolved[0].event_type == "auto_cleared"
     assert "Queue length 1 < threshold 3" in (logs_resolved[0].cleared_reason or "")
+
+
+def test_stock_alert_not_cleared_while_status_is_low(alert_engine: AlertEngine) -> None:
+    """A low-stock alert must not clear if stock event status is still low."""
+    t0 = datetime(2026, 8, 29, 10, 0, 0, tzinfo=UTC)
+    t1 = datetime(2026, 8, 29, 10, 1, 0, tzinfo=UTC)
+    event_low = make_stock_event("shelf_a", "low", confidence=0.85, ts=t0)
+    alert = alert_engine.process_stock_event(event_low, facing_count=1)
+    assert alert is not None
+
+    # Next check: facing detector noisy/overcounted (3 > 2), but shelf status is still low
+    event_low_next = make_stock_event("shelf_a", "low", confidence=0.85, ts=t1)
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_a": event_low_next},
+        latest_queue_events={},
+        latest_facings={"shelf_a": 3},
+    )
+    # Must NOT clear because status is still low!
+    assert len(resolved) == 0
+
+    # Once status becomes 'ok', it clears
+    event_ok = make_stock_event("shelf_a", "ok", confidence=0.90, ts=t1)
+    resolved = alert_engine.check_resolutions(
+        latest_stock_events={"shelf_a": event_ok},
+        latest_queue_events={},
+        latest_facings={"shelf_a": 3},
+    )
+    assert len(resolved) == 1
+    assert resolved[0].alert_id == alert.alert_id

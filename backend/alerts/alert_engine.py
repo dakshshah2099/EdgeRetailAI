@@ -109,6 +109,11 @@ class AlertEngine:
                 else f"Shelf {event.shelf_id} is out of stock"
             )
         elif event.status == "low":
+            if (
+                facing_count is not None
+                and facing_count > self.low_stock_facings_threshold
+            ):
+                return None
             severity = "warning"
             message = (
                 f"{sku_label} on {event.shelf_id} is low on stock{facing_suffix}"
@@ -279,125 +284,141 @@ class AlertEngine:
         latest_stock_events: dict[str, StockEvent],
         latest_queue_events: dict[str, QueueEvent],
         latest_facings: dict[str, int] | None = None,
+        eval_stock: bool = True,
+        eval_queue: bool = True,
     ) -> list[Alert]:
         """Given the latest known state per shelf_id/counter_id, return
         updated (resolved) Alert objects for any previously-open alert
         whose condition has cleared.
 
         Stock auto-clearing rule:
-        - Out-of-stock (critical): clears when facing_count > 0.
-        - Low-stock (warning): clears when facing_count > low_stock_facings_threshold.
-        - Fallback: clears when stock_ev.status == "ok" and confidence >= low_stock_threshold.
+        - Out-of-stock (critical): clears when stock_ev.status != "empty"
+          and (facing_count > 0 or stock_ev.status == "ok").
+        - Low-stock (warning): clears when stock_ev.status == "ok"
+          or (stock_ev.status != "low" and facing_count > low_stock_facings_threshold).
+        - Fallback: clears when stock_ev.status == "ok"
+          and confidence >= low_stock_threshold.
         """
         resolved: list[Alert] = []
 
         # Check stock alert resolutions
-        for shelf_id in list(self._open_stock_alerts.keys()):
-            if shelf_id in latest_stock_events:
-                stock_ev = latest_stock_events[shelf_id]
-                open_alert = self._open_stock_alerts[shelf_id]
-                facing_count = latest_facings.get(shelf_id) if latest_facings is not None else None
+        if eval_stock:
+            for shelf_id in list(self._open_stock_alerts.keys()):
+                if shelf_id in latest_stock_events:
+                    stock_ev = latest_stock_events[shelf_id]
+                    open_alert = self._open_stock_alerts[shelf_id]
+                    facing_count = (
+                        latest_facings.get(shelf_id) if latest_facings is not None else None
+                    )
 
-                cleared_reason: str | None = None
-                if facing_count is not None:
-                    if open_alert.severity == "critical":
-                        is_cleared = facing_count > 0
-                        if is_cleared:
-                            cleared_reason = f"Facing count {facing_count} > 0"
+                    cleared_reason: str | None = None
+                    if facing_count is not None:
+                        if open_alert.severity == "critical":
+                            is_cleared = facing_count > 0 and stock_ev.status != "empty"
+                            if is_cleared:
+                                cleared_reason = f"Facing count {facing_count} > 0"
+                        else:
+                            is_cleared = (
+                                stock_ev.status == "ok"
+                                or (
+                                    stock_ev.status != "low"
+                                    and facing_count > self.low_stock_facings_threshold
+                                )
+                            )
+                            if is_cleared:
+                                cleared_reason = (
+                                    f"Facing count {facing_count} > "
+                                    f"threshold {self.low_stock_facings_threshold}"
+                                )
                     else:
-                        is_cleared = facing_count > self.low_stock_facings_threshold
+                        is_cleared = (
+                            stock_ev.status == "ok"
+                            and stock_ev.confidence >= self.low_stock_threshold
+                        )
                         if is_cleared:
                             cleared_reason = (
-                                f"Facing count {facing_count} > "
-                                f"threshold {self.low_stock_facings_threshold}"
+                                f"Stock status 'ok' with confidence {stock_ev.confidence:.2f} >= "
+                                f"{self.low_stock_threshold:.2f}"
                             )
-                else:
-                    is_cleared = (
-                        stock_ev.status == "ok" and stock_ev.confidence >= self.low_stock_threshold
-                    )
-                    if is_cleared:
-                        cleared_reason = (
-                            f"Stock status 'ok' with confidence {stock_ev.confidence:.2f} >= "
-                            f"{self.low_stock_threshold:.2f}"
-                        )
 
-                if is_cleared:
-                    popped = self._open_stock_alerts.pop(shelf_id)
-                    res_time = (
-                        stock_ev.timestamp
-                        if stock_ev.timestamp >= popped.created_at
-                        else popped.created_at
-                    )
-                    resolved_alert = Alert(
-                        alert_id=popped.alert_id,
-                        alert_type=popped.alert_type,
-                        severity=popped.severity,
-                        zone_id=popped.zone_id,
-                        message=popped.message,
-                        created_at=popped.created_at,
-                        resolved_at=res_time,
-                    )
-                    resolved.append(resolved_alert)
-                    self._audit_log.append(
-                        AuditLogEntry(
-                            log_id=f"audit_{uuid.uuid4().hex[:12]}",
-                            timestamp=res_time,
-                            event_type="auto_cleared",
-                            alert_id=resolved_alert.alert_id,
-                            alert_type=resolved_alert.alert_type,
-                            severity=resolved_alert.severity,
-                            zone_id=resolved_alert.zone_id,
-                            sku_id=None,
-                            message=f"Auto-cleared: {resolved_alert.message}",
-                            facings=facing_count,
-                            cleared_reason=cleared_reason,
+                    if is_cleared:
+                        popped = self._open_stock_alerts.pop(shelf_id)
+                        res_time = (
+                            stock_ev.timestamp
+                            if stock_ev.timestamp >= popped.created_at
+                            else popped.created_at
                         )
-                    )
+                        resolved_alert = Alert(
+                            alert_id=popped.alert_id,
+                            alert_type=popped.alert_type,
+                            severity=popped.severity,
+                            zone_id=popped.zone_id,
+                            message=popped.message,
+                            created_at=popped.created_at,
+                            resolved_at=res_time,
+                        )
+                        resolved.append(resolved_alert)
+                        self._audit_log.append(
+                            AuditLogEntry(
+                                log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                                timestamp=res_time,
+                                event_type="auto_cleared",
+                                alert_id=resolved_alert.alert_id,
+                                alert_type=resolved_alert.alert_type,
+                                severity=resolved_alert.severity,
+                                zone_id=resolved_alert.zone_id,
+                                sku_id=None,
+                                message=f"Auto-cleared: {resolved_alert.message}",
+                                facings=facing_count,
+                                cleared_reason=cleared_reason,
+                            )
+                        )
 
         # Check queue alert resolutions
-        for counter_id in list(self._open_queue_alerts.keys()):
-            if counter_id in latest_queue_events:
-                queue_ev = latest_queue_events[counter_id]
-                is_cleared = queue_ev.queue_length < self.queue_congestion_length and (
-                    queue_ev.predicted_queue_length is None
-                    or queue_ev.predicted_queue_length < self.queue_congestion_length
-                )
-                if is_cleared:
-                    open_alert = self._open_queue_alerts.pop(counter_id)
-                    q_res_time = (
-                        queue_ev.timestamp
-                        if queue_ev.timestamp >= open_alert.created_at
-                        else open_alert.created_at
+        if eval_queue:
+            for counter_id in list(self._open_queue_alerts.keys()):
+                if counter_id in latest_queue_events:
+                    queue_ev = latest_queue_events[counter_id]
+                    is_cleared = queue_ev.queue_length < self.queue_congestion_length and (
+                        queue_ev.predicted_queue_length is None
+                        or queue_ev.predicted_queue_length < self.queue_congestion_length
                     )
-                    resolved_alert = Alert(
-                        alert_id=open_alert.alert_id,
-                        alert_type=open_alert.alert_type,
-                        severity=open_alert.severity,
-                        zone_id=open_alert.zone_id,
-                        message=open_alert.message,
-                        created_at=open_alert.created_at,
-                        resolved_at=q_res_time,
-                    )
-                    resolved.append(resolved_alert)
-                    cleared_reason = (
-                        f"Queue length {queue_ev.queue_length} < "
-                        f"threshold {self.queue_congestion_length}"
-                    )
-                    self._audit_log.append(
-                        AuditLogEntry(
-                            log_id=f"audit_{uuid.uuid4().hex[:12]}",
-                            timestamp=q_res_time,
-                            event_type="auto_cleared",
-                            alert_id=resolved_alert.alert_id,
-                            alert_type=resolved_alert.alert_type,
-                            severity=resolved_alert.severity,
-                            zone_id=resolved_alert.zone_id,
-                            sku_id=None,
-                            message=f"Auto-cleared: {resolved_alert.message}",
-                            facings=None,
-                            cleared_reason=cleared_reason,
+                    if is_cleared:
+                        open_alert = self._open_queue_alerts.pop(counter_id)
+                        q_res_time = (
+                            queue_ev.timestamp
+                            if queue_ev.timestamp >= open_alert.created_at
+                            else open_alert.created_at
                         )
-                    )
+                        resolved_alert = Alert(
+                            alert_id=open_alert.alert_id,
+                            alert_type=open_alert.alert_type,
+                            severity=open_alert.severity,
+                            zone_id=open_alert.zone_id,
+                            message=open_alert.message,
+                            created_at=open_alert.created_at,
+                            resolved_at=q_res_time,
+                        )
+                        resolved.append(resolved_alert)
+                        cleared_reason = (
+                            f"Queue length {queue_ev.queue_length} < "
+                            f"threshold {self.queue_congestion_length}"
+                        )
+                        self._audit_log.append(
+                            AuditLogEntry(
+                                log_id=f"audit_{uuid.uuid4().hex[:12]}",
+                                timestamp=q_res_time,
+                                event_type="auto_cleared",
+                                alert_id=resolved_alert.alert_id,
+                                alert_type=resolved_alert.alert_type,
+                                severity=resolved_alert.severity,
+                                zone_id=resolved_alert.zone_id,
+                                sku_id=None,
+                                message=f"Auto-cleared: {resolved_alert.message}",
+                                facings=None,
+                                cleared_reason=cleared_reason,
+                            )
+                        )
 
         return resolved
 
