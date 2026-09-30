@@ -28,7 +28,7 @@ from api.routes.ws import ws_manager
 from core.schemas import Frame, QueueEvent, StockEvent, ZoneConfig
 from vision.camera_base import CameraSource
 from vision.camera_mesh import camera_mesh
-from vision.detector import PersonDetector
+from vision.detector import PersonDetector, RetailDetector
 from vision.http_source import HTTPSource
 from vision.inference_backend import ONNXBackend
 from vision.rtsp_source import RTSPSource, format_authenticated_rtsp_url, mask_rtsp_credentials
@@ -524,9 +524,9 @@ class StreamManager:
                                 input_size=(input_size, input_size),
                                 intra_op_num_threads=threads,
                             )
-                            self.detector = PersonDetector(backend)
+                            self.detector = RetailDetector(backend)
                             logger.info(
-                                "Initialized ONNX detector: %s (%dx%d, %d threads)",
+                                "Initialized ONNX multi-class detector: %s (%dx%d, %d threads)",
                                 model_path,
                                 input_size,
                                 input_size,
@@ -646,8 +646,9 @@ class StreamManager:
                     )
 
                     try:
+                        person_dets = [d for d in c_dets if getattr(d, "class_id", 0) == 0]
                         ft = self._get_footfall_tracker_for_camera(cam_id)
-                        footfall_events = ft.update(c_meta, c_dets, cam_zones)
+                        footfall_events = ft.update(c_meta, person_dets, cam_zones)
                         for ev in footfall_events:
                             repo.save_detection_event(ev)
                             if ev.event_type == "exit":
@@ -664,6 +665,23 @@ class StreamManager:
                             )
                             if is_shelf:
                                 pending_shelf_eval_zones.add(d_ev.zone_id)
+                                sku_prof = sku_segregator.get_sku_for_zone(d_ev.zone_id)
+                                inter_sku = sku_prof.sku_id if sku_prof else None
+                                repo.save_product_interaction(
+                                    interaction_id=f"inter_{uuid.uuid4().hex[:12]}",
+                                    track_id=d_ev.track_id,
+                                    zone_id=d_ev.zone_id,
+                                    sku_id=inter_sku,
+                                    start_ts=d_ev.start_ts,
+                                    end_ts=d_ev.end_ts,
+                                    duration_sec=d_ev.duration_sec,
+                                )
+                                ws_manager.broadcast_sync({
+                                    "type": "product_interaction",
+                                    "zone_id": d_ev.zone_id,
+                                    "sku_id": inter_sku,
+                                    "duration_sec": d_ev.duration_sec,
+                                })
 
                         all_enters += sum(1 for e in footfall_events if e.event_type == "enter")
                         all_exits += sum(1 for e in footfall_events if e.event_type == "exit")
@@ -673,8 +691,9 @@ class StreamManager:
                     checkout_zones = [z for z in cam_zones if z.zone_type == "checkout"]
                     if checkout_zones:
                         try:
+                            person_dets = [d for d in c_dets if getattr(d, "class_id", 0) == 0]
                             qm = self._get_queue_monitor_for_camera(cam_id)
-                            q_events = qm.update(c_meta, c_dets, checkout_zones)
+                            q_events = qm.update(c_meta, person_dets, checkout_zones)
                             for q_ev in q_events:
                                 all_q_events.append(q_ev)
                                 prev_q = self.latest_queue_events.get(q_ev.counter_id)
@@ -858,6 +877,23 @@ class StreamManager:
                                     else False
                                 )
 
+                                # Discrete product counts: count detected products in zone
+                                product_dets_in_zone = 0
+                                if matching_zone:
+                                    from analytics.zone_membership import (
+                                        anchor_point,
+                                        is_inside_zone,
+                                    )
+
+                                    product_dets_in_zone = sum(
+                                        1
+                                        for d in zone_dets
+                                        if getattr(d, "class_id", 0) != 0
+                                        and is_inside_zone(anchor_point(d.bbox), matching_zone)
+                                    )
+
+                                final_facing_count = max(item.facing_count, product_dets_in_zone)
+
                                 raw_s_status: Literal["empty", "low", "ok"] = (
                                     "empty"
                                     if item.status == "empty"
@@ -870,7 +906,7 @@ class StreamManager:
                                     is_occluded=is_occ,
                                 )
 
-                                self.latest_facings[item.shelf_id] = item.facing_count
+                                self.latest_facings[item.shelf_id] = final_facing_count
                                 prev_ev = self.latest_stock_events.get(item.shelf_id)
                                 is_initial = prev_ev is None
                                 state_changed = prev_ev is not None and prev_ev.status != s_status
@@ -909,7 +945,7 @@ class StreamManager:
                                     sku_ev,
                                     sku_name=sku_name,
                                     sku_id=sku_id,
-                                    facing_count=item.facing_count,
+                                    facing_count=final_facing_count,
                                 )
                                 if s_alert:
                                     repo.upsert_alert(s_alert)
@@ -953,11 +989,14 @@ class StreamManager:
                                             s_zone,
                                             plano_layout,
                                             classifier=self.shelf_classifier,
+                                            sku_segregator=sku_segregator,
                                         )
                                         save_planogram_compliance(repo, p_comp)
                                         ws_manager.broadcast_sync({
                                             "type": "planogram_update",
                                             "zone_id": s_zone.zone_id,
+                                            "compliance_ratio": p_comp.compliance_ratio,
+                                            "misplaced_count": len(p_comp.misplaced_facings),
                                         })
 
                             if stock_events_emitted or resolved_alerts or had_stock_alert:
