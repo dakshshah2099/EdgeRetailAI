@@ -55,7 +55,7 @@
   let selectedZone = $state("");
   let selectedPlanogramShelf = $state("");
   let groupBy = $state("hour");
-  let alertFilter = $state("open");
+  let alertFilter = $state("all");
 
   // Camera Feed Page Subpanel Tab
   let cameraSideTab = $state("alerts"); // 'alerts' | 'telemetry'
@@ -329,18 +329,17 @@
             fetchKPIStock({ zone_id: selectedZone || null }).then((res) => { stockData = res; }).catch(() => {});
             fetchKPISKU({ zone_id: selectedZone || null }).then((res) => { skuReport = res; }).catch(() => {});
           }
-          fetchAlerts({ status: alertFilter }).then((res) => { alertsData = res; }).catch(() => {});
+          fetchAlerts({ status: 'all' }).then((res) => { if (Array.isArray(res)) alertsData = res; }).catch(() => {});
           lastUpdated = new Date();
         } else if (msg.type === "alert" && msg.alert) {
           // Inline push: prepend the new alert immediately without a fetch round-trip.
           // Deduplicates by alert_id in case "alerts_update" fetch arrives shortly after.
           const incoming = msg.alert;
-          if (alertFilter === "open" || alertFilter === "all") {
-            alertsData = [incoming, ...alertsData.filter((a) => a.alert_id !== incoming.alert_id)];
-          }
+          const currentList = Array.isArray(alertsData) ? alertsData : [];
+          alertsData = [incoming, ...currentList.filter((a) => a.alert_id !== incoming.alert_id)];
           lastUpdated = new Date();
         } else if (msg.type === "alerts_update") {
-          fetchAlerts({ status: alertFilter }).then((res) => { alertsData = res; }).catch(() => {});
+          fetchAlerts({ status: 'all' }).then((res) => { if (Array.isArray(res)) alertsData = res; }).catch(() => {});
           lastUpdated = new Date();
         }
       },
@@ -376,7 +375,7 @@
   let totalExits = $derived(footfallData ? footfallData.total_exits : 0);
   let maxQueueLength = $derived(queueData.length ? Math.max(...queueData.map((q) => q.queue_length)) : 0);
   let lowStockShelves = $derived(stockData.filter((s) => s.status === "empty" || s.status === "low").length);
-  let openAlertsCount = $derived(alertsData.filter((a) => !a.resolved_at).length);
+  let openAlertsCount = $derived(Array.isArray(alertsData) ? alertsData.filter((a) => !a.resolved_at).length : 0);
 </script>
 
 <svelte:head>

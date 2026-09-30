@@ -84,6 +84,29 @@
       text: alert.severity === 'critical' ? 'text-rose-700' : 'text-slate-700'
     };
   }
+
+  let localFilter = $state('open');
+
+  $effect(() => {
+    if (activeFilter) {
+      localFilter = activeFilter;
+    }
+  });
+
+  let currentFilter = $derived(localFilter || activeFilter || 'open');
+
+  let displayedAlerts = $derived(
+    (alerts || []).filter(a => {
+      if (currentFilter === 'open') return !a.resolved_at;
+      if (currentFilter === 'resolved') return !!a.resolved_at;
+      return true;
+    })
+  );
+
+  function handleFilterClick(status) {
+    localFilter = status;
+    onFilterChange(status);
+  }
 </script>
 
 <div class="flex flex-col h-full bg-white border border-slate-200 rounded-md shadow-xs">
@@ -92,9 +115,9 @@
     <div class="flex items-center gap-2">
       <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Incident Triage</span>
       <span class="px-1.5 py-0.5 text-xs font-mono bg-white text-slate-600 rounded border border-slate-200">
-        {alerts.length}
+        {displayedAlerts.length}
       </span>
-      {#if alerts.some(a => !a.resolved_at)}
+      {#if displayedAlerts.some(a => !a.resolved_at)}
         <button 
           type="button"
           class="ml-1 px-2 py-0.5 text-[11px] font-mono rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 cursor-pointer transition-colors"
@@ -109,22 +132,22 @@
     <div class="flex items-center bg-slate-100 border border-slate-200 rounded-md p-0.5">
       <button 
         type="button"
-        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'open' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
-        onclick={() => onFilterChange('open')}
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {currentFilter === 'open' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
+        onclick={() => handleFilterClick('open')}
       >
         OPEN
       </button>
       <button 
         type="button"
-        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'resolved' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
-        onclick={() => onFilterChange('resolved')}
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {currentFilter === 'resolved' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
+        onclick={() => handleFilterClick('resolved')}
       >
         RESOLVED
       </button>
       <button 
         type="button"
-        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {activeFilter === 'all' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
-        onclick={() => onFilterChange('all')}
+        class="px-2.5 py-1 text-xs font-mono rounded transition-colors {currentFilter === 'all' ? 'bg-white text-sky-700 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'} cursor-pointer"
+        onclick={() => handleFilterClick('all')}
       >
         ALL
       </button>
@@ -133,17 +156,17 @@
 
   <!-- Incident List -->
   <div class="flex-1 overflow-y-auto p-2.5 space-y-2 min-h-[220px] max-h-[480px]">
-    {#if alerts.length === 0}
+    {#if displayedAlerts.length === 0}
       <div class="h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 font-mono text-xs">
         <svg class="w-8 h-8 mb-2 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
           <polyline points="22 4 12 14.01 9 11.01"/>
         </svg>
-        <span class="text-slate-600 font-medium">NO {activeFilter.toUpperCase()} INCIDENTS</span>
+        <span class="text-slate-600 font-medium">NO {currentFilter.toUpperCase()} INCIDENTS</span>
         <span class="text-slate-400 text-xs mt-0.5">All monitored store zones nominal</span>
       </div>
     {:else}
-      {#each alerts as alert, idx (alert.alert_id ?? alert.id ?? `${alert.created_at || alert.timestamp || idx}_${alert.zone_id || 'z'}_${idx}`)}
+      {#each displayedAlerts as alert, idx (alert.alert_id ?? alert.id ?? `${alert.created_at || alert.timestamp || idx}_${alert.zone_id || 'z'}_${idx}`)}
         {@const skuInfo = parseSKUAlert(alert)}
         {@const badge = getBadge(alert, skuInfo)}
         <div class="p-2.5 rounded-md border transition-colors bg-white {alert.resolved_at ? 'border-slate-100 opacity-60' : 'border-slate-200 hover:border-slate-300 shadow-xs'}">

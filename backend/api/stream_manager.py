@@ -268,7 +268,7 @@ class StreamManager:
         self.alert_engine: AlertEngine = AlertEngine(
             low_stock_threshold=0.55,
             queue_congestion_length=4,
-            low_stock_facings_threshold=0,
+            low_stock_facings_threshold=2,
         )
 
         self.latest_stock_events: dict[str, StockEvent] = {}
@@ -907,6 +907,17 @@ class StreamManager:
                                     is_occluded=is_occ,
                                 )
 
+                                # If shelf is classified as empty or low, clamp facings to realistic threshold
+                                if s_status == "empty":
+                                    final_facing_count = 0
+                                elif s_status == "low":
+                                    final_facing_count = min(
+                                        final_facing_count,
+                                        self.alert_engine.low_stock_facings_threshold,
+                                    )
+                                    if final_facing_count <= 0:
+                                        final_facing_count = 1
+
                                 self.latest_facings[item.shelf_id] = final_facing_count
                                 prev_ev = self.latest_stock_events.get(item.shelf_id)
                                 is_initial = prev_ev is None
@@ -999,6 +1010,38 @@ class StreamManager:
                                             "compliance_ratio": p_comp.compliance_ratio,
                                             "misplaced_count": len(p_comp.misplaced_facings),
                                         })
+
+                                        # Low-stock / out-of-stock alert if planogram facings are depleted
+                                        if (
+                                            p_comp.expected_nonempty > 0
+                                            and p_comp.actual_nonempty <= self.alert_engine.low_stock_facings_threshold
+                                        ):
+                                            p_status: Literal["empty", "low"] = (
+                                                "empty" if p_comp.actual_nonempty == 0 else "low"
+                                            )
+                                            plano_ev = StockEvent(
+                                                event_id=f"stk_ev_{s_zone.zone_id}_{int(time.time())}_{uuid.uuid4().hex[:6]}",
+                                                shelf_id=s_zone.zone_id,
+                                                timestamp=p_comp.timestamp,
+                                                status=p_status,
+                                                confidence=0.85,
+                                            )
+                                            self.latest_stock_events[s_zone.zone_id] = plano_ev
+                                            self.latest_facings[s_zone.zone_id] = p_comp.actual_nonempty
+                                            p_sku = sku_segregator.get_sku_for_zone(s_zone.zone_id)
+                                            plano_alert = self.alert_engine.process_stock_event(
+                                                plano_ev,
+                                                sku_name=p_sku.name if p_sku else None,
+                                                sku_id=p_sku.sku_id if p_sku else None,
+                                                facing_count=p_comp.actual_nonempty,
+                                            )
+                                            if plano_alert:
+                                                repo.upsert_alert(plano_alert)
+                                                had_stock_alert = True
+                                                ws_manager.broadcast_sync({
+                                                    "type": "alert",
+                                                    "alert": plano_alert.model_dump(mode="json"),
+                                                })
 
                             if stock_events_emitted or resolved_alerts or had_stock_alert:
                                 all_shelves = [
