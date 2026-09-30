@@ -440,6 +440,16 @@ class AlertEngine:
         self._open_stock_alerts.clear()
         self._open_queue_alerts.clear()
 
+    def restore_open_alerts(self, alerts: list[Alert]) -> None:
+        """Hydrate in-memory debouncer from persisted active alerts on startup."""
+        for a in alerts:
+            if a.resolved_at is not None:
+                continue
+            if a.alert_type == "low_stock":
+                self._open_stock_alerts[a.zone_id] = a
+            elif a.alert_type == "queue_congestion":
+                self._open_queue_alerts[a.zone_id] = a
+
     def reset(self) -> None:
         """Clear all internal tracking states for open alerts."""
         self._open_stock_alerts.clear()

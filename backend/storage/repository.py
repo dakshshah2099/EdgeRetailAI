@@ -141,10 +141,40 @@ class EventRepository:
             conn.close()
 
     def upsert_alert(self, alert: Alert) -> None:
-        """Insert or update alert matched on alert_id."""
+        """Insert or update alert matched on alert_id or active zone_id breach."""
         conn = get_connection(self.db_path)
         try:
             with conn:
+                cursor = conn.cursor()
+                if alert.resolved_at is None:
+                    # Check if an unresolved alert already exists for this zone and type
+                    cursor.execute(
+                        """
+                        SELECT alert_id FROM alerts
+                        WHERE zone_id = ? AND alert_type = ? AND resolved_at IS NULL
+                        LIMIT 1;
+                        """,
+                        (alert.zone_id, alert.alert_type),
+                    )
+                    existing = cursor.fetchone()
+                    if existing and existing["alert_id"] != alert.alert_id:
+                        cursor.execute(
+                            """
+                            UPDATE alerts SET
+                                severity = ?,
+                                message = ?,
+                                created_at = ?
+                            WHERE alert_id = ?;
+                            """,
+                            (
+                                alert.severity,
+                                alert.message,
+                                alert.created_at.isoformat(),
+                                existing["alert_id"],
+                            ),
+                        )
+                        return
+
                 conn.execute(
                     """
                     INSERT INTO alerts (

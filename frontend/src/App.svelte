@@ -333,10 +333,24 @@
           lastUpdated = new Date();
         } else if (msg.type === "alert" && msg.alert) {
           // Inline push: prepend the new alert immediately without a fetch round-trip.
-          // Deduplicates by alert_id in case "alerts_update" fetch arrives shortly after.
+          // Deduplicates by alert_id and ensures only one active alert per (zone_id, alert_type).
           const incoming = msg.alert;
           const currentList = Array.isArray(alertsData) ? alertsData : [];
-          alertsData = [incoming, ...currentList.filter((a) => a.alert_id !== incoming.alert_id)];
+          alertsData = [
+            incoming,
+            ...currentList.filter((a) => {
+              if (a.alert_id === incoming.alert_id) return false;
+              if (
+                !incoming.resolved_at &&
+                !a.resolved_at &&
+                a.zone_id === incoming.zone_id &&
+                a.alert_type === incoming.alert_type
+              ) {
+                return false;
+              }
+              return true;
+            })
+          ];
           lastUpdated = new Date();
         } else if (msg.type === "alerts_update") {
           fetchAlerts({ status: 'all' }).then((res) => { if (Array.isArray(res)) alertsData = res; }).catch(() => {});
@@ -375,7 +389,21 @@
   let totalExits = $derived(footfallData ? footfallData.total_exits : 0);
   let maxQueueLength = $derived(queueData.length ? Math.max(...queueData.map((q) => q.queue_length)) : 0);
   let lowStockShelves = $derived(stockData.filter((s) => s.status === "empty" || s.status === "low").length);
-  let openAlertsCount = $derived(Array.isArray(alertsData) ? alertsData.filter((a) => !a.resolved_at).length : 0);
+  let openAlertsCount = $derived.by(() => {
+    if (!Array.isArray(alertsData)) return 0;
+    const seen = new Set();
+    let count = 0;
+    for (const a of alertsData) {
+      if (!a.resolved_at) {
+        const key = `${a.zone_id || 'z'}_${a.alert_type || 't'}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          count++;
+        }
+      }
+    }
+    return count;
+  });
 </script>
 
 <svelte:head>

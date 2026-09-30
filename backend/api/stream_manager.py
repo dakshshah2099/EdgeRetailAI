@@ -453,6 +453,8 @@ class StreamManager:
         cached_cfg = get_app_config()
         repo = get_repository()
         env_vars = read_env_file()
+        with contextlib.suppress(Exception):
+            self.alert_engine.restore_open_alerts(repo.get_open_alerts())
         target_interval = 0.2
         shelf_interval = 2.0  # Fallback watchdog interval for event-driven shelf checks
         pending_shelf_eval_zones: set[str] = set()

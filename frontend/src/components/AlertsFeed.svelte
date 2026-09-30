@@ -95,13 +95,26 @@
 
   let currentFilter = $derived(localFilter || activeFilter || 'open');
 
-  let displayedAlerts = $derived(
-    (alerts || []).filter(a => {
+  let displayedAlerts = $derived.by(() => {
+    const raw = (alerts || []).filter(a => {
       if (currentFilter === 'open') return !a.resolved_at;
       if (currentFilter === 'resolved') return !!a.resolved_at;
       return true;
-    })
-  );
+    });
+
+    const seen = new Set();
+    const deduped = [];
+    for (const a of raw) {
+      const key = !a.resolved_at
+        ? `open_${a.zone_id || 'z'}_${a.alert_type || 't'}`
+        : `alert_${a.alert_id || a.id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(a);
+      }
+    }
+    return deduped;
+  });
 
   function handleFilterClick(status) {
     localFilter = status;
