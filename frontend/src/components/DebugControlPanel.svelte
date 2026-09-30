@@ -42,8 +42,6 @@
   // Env Vars Editor State
   let editVars = $state({});
   let isDirty = $state(false);
-  let newKey = $state('');
-  let newVal = $state('');
   let showPassword = $state(false);
   let envFilter = $state('');
 
@@ -157,15 +155,6 @@
     } finally {
       isSavingEnv = false;
     }
-  }
-
-  function addVariable() {
-    if (!newKey.trim()) return;
-    const cleanKey = newKey.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
-    editVars = { ...editVars, [cleanKey]: newVal.trim() };
-    isDirty = true;
-    newKey = '';
-    newVal = '';
   }
 
   function removeVariable(key) {
@@ -585,84 +574,34 @@
       </div>
     </div>
 
-    <!-- Env Vars Editor Table -->
-    <div class="flex flex-col gap-1.5">
-      <div class="hidden sm:flex items-center gap-3 px-3 py-1.5 text-xs font-mono font-semibold uppercase tracking-wider text-slate-500">
-        <span class="w-64 shrink-0">Variable Name</span>
-        <span class="flex-1">Value</span>
-        <span class="w-10 text-center">Action</span>
-      </div>
-
+    <!-- Env Vars Editor Compact Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
       {#each filteredEnvVars as [key, val] (key)}
-        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 bg-white p-2 sm:p-2.5 border border-slate-200 rounded-md hover:bg-slate-50/60 transition-colors shadow-xs">
-          <div class="flex items-center justify-between sm:w-64 sm:shrink-0">
-            <span class="text-xs font-mono font-medium text-slate-900 truncate" title={key}>{key}</span>
-            <button 
-              type="button"
-              class="sm:hidden text-slate-500 hover:text-rose-700 p-1 cursor-pointer" 
-              title="Delete variable" 
-              onclick={() => removeVariable(key)}
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
+        <div class="flex items-center gap-2 bg-slate-50/70 p-2 border border-slate-200 rounded-md hover:bg-slate-100/60 transition-colors shadow-2xs">
+          <div class="w-48 shrink-0 truncate" title={key}>
+            <span class="text-[11px] font-mono font-medium text-slate-800">{key}</span>
           </div>
-          <div class="flex-1">
+          <div class="flex-1 min-w-0">
             <input 
               type={key === 'RTSP_PASSWORD' && !showPassword ? 'password' : 'text'} 
-              class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
+              class="w-full bg-white border border-slate-300 rounded px-2 py-0.5 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
               value={val}
               oninput={(e) => handleInputChange(key, e.target.value)}
               placeholder="Value..."
             />
           </div>
-          <div class="hidden sm:flex w-10 justify-center">
-            <button 
-              type="button"
-              class="text-slate-500 hover:text-rose-700 p-1 rounded hover:bg-slate-100 transition-colors cursor-pointer" 
-              title="Delete variable" 
-              onclick={() => removeVariable(key)}
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      {/each}
-
-      <!-- Add new variable row -->
-      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 sm:p-2.5 bg-slate-50 border border-dashed border-slate-300 rounded-md mt-1">
-        <div class="sm:w-64 sm:shrink-0">
-          <input 
-            type="text" 
-            class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
-            placeholder="NEW_VARIABLE_NAME" 
-            bind:value={newKey}
-            onkeydown={(e) => e.key === 'Enter' && addVariable()}
-          />
-        </div>
-        <div class="flex-1">
-          <input 
-            type="text" 
-            class="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-500" 
-            placeholder="Value..." 
-            bind:value={newVal}
-            onkeydown={(e) => e.key === 'Enter' && addVariable()}
-          />
-        </div>
-        <div class="flex sm:w-10 justify-end sm:justify-center">
           <button 
-            type="button" 
-            class="px-3 py-1 bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-md text-xs font-medium cursor-pointer transition-colors disabled:opacity-50" 
-            onclick={addVariable} 
-            disabled={!newKey.trim()}
+            type="button"
+            class="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-white transition-colors cursor-pointer shrink-0" 
+            title="Delete variable" 
+            onclick={() => removeVariable(key)}
           >
-            Add
+            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
           </button>
         </div>
-      </div>
+      {/each}
     </div>
   </div>
 </div>
