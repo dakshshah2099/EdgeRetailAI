@@ -1,5 +1,5 @@
 camera:
-  source: tests/fixtures/test.mp4
+  source: rtsp://192.168.1.100:8080/h264_pcm.sdp
 cameras: []
 calibration_width: 1280
 calibration_height: 720
@@ -9,13 +9,14 @@ zones:
   polygon:
   - - 165
     - 339
-  - - 463
-    - 311
+  - - 480
+    - 337
   - - 480
     - 705
-  - - 80
-    - 705
+  - - 162
+    - 695
   label: ''
+  camera_id: cam_primary
 - zone_id: zone_shelf_beverages
   zone_type: shelf
   polygon:
@@ -41,6 +42,7 @@ zones:
   - - 500
     - 718
   label: ''
+  camera_id: cam_primary
 - zone_id: zone_queue_checkout_1
   zone_type: checkout
   polygon:
@@ -53,5 +55,6 @@ zones:
   - - 820
     - 690
   label: ''
+  camera_id: cam_primary
 low_stock_confidence_threshold: 0.6
 queue_congestion_length: 4
