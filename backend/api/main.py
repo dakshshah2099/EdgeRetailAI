@@ -14,6 +14,7 @@ from api.routes.alerts import router as alerts_router
 from api.routes.heatmap import router as heatmap_router
 from api.routes.kpi import router as kpi_router
 from api.routes.planogram import router as planogram_router
+from api.routes.pos import router as pos_router
 from api.routes.reports import router as reports_router
 from api.routes.staff import router as staff_router
 from api.routes.system import router as system_router
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
         api_router = APIRouter(prefix=api_prefix)
         api_router.include_router(kpi_router)
         api_router.include_router(planogram_router)
+        api_router.include_router(pos_router)
         api_router.include_router(staff_router)
         api_router.include_router(reports_router)
         api_router.include_router(alerts_router)
@@ -115,6 +117,7 @@ def create_app() -> FastAPI:
     else:
         application.include_router(kpi_router)
         application.include_router(planogram_router)
+        application.include_router(pos_router)
         application.include_router(staff_router)
         application.include_router(reports_router)
         application.include_router(alerts_router)

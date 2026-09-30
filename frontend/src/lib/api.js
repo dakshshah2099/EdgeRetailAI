@@ -433,3 +433,35 @@ export async function fetchCentralStores(options = {}) {
     return [];
   }
 }
+
+export async function fetchConversionKPI(options = {}) {
+  const res = await apiFetch('/pos/conversion', { signal: options.signal });
+  if (!res.ok) throw new Error(`Conversion KPI error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchPOSTransactions(options = {}) {
+  const res = await apiFetch('/pos/transactions', { signal: options.signal });
+  if (!res.ok) throw new Error(`POS Transactions error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function recordPOSTransaction(transactionData, options = {}) {
+  const res = await apiFetch('/pos/transactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(transactionData),
+    signal: options.signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to record transaction');
+  }
+  return res.json();
+}
+
+export async function fetchProductInteractions(options = {}) {
+  const res = await apiFetch('/pos/interactions', { signal: options.signal });
+  if (!res.ok) throw new Error(`Interactions KPI error: ${res.statusText}`);
+  return res.json();
+}

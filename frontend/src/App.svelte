@@ -12,6 +12,7 @@
   import StockInventory from "./components/StockInventory.svelte";
   import DebugControlPanel from "./components/DebugControlPanel.svelte";
   import PlanogramCompliance from "./components/PlanogramCompliance.svelte";
+  import POSTerminal from "./components/POSTerminal.svelte";
   import ReportsManager from "./components/ReportsManager.svelte";
   import {
     fetchKPIFootfall,
@@ -79,6 +80,7 @@
     "queues",
     "stock",
     "planogram",
+    "pos",
     "reports",
     "alerts",
     "settings",
@@ -114,6 +116,11 @@
       title: "Planogram-Lite Compliance",
       category: "Store Intelligence",
       desc: "Shelf facing grid subdivision, expected layout compliance, and empty facing detection",
+    },
+    pos: {
+      title: "POS Gateway & Conversion Intelligence",
+      category: "Store Intelligence",
+      desc: "Live transaction ingestion, store conversion metrics & simulated cashier checkout",
     },
     reports: {
       title: "Incident Triage Reports",
@@ -628,6 +635,8 @@
             }}
             onRefresh={loadAllData} 
           />
+        {:else if activeTab === "pos"}
+          <POSTerminal {skuCatalog} />
         {:else if activeTab === "reports"}
           <ReportsManager />
         {:else if activeTab === "alerts"}

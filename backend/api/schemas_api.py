@@ -168,3 +168,43 @@ class UnregisterCameraResponse(BaseModel):
     status: Literal["ok"] = "ok"
     unregistered: str
 
+
+class POSTransactionItem(BaseModel):
+    sku_id: str
+    quantity: int = Field(default=1, ge=1)
+    price: float | None = None
+
+
+class POSTransactionRequest(BaseModel):
+    transaction_id: str
+    timestamp: datetime | None = None
+    items: list[POSTransactionItem] = Field(default_factory=list)
+    total_amount: float | None = None
+    payment_status: Literal["completed", "pending", "failed"] = "completed"
+
+
+class POSTransactionResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    transaction_id: str
+    item_count: int
+    total_amount: float | None
+
+
+class ConversionSummary(BaseModel):
+    total_footfall: int
+    total_transactions: int
+    conversion_rate: float
+    total_revenue: float
+    avg_basket_size: float
+    product_pick_to_purchase_ratio: float
+
+
+class ProductInteractionDTO(BaseModel):
+    interaction_id: str
+    track_id: str
+    zone_id: str
+    sku_id: str | None = None
+    start_ts: datetime
+    end_ts: datetime
+    duration_sec: float
+
