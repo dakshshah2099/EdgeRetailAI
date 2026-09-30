@@ -47,7 +47,10 @@ def get_planogram_compliance_endpoint(
                 None,
             )
             if target_zone:
-                live_comp = score_planogram_compliance(frame, target_zone, layout)
+                from analytics.sku_classifier import sku_segregator
+                live_comp = score_planogram_compliance(
+                    frame, target_zone, layout, sku_segregator=sku_segregator
+                )
                 save_planogram_compliance(repo, live_comp)
                 return live_comp
 

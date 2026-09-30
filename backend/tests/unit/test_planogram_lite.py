@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -302,4 +302,71 @@ def test_save_and_retrieve_planogram_compliance(tmp_path: Path) -> None:
     assert retrieved.compliance_ratio == 0.5
     assert set(retrieved.missing_facings) == {(0, 1)}
     assert len(retrieved.facing_statuses) == 2
+
+
+def test_sku_aware_planogram_flags_misplaced_product() -> None:
+    """SKU-aware planogram flags facing as 'misplaced' if product does not match expected SKU."""
+    from analytics.planogram_lite import ExpectedLayout, score_planogram_compliance
+    from analytics.sku_classifier import SKUSegregator
+
+    zone = ZoneConfig(
+        zone_id="zone_bev",
+        camera_id="cam_primary",
+        zone_type="shelf",
+        polygon=[(0, 0), (200, 0), (200, 100), (0, 100)],
+        label="Beverages",
+    )
+    # Layout expects (0,0) to be cola, (0,1) to be snack chips
+    layout = ExpectedLayout(
+        zone_id="zone_bev",
+        grid_rows=1,
+        grid_cols=2,
+        expected_nonempty_facings=[(0, 0), (0, 1)],
+        facing_expected_skus={(0, 0): "sku_cola", (0, 1): "sku_chips"},
+    )
+
+    segregator = SKUSegregator()
+    # Register SKU 1: Cola (Reddish HSV)
+    cola_sample = np.zeros((50, 50, 3), dtype=np.uint8)
+    cola_sample[:, :] = [20, 20, 180]  # BGR red
+    segregator.register_sku(
+        "sku_cola", "Coca Cola", "CocaCola", "zone_bev", reference_crop=cola_sample
+    )
+
+    # Register SKU 2: Chips (Yellow HSV)
+    chips_sample = np.zeros((50, 50, 3), dtype=np.uint8)
+    chips_sample[:, :] = [30, 200, 220]  # BGR yellow
+    segregator.register_sku(
+        "sku_chips", "Potato Chips", "Lays", "zone_bev", reference_crop=chips_sample
+    )
+
+    # Frame has: slot (0,0) filled with YELLOW CHIPS (misplaced! Expected cola)
+    # slot (0,1) filled with YELLOW CHIPS (compliant! Expected chips)
+    frame = np.zeros((100, 200, 3), dtype=np.uint8)
+    frame[:, 0:100] = [30, 200, 220]  # yellow chips placed in cola slot
+    frame[:, 100:200] = [30, 200, 220]  # yellow chips placed in chips slot
+
+    classifier = DummyClassifier(default_status="ok", default_conf=0.95)
+    comp = score_planogram_compliance(
+        frame, zone, layout, classifier=classifier, sku_segregator=segregator
+    )
+
+    assert comp.total_facings == 2
+    assert comp.expected_nonempty == 2
+    # Only 1 facing is compliant (0,1). Facing (0,0) is misplaced!
+    assert comp.actual_nonempty == 1
+    assert comp.compliance_ratio == 0.5
+    assert (0, 0) in comp.misplaced_facings
+    assert (0, 1) not in comp.misplaced_facings
+
+    # Check status attributes
+    f00 = next(f for f in comp.facing_statuses if f.facing_index == (0, 0))
+    assert f00.status == "misplaced"
+    assert f00.detected_sku_id == "sku_chips"
+    assert f00.expected_sku_id == "sku_cola"
+
+    f01 = next(f for f in comp.facing_statuses if f.facing_index == (0, 1))
+    assert f01.status == "ok"
+    assert f01.detected_sku_id == "sku_chips"
+    assert f01.expected_sku_id == "sku_chips"
 

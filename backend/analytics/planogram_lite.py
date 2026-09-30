@@ -22,12 +22,15 @@ Polygon = list[tuple[int, int]]
 
 @dataclass(frozen=True)
 class FacingStatus:
-    """Classification status and confidence for an individual facing sub-rectangle."""
+    """Classification status, SKU identity, and confidence for a facing sub-rectangle."""
 
     zone_id: str
     facing_index: tuple[int, int]  # (row, col) within the zone's grid
-    status: Literal["ok", "low", "empty"]
+    status: Literal["ok", "low", "empty", "misplaced"]
     confidence: float
+    detected_sku_id: str | None = None
+    detected_sku_name: str | None = None
+    expected_sku_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,16 +45,18 @@ class PlanogramCompliance:
     compliance_ratio: float  # actual_nonempty / expected_nonempty, capped at 1.0
     facing_statuses: list[FacingStatus]
     missing_facings: list[tuple[int, int]]  # expected-nonempty facings currently empty/low
+    misplaced_facings: list[tuple[int, int]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ExpectedLayout:
-    """Configured planogram layout: grid size and list of expected non-empty facing indices."""
+    """Configured planogram layout: grid size, expected facings, and SKU assignments."""
 
     zone_id: str
     grid_rows: int
     grid_cols: int
     expected_nonempty_facings: list[tuple[int, int]] = field(default_factory=list)
+    facing_expected_skus: dict[tuple[int, int], str] = field(default_factory=dict)
 
 
 # In-memory cache for recent compliance snapshots
@@ -111,12 +116,12 @@ def score_planogram_compliance(
     layout: ExpectedLayout,
     classifier: ShelfClassifier | None = None,
     timestamp: datetime | None = None,
+    sku_segregator: Any | None = None,
 ) -> PlanogramCompliance:
-    """Score every facing via the existing shelf_classifier scorer, then
+    """Score every facing via physical fill classifier and SKU recognition against expected layout.
 
-    diff actual-nonempty facings against layout.expected_nonempty_facings.
-    The raw frame ndarray is used transiently for scoring only â€” never
-    persisted, adhering to the non-PII/frame persistence constraints.
+    Matches actual products to expected SKUs per facing slot.
+    Flags discordant SKUs as 'misplaced', penalizing the compliance score.
     """
     if classifier is None:
         classifier = HybridShelfClassifier()
@@ -138,12 +143,49 @@ def score_planogram_compliance(
         y0 = max(0, min(frame_h, min(poly_ys)))
         y1 = max(0, min(frame_h, max(poly_ys)))
 
+        expected_sku = layout.facing_expected_skus.get((r, c))
+        if not expected_sku and sku_segregator is not None:
+            zone_sku_prof = sku_segregator.get_sku_for_zone(zone.zone_id)
+            if zone_sku_prof:
+                expected_sku = zone_sku_prof.sku_id
+
         if x1 <= x0 or y1 <= y0:
-            status: Literal["empty", "low", "ok"] = "empty"
+            status: Literal["ok", "low", "empty", "misplaced"] = "empty"
             conf = 0.0
+            det_sku_id = None
+            det_sku_name = None
         else:
             sub_crop = frame[y0:y1, x0:x1]
-            status, conf = classifier.classify(sub_crop)
+            raw_status, conf = classifier.classify(sub_crop)
+
+            det_sku_id = None
+            det_sku_name = None
+
+            # If slot is physically stocked and sku_segregator is provided, match product identity
+            if raw_status in ("ok", "low") and sku_segregator is not None:
+                # Match facing sub-crop against SKU catalog
+                crop_hist = sku_segregator.extract_histogram(sub_crop)
+                best_sku = None
+                best_score = -1.0
+                for sku_ref in sku_segregator._catalog.values():
+                    score = float(np.sum(crop_hist * sku_ref.hist))
+                    if score > best_score:
+                        best_score = score
+                        best_sku = sku_ref
+
+                if best_sku is not None and best_score >= 0.25:
+                    det_sku_id = best_sku.sku_id
+                    det_sku_name = best_sku.name
+
+                if expected_sku is not None and best_sku is not None:
+                    if best_sku.sku_id != expected_sku and best_score > 0.60:
+                        status = "misplaced"
+                    else:
+                        status = raw_status
+                else:
+                    status = raw_status
+            else:
+                status = raw_status
 
         facing_statuses.append(
             FacingStatus(
@@ -151,6 +193,9 @@ def score_planogram_compliance(
                 facing_index=(r, c),
                 status=status,
                 confidence=conf,
+                detected_sku_id=det_sku_id,
+                detected_sku_name=det_sku_name,
+                expected_sku_id=expected_sku,
             )
         )
 
@@ -158,7 +203,7 @@ def score_planogram_compliance(
     expected_set = set(layout.expected_nonempty_facings)
     expected_nonempty = len(expected_set)
 
-    # Actual nonempty: count of facings currently scored 'ok' (compliant with stocking)
+    # Actual compliant: count of facings currently scored 'ok' (stocked AND matching expected SKU)
     actual_nonempty = sum(1 for f in facing_statuses if f.status == "ok")
 
     # Ratio capped at 1.0; 1.0 when expected_nonempty == 0
@@ -174,6 +219,13 @@ def score_planogram_compliance(
         if f.facing_index in expected_set and f.status in ("low", "empty")
     ]
 
+    # misplaced_facings: facings where wrong SKU was detected
+    misplaced_facings = [
+        f.facing_index
+        for f in facing_statuses
+        if f.status == "misplaced"
+    ]
+
     return PlanogramCompliance(
         zone_id=zone.zone_id,
         timestamp=ts,
@@ -183,6 +235,7 @@ def score_planogram_compliance(
         compliance_ratio=compliance_ratio,
         facing_statuses=facing_statuses,
         missing_facings=missing_facings,
+        misplaced_facings=misplaced_facings,
     )
 
 
@@ -198,11 +251,15 @@ def save_planogram_compliance(
 
     for fs in compliance.facing_statuses:
         r, c = fs.facing_index
+        # StockEvent schema expects Literal["empty", "low", "ok"]
+        stock_status: Literal["empty", "low", "ok"] = (
+            "low" if fs.status == "misplaced" else fs.status
+        )
         event = StockEvent(
             event_id=f"plano_{uuid.uuid4().hex[:12]}",
             shelf_id=f"{compliance.zone_id}:facing:{r}:{c}",
             timestamp=compliance.timestamp,
-            status=fs.status,
+            status=stock_status,
             confidence=fs.confidence,
         )
         repo.save_stock_event(event)
@@ -330,11 +387,22 @@ def load_planogram_layouts(
             if isinstance(item, list | tuple) and len(item) == 2:
                 expected_facings.append((int(item[0]), int(item[1])))
 
+        facing_skus_raw = cfg.get("facing_skus") or cfg.get("facing_expected_skus") or {}
+        facing_skus: dict[tuple[int, int], str] = {}
+        if isinstance(facing_skus_raw, dict):
+            for k, sku_val in facing_skus_raw.items():
+                if isinstance(k, str) and "," in k:
+                    parts = k.split(",")
+                    facing_skus[(int(parts[0].strip()), int(parts[1].strip()))] = str(sku_val)
+                elif isinstance(k, list | tuple) and len(k) == 2:
+                    facing_skus[(int(k[0]), int(k[1]))] = str(sku_val)
+
         layouts[str(zone_id)] = ExpectedLayout(
             zone_id=str(zone_id),
             grid_rows=grid_rows,
             grid_cols=grid_cols,
             expected_nonempty_facings=expected_facings,
+            facing_expected_skus=facing_skus,
         )
 
     return layouts

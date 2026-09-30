@@ -19,6 +19,7 @@
   function getStatusColor(status) {
     if (status === "ok") return "bg-emerald-500 text-white border-emerald-600";
     if (status === "low") return "bg-amber-400 text-slate-900 border-amber-500";
+    if (status === "misplaced") return "bg-purple-600 text-white border-purple-700";
     return "bg-rose-500 text-white border-rose-600";
   }
 </script>
@@ -75,7 +76,7 @@
     </div>
   {:else}
     <!-- Summary KPI cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
       <div class="bg-slate-50 border border-slate-200 rounded p-2.5 flex flex-col">
         <span class="text-[11px] font-mono text-slate-500 uppercase">Total Facings</span>
         <strong class="text-lg font-bold text-slate-800">{planogramData.total_facings}</strong>
@@ -85,8 +86,12 @@
         <strong class="text-lg font-bold text-slate-800">{planogramData.expected_nonempty}</strong>
       </div>
       <div class="bg-emerald-50/70 border border-emerald-200 rounded p-2.5 flex flex-col">
-        <span class="text-[11px] font-mono text-emerald-700 uppercase">Stocked Facings</span>
+        <span class="text-[11px] font-mono text-emerald-700 uppercase">Compliant</span>
         <strong class="text-lg font-bold text-emerald-800">{planogramData.actual_nonempty}</strong>
+      </div>
+      <div class="bg-purple-50/70 border border-purple-200 rounded p-2.5 flex flex-col">
+        <span class="text-[11px] font-mono text-purple-700 uppercase">Misplaced</span>
+        <strong class="text-lg font-bold text-purple-800">{(planogramData.misplaced_facings || []).length}</strong>
       </div>
       <div class="bg-rose-50/70 border border-rose-200 rounded p-2.5 flex flex-col">
         <span class="text-[11px] font-mono text-rose-700 uppercase">Missing / Low</span>
@@ -101,16 +106,22 @@
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-emerald-500"></span> OK</span>
           <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-400"></span> LOW</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-purple-600"></span> MISPLACED</span>
           <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-rose-500"></span> EMPTY</span>
         </div>
       </div>
 
       <div class="p-4 bg-slate-100/70 border border-slate-200 rounded-md">
-        <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));">
+        <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));">
           {#each planogramData.facing_statuses as facing (`${facing.facing_index[0]}_${facing.facing_index[1]}`)}
-            <div class="flex flex-col items-center justify-center p-3 rounded border {getStatusColor(facing.status)} shadow-xs text-center transition-transform hover:scale-102">
+            <div class="flex flex-col items-center justify-center p-2.5 rounded border {getStatusColor(facing.status)} shadow-xs text-center transition-transform hover:scale-102">
               <span class="text-[10px] font-mono opacity-80">R{facing.facing_index[0]}C{facing.facing_index[1]}</span>
               <strong class="text-xs font-bold uppercase tracking-wider">{facing.status}</strong>
+              {#if facing.detected_sku_name}
+                <span class="text-[9px] font-mono font-medium truncate max-w-full px-1">{facing.detected_sku_name}</span>
+              {:else if facing.detected_sku_id}
+                <span class="text-[9px] font-mono truncate max-w-full px-1">{facing.detected_sku_id}</span>
+              {/if}
               <span class="text-[9px] font-mono opacity-75">{Math.round(facing.confidence * 100)}%</span>
             </div>
           {/each}
