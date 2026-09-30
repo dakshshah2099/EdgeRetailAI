@@ -764,14 +764,14 @@ class StreamManager:
                     if had_q_alert or q_resolutions:
                         ws_manager.broadcast_sync({"type": "alerts_update"})
 
-                # Broadcast real-time centroid coordinates across all cameras
-                # for instant dwell heatmap accumulation
+                # Broadcast real-time ground-anchor coordinates across all cameras
+                # for instant dwell heatmap accumulation (matching HeatmapAccumulator anchor: bottom-center)
                 all_dwell_points = []
                 for cam_id, cam_dets in self.per_camera_tracked.items():
                     for det in cam_dets:
                         all_dwell_points.append({
                             "x": int(det.bbox[0] + det.bbox[2] / 2),
-                            "y": int(det.bbox[1] + det.bbox[3] / 2),
+                            "y": int(det.bbox[1] + det.bbox[3]),
                             "track_id": det.track_id,
                             "camera_id": cam_id,
                         })

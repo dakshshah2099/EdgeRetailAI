@@ -78,9 +78,14 @@
 
     // Draw Real-time Shopper Dwell Points Overlay
     if (livePoints && livePoints.length > 0) {
+      const srcW = (heatmapData && heatmapData.width) ? heatmapData.width : canvas.width;
+      const srcH = (heatmapData && heatmapData.height) ? heatmapData.height : canvas.height;
+      const scaleX = canvas.width / srcW;
+      const scaleY = canvas.height / srcH;
+
       for (const pt of livePoints) {
-        const px = Math.max(0, Math.min(canvas.width, pt.x));
-        const py = Math.max(0, Math.min(canvas.height, pt.y));
+        const px = Math.max(0, Math.min(canvas.width, pt.x * scaleX));
+        const py = Math.max(0, Math.min(canvas.height, pt.y * scaleY));
 
         // Pulsing thermal glow
         const grad = ctx.createRadialGradient(px, py, 2, px, py, 18);
