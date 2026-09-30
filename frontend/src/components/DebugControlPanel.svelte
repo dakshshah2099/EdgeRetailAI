@@ -200,10 +200,23 @@
     }
   }
 
+  // Vars already surfaced in Section 1 (RTSP) or Section 2 (detection sliders) —
+  // hiding them here avoids duplication in the flat env grid.
+  const DEDICATED_UI_VARS = new Set([
+    'RTSP_USERNAME', 'RTSP_PASSWORD', 'RTSP_TRANSPORT',
+    'DETECTION_CONFIDENCE_THRESHOLD', 'LOW_STOCK_CONFIDENCE_THRESHOLD', 'QUEUE_CONGESTION_LENGTH',
+  ]);
+
+  // Vars present in .env but not read by any backend Python code — vestigial, hide them.
+  const VESTIGIAL_VARS = new Set([
+    'HEATMAP_CELL_SIZE', 'POLLING_INTERVAL_SEC',
+  ]);
+
   let filteredEnvVars = $derived(
-    Object.entries(editVars).filter(([k]) => 
-      !envFilter.trim() || k.toLowerCase().includes(envFilter.toLowerCase())
-    )
+    Object.entries(editVars).filter(([k]) => {
+      if (DEDICATED_UI_VARS.has(k) || VESTIGIAL_VARS.has(k)) return false;
+      return !envFilter.trim() || k.toLowerCase().includes(envFilter.toLowerCase());
+    })
   );
 </script>
 
