@@ -99,3 +99,22 @@ def test_tracker_reset() -> None:
     tracker.reset()
     assert len(tracker.tracks) == 0
     assert tracker._next_id == 1
+
+
+def test_tracker_prevents_cross_class_association() -> None:
+    tracker = Tracker(iou_threshold=0.3, high_conf_threshold=0.5)
+
+    # Frame 1: Person (class_id=0) at (100, 100, 50, 50)
+    f1 = [RawDetection(class_id=0, confidence=0.9, bbox=(100, 100, 50, 50))]
+    res1 = tracker.update(f1)
+    assert len(res1) == 1
+    person_track_id = res1[0].track_id
+    assert res1[0].class_id == 0
+
+    # Frame 2: Product (class_id=39 / bottle) at the EXACT same bbox
+    f2 = [RawDetection(class_id=39, confidence=0.9, bbox=(100, 100, 50, 50))]
+    res2 = tracker.update(f2)
+    # Even though IoU is 1.0, it must NOT associate across different class IDs
+    product_track = next((t for t in res2 if t.class_id == 39), None)
+    assert product_track is not None
+    assert product_track.track_id != person_track_id

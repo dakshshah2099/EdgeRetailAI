@@ -82,6 +82,32 @@ def test_person_detector_filters_non_person_classes() -> None:
         assert d.class_id == PERSON_CLASS_ID
 
 
+@pytest.mark.skipif(
+    not MODEL_PATH.is_file() or not BUS_IMAGE_PATH.is_file(),
+    reason="ONNX model or bus.jpg fixture not present",
+)
+def test_retail_detector_detects_multiple_classes() -> None:
+    from vision.detector import RetailDetector
+
+    raw_img = cv2.imread(str(BUS_IMAGE_PATH))
+    assert raw_img is not None
+    img: npt.NDArray[np.uint8] = np.asarray(raw_img, dtype=np.uint8)
+
+    backend = ONNXBackend(MODEL_PATH, conf_threshold=0.4)
+    retail_detector = RetailDetector(backend)
+    all_detections = retail_detector.detect(img)
+
+    # Should detect both persons and non-persons (bus)
+    classes = {d.class_id for d in all_detections}
+    assert PERSON_CLASS_ID in classes
+    assert len(classes) > 1
+
+    # Filtered mode
+    filtered_detector = RetailDetector(backend, allowed_class_ids={PERSON_CLASS_ID})
+    filtered_dets = filtered_detector.detect(img)
+    assert all(d.class_id == PERSON_CLASS_ID for d in filtered_dets)
+
+
 @pytest.mark.skipif(not MODEL_PATH.is_file(), reason="ONNX model not present")
 def test_onnx_backend_mismatched_input_size_raises_value_error() -> None:
     with pytest.raises(ValueError, match="does not match model static"):

@@ -165,12 +165,13 @@ class Tracker:
             if self.low_conf_threshold <= d.confidence < self.high_conf_threshold
         ]
 
-        # Stage 1: Match active tracks with high-confidence detections
-        cost_matrix_high = np.zeros((len(self.tracks), len(dets_high)), dtype=np.float32)
+        # Stage 1: Match active tracks with high-confidence detections (class-aware)
+        cost_matrix_high = np.ones((len(self.tracks), len(dets_high)), dtype=np.float32)
         for i, track in enumerate(self.tracks):
             for j, det in enumerate(dets_high):
-                iou = _compute_iou(track.bbox, det.bbox)
-                cost_matrix_high[i, j] = 1.0 - iou
+                if track.class_id == det.class_id:
+                    iou = _compute_iou(track.bbox, det.bbox)
+                    cost_matrix_high[i, j] = 1.0 - iou
 
         matches_1, unmatched_tracks_1, unmatched_dets_high = _linear_assignment(
             cost_matrix_high, threshold=1.0 - self.iou_threshold
@@ -180,17 +181,18 @@ class Tracker:
             det = dets_high[det_idx]
             self.tracks[track_idx].update(det.bbox, det.confidence)
 
-        # Stage 2: Match remaining tracks with low-confidence detections
+        # Stage 2: Match remaining tracks with low-confidence detections (class-aware)
         remaining_track_indices = unmatched_tracks_1
         if remaining_track_indices and dets_low:
-            cost_matrix_low = np.zeros(
+            cost_matrix_low = np.ones(
                 (len(remaining_track_indices), len(dets_low)), dtype=np.float32
             )
             for i, track_idx in enumerate(remaining_track_indices):
                 track = self.tracks[track_idx]
                 for j, det in enumerate(dets_low):
-                    iou = _compute_iou(track.bbox, det.bbox)
-                    cost_matrix_low[i, j] = 1.0 - iou
+                    if track.class_id == det.class_id:
+                        iou = _compute_iou(track.bbox, det.bbox)
+                        cost_matrix_low[i, j] = 1.0 - iou
 
             matches_2, unmatched_tracks_2_rel, _ = _linear_assignment(
                 cost_matrix_low, threshold=1.0 - self.iou_threshold
