@@ -266,8 +266,9 @@ class StreamManager:
         self.shelf_classifier: ShelfClassifier = HybridShelfClassifier()
         self.shelf_smoother: TemporalShelfSmoother = TemporalShelfSmoother()
         self.alert_engine: AlertEngine = AlertEngine(
-            low_stock_threshold=0.60,
+            low_stock_threshold=0.55,
             queue_congestion_length=4,
+            low_stock_facings_threshold=0,
         )
 
         self.latest_stock_events: dict[str, StockEvent] = {}

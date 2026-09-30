@@ -55,7 +55,7 @@
   let selectedZone = $state("");
   let selectedPlanogramShelf = $state("");
   let groupBy = $state("hour");
-  let alertFilter = $state("all");
+  let alertFilter = $state("open");
 
   // Camera Feed Page Subpanel Tab
   let cameraSideTab = $state("alerts"); // 'alerts' | 'telemetry'
@@ -330,6 +330,14 @@
             fetchKPISKU({ zone_id: selectedZone || null }).then((res) => { skuReport = res; }).catch(() => {});
           }
           fetchAlerts({ status: alertFilter }).then((res) => { alertsData = res; }).catch(() => {});
+          lastUpdated = new Date();
+        } else if (msg.type === "alert" && msg.alert) {
+          // Inline push: prepend the new alert immediately without a fetch round-trip.
+          // Deduplicates by alert_id in case "alerts_update" fetch arrives shortly after.
+          const incoming = msg.alert;
+          if (alertFilter === "open" || alertFilter === "all") {
+            alertsData = [incoming, ...alertsData.filter((a) => a.alert_id !== incoming.alert_id)];
+          }
           lastUpdated = new Date();
         } else if (msg.type === "alerts_update") {
           fetchAlerts({ status: alertFilter }).then((res) => { alertsData = res; }).catch(() => {});
