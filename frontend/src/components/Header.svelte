@@ -33,7 +33,7 @@
   });
 </script>
 
-<header class="bg-white border-b border-slate-200 text-slate-900 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 flex-wrap select-none sticky top-0 z-30 shadow-xs shrink-0">
+<header class="h-14 bg-white border-b border-slate-200 text-slate-900 px-3 sm:px-4 flex items-center justify-between gap-2 flex-wrap select-none sticky top-0 z-30 shadow-xs shrink-0">
   <!-- Left: Mobile Menu Toggle & Operational Context -->
   <div class="flex items-center gap-2 sm:gap-3">
     <button

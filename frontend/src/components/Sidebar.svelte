@@ -112,15 +112,24 @@
   ]}
 >
   <!-- Brand Area -->
-  <div class="p-2.5 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
-    <div class={["flex items-center gap-2 overflow-hidden", isCollapsed && "md:justify-center md:w-full"]}>
-      <div class="w-7 h-7 rounded-md bg-sky-600 flex items-center justify-center text-white shrink-0 shadow-xs">
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+  <div class="h-14 px-3 border-b border-slate-200 flex items-center justify-between gap-2 shrink-0">
+    <div class={["flex items-center gap-2.5 overflow-hidden", isCollapsed && "md:justify-center md:w-full"]}>
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-600 via-sky-500 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-sm ring-1 ring-sky-500/20">
+        <!-- Modern Edge Vision / Neural Retail Scanner Icon -->
+        <svg class="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Outer Scanning Aperture Corners -->
+          <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+          <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+          <!-- Central Retail Iris / Pulse -->
+          <circle cx="12" cy="12" r="3" class="stroke-[2.2]"/>
+          <path d="M12 9v-1M12 16v-1M9 12H8M16 12h-1" stroke-width="2"/>
         </svg>
       </div>
-      <div class={["overflow-hidden", isCollapsed ? "md:hidden" : "block"]}>
-        <div class="font-bold text-xs tracking-tight text-slate-900 leading-tight">Dukaanlytics</div>
+      <div class={["overflow-hidden flex flex-col justify-center", isCollapsed ? "md:hidden" : "block"]}>
+        <div class="font-bold text-sm tracking-tight text-slate-900 leading-tight">Dukaanlytics</div>
+        <div class="text-[10px] font-mono font-medium text-sky-600 tracking-wider uppercase leading-none mt-0.5">Edge AI Vision</div>
       </div>
     </div>
 
