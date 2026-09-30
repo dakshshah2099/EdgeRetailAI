@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from core.schemas import (
     Alert,
@@ -686,5 +687,200 @@ class EventRepository:
             if row and row["avg_q"] is not None:
                 return float(row["avg_q"])
             return None
+        finally:
+            conn.close()
+
+    def save_product_interaction(
+        self,
+        interaction_id: str,
+        track_id: str,
+        zone_id: str,
+        sku_id: str | None,
+        start_ts: datetime,
+        end_ts: datetime,
+        duration_sec: float,
+    ) -> None:
+        """Persist a shopper-product interaction event."""
+        conn = get_connection(self.db_path)
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO product_interactions (
+                        interaction_id, track_id, zone_id, sku_id, start_ts, end_ts, duration_sec
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(interaction_id) DO NOTHING;
+                    """,
+                    (
+                        interaction_id,
+                        track_id,
+                        zone_id,
+                        sku_id,
+                        start_ts.isoformat(),
+                        end_ts.isoformat(),
+                        duration_sec,
+                    ),
+                )
+        finally:
+            conn.close()
+
+    def get_recent_product_interactions(
+        self,
+        limit: int = 100,
+        zone_id: str | None = None,
+        sku_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Retrieve recent customer interactions with products."""
+        conn = get_connection(self.db_path)
+        try:
+            cursor = conn.cursor()
+            query = (
+                "SELECT interaction_id, track_id, zone_id, sku_id, start_ts, end_ts, duration_sec "
+                "FROM product_interactions"
+            )
+            params: list[Any] = []
+            conditions: list[str] = []
+            if zone_id:
+                conditions.append("zone_id = ?")
+                params.append(zone_id)
+            if sku_id:
+                conditions.append("sku_id = ?")
+                params.append(sku_id)
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            query += " ORDER BY end_ts DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "interaction_id": row["interaction_id"],
+                    "track_id": row["track_id"],
+                    "zone_id": row["zone_id"],
+                    "sku_id": row["sku_id"],
+                    "start_ts": datetime.fromisoformat(row["start_ts"]),
+                    "end_ts": datetime.fromisoformat(row["end_ts"]),
+                    "duration_sec": float(row["duration_sec"]),
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
+    def save_pos_transaction(
+        self,
+        transaction_id: str,
+        timestamp: datetime,
+        item_count: int,
+        total_amount: float | None,
+        payment_status: str,
+        items: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Persist a point-of-sale transaction and associated purchased items."""
+        conn = get_connection(self.db_path)
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO pos_transactions (
+                        transaction_id, timestamp, item_count, total_amount, payment_status
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(transaction_id) DO NOTHING;
+                    """,
+                    (
+                        transaction_id,
+                        timestamp.isoformat(),
+                        item_count,
+                        total_amount,
+                        payment_status,
+                    ),
+                )
+                if items:
+                    for idx, item in enumerate(items):
+                        conn.execute(
+                            """
+                            INSERT INTO pos_transaction_items (
+                                item_id, transaction_id, sku_id, quantity, price
+                            ) VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(item_id) DO NOTHING;
+                            """,
+                            (
+                                f"{transaction_id}_{idx}",
+                                transaction_id,
+                                item.get("sku_id", "unknown"),
+                                int(item.get("quantity", 1)),
+                                (
+                                    float(item.get("price", 0.0))
+                                    if item.get("price") is not None
+                                    else None
+                                ),
+                            ),
+                        )
+        finally:
+            conn.close()
+
+    def get_recent_pos_transactions(
+        self,
+        limit: int = 100,
+        since: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Retrieve recent POS transactions and items."""
+        conn = get_connection(self.db_path)
+        try:
+            cursor = conn.cursor()
+            if since is not None:
+                cursor.execute(
+                    """
+                    SELECT transaction_id, timestamp, item_count, total_amount, payment_status
+                    FROM pos_transactions
+                    WHERE timestamp >= ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?;
+                    """,
+                    (since.isoformat(), limit),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT transaction_id, timestamp, item_count, total_amount, payment_status
+                    FROM pos_transactions
+                    ORDER BY timestamp DESC
+                    LIMIT ?;
+                    """,
+                    (limit,),
+                )
+            tx_rows = cursor.fetchall()
+            transactions = []
+            for r in tx_rows:
+                tx_id = r["transaction_id"]
+                cursor.execute(
+                    """
+                    SELECT sku_id, quantity, price
+                    FROM pos_transaction_items
+                    WHERE transaction_id = ?;
+                    """,
+                    (tx_id,),
+                )
+                item_rows = cursor.fetchall()
+                items = [
+                    {
+                        "sku_id": ir["sku_id"],
+                        "quantity": ir["quantity"],
+                        "price": ir["price"],
+                    }
+                    for ir in item_rows
+                ]
+                transactions.append(
+                    {
+                        "transaction_id": tx_id,
+                        "timestamp": datetime.fromisoformat(r["timestamp"]),
+                        "item_count": r["item_count"],
+                        "total_amount": r["total_amount"],
+                        "payment_status": r["payment_status"],
+                        "items": items,
+                    }
+                )
+            return transactions
         finally:
             conn.close()

@@ -85,6 +85,41 @@ _SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(timestamp);",
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_alert ON audit_logs(alert_id);",
+    """
+    CREATE TABLE IF NOT EXISTS product_interactions (
+        interaction_id TEXT PRIMARY KEY,
+        track_id TEXT NOT NULL,
+        zone_id TEXT NOT NULL,
+        sku_id TEXT,
+        start_ts TEXT NOT NULL,
+        end_ts TEXT NOT NULL,
+        duration_sec REAL NOT NULL
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_product_interactions_zone ON product_interactions(zone_id);",
+    "CREATE INDEX IF NOT EXISTS idx_product_interactions_sku ON product_interactions(sku_id);",
+    """
+    CREATE TABLE IF NOT EXISTS pos_transactions (
+        transaction_id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        item_count INTEGER NOT NULL,
+        total_amount REAL,
+        payment_status TEXT NOT NULL
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_pos_transactions_ts ON pos_transactions(timestamp);",
+    """
+    CREATE TABLE IF NOT EXISTS pos_transaction_items (
+        item_id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        sku_id TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL,
+        FOREIGN KEY (transaction_id) REFERENCES pos_transactions(transaction_id)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_pos_items_tx ON pos_transaction_items(transaction_id);",
+    "CREATE INDEX IF NOT EXISTS idx_pos_items_sku ON pos_transaction_items(sku_id);",
 ]
 
 
