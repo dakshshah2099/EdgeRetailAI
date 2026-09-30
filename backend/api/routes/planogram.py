@@ -1,3 +1,4 @@
+import contextlib
 from datetime import datetime
 from typing import Annotated
 
@@ -12,6 +13,7 @@ from analytics.planogram_lite import (
     score_planogram_compliance,
 )
 from api.dependencies import RepoDep, get_app_config
+from api.schemas_api import PlanogramLayoutDTO
 from api.stream_manager import scale_zones_to_frame, stream_manager
 
 router = APIRouter(prefix="/kpi", tags=["kpi", "planogram"])
@@ -81,3 +83,46 @@ def get_planogram_compliance_endpoint(
         facing_statuses=default_facing_statuses,
         missing_facings=list(expected_facings),
     )
+
+
+@router.get("/planogram/layout", response_model=PlanogramLayoutDTO)
+def get_planogram_layout_endpoint(
+    zone_id: Annotated[str, Query(description="Shelf zone ID to fetch layout for")],
+) -> PlanogramLayoutDTO:
+    """Retrieve the configured expected layout and SKU mappings for a shelf zone."""
+    layout = get_or_create_planogram_layout(zone_id)
+    facing_skus_str = {
+        f"{r},{c}": sku for (r, c), sku in layout.facing_expected_skus.items()
+    }
+    return PlanogramLayoutDTO(
+        zone_id=layout.zone_id,
+        grid_rows=layout.grid_rows,
+        grid_cols=layout.grid_cols,
+        expected_nonempty_facings=layout.expected_nonempty_facings,
+        facing_expected_skus=facing_skus_str,
+    )
+
+
+@router.put("/planogram/layout", response_model=PlanogramLayoutDTO)
+def update_planogram_layout_endpoint(
+    payload: PlanogramLayoutDTO,
+) -> PlanogramLayoutDTO:
+    """Update and persist the planogram grid layout and expected SKU slot assignments."""
+    from analytics.planogram_lite import ExpectedLayout, save_planogram_layout
+
+    facing_skus: dict[tuple[int, int], str] = {}
+    for k, v in payload.facing_expected_skus.items():
+        if "," in k:
+            parts = k.split(",")
+            with contextlib.suppress(ValueError):
+                facing_skus[(int(parts[0].strip()), int(parts[1].strip()))] = str(v)
+
+    layout = ExpectedLayout(
+        zone_id=payload.zone_id,
+        grid_rows=payload.grid_rows,
+        grid_cols=payload.grid_cols,
+        expected_nonempty_facings=payload.expected_nonempty_facings,
+        facing_expected_skus=facing_skus,
+    )
+    save_planogram_layout(layout)
+    return payload

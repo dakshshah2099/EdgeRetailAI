@@ -123,6 +123,14 @@ class RegisterSKURequest(BaseModel):
     category: str = "general"
 
 
+class PlanogramLayoutDTO(BaseModel):
+    zone_id: str
+    grid_rows: int = Field(ge=1, le=10)
+    grid_cols: int = Field(ge=1, le=10)
+    expected_nonempty_facings: list[tuple[int, int]] = Field(default_factory=list)
+    facing_expected_skus: dict[str, str] = Field(default_factory=dict)
+
+
 class SKUSegregationItem(BaseModel):
     shelf_id: str
     camera_id: str

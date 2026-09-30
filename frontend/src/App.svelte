@@ -627,6 +627,7 @@
           <PlanogramCompliance 
             {planogramData} 
             {shelfZones}
+            {skuCatalog}
             selectedShelfId={selectedPlanogramShelf}
             isLoading={isRefreshing} 
             onSelectShelf={(sId) => {

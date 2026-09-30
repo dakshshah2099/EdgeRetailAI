@@ -3,6 +3,7 @@
 and expected layout compliance evaluation.
 """
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -16,6 +17,8 @@ import yaml
 from analytics.shelf_classifier import HybridShelfClassifier, ShelfClassifier
 from core.schemas import StockEvent, ZoneConfig
 from storage.repository import EventRepository
+
+logger = logging.getLogger(__name__)
 
 Polygon = list[tuple[int, int]]
 
@@ -422,5 +425,41 @@ def get_or_create_planogram_layout(
         grid_cols=3,
         expected_nonempty_facings=[(r, c) for r in range(2) for c in range(3)],
     )
+
+
+def save_planogram_layout(
+    layout: ExpectedLayout,
+    config_path: str | Path | None = None,
+) -> None:
+    """Save or update an expected planogram layout in planogram_layouts.yaml."""
+    target_path = Path("backend/config/planogram_layouts.yaml")
+    if config_path:
+        target_path = Path(config_path)
+    elif not target_path.exists() and Path("config/planogram_layouts.yaml").exists():
+        target_path = Path("config/planogram_layouts.yaml")
+
+    data: dict[str, Any] = {}
+    if target_path.is_file():
+        try:
+            with open(target_path, encoding="utf-8") as f:
+                loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    data = loaded
+        except Exception as e:
+            logger.warning("Could not read existing planogram yaml %s: %s", target_path, e)
+
+    facing_skus_str: dict[str, str] = {
+        f"{r},{c}": sku for (r, c), sku in layout.facing_expected_skus.items()
+    }
+    data[layout.zone_id] = {
+        "grid_rows": layout.grid_rows,
+        "grid_cols": layout.grid_cols,
+        "expected_nonempty_facings": [list(f) for f in layout.expected_nonempty_facings],
+        "facing_skus": facing_skus_str,
+    }
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(target_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, sort_keys=False)
 
 

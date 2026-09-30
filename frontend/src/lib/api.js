@@ -76,6 +76,20 @@ export async function fetchSKUCatalog(params = {}, options = {}) {
   return res.json();
 }
 
+export async function registerSKU(skuData, options = {}) {
+  const res = await apiFetch('/kpi/sku/catalog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(skuData),
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to register SKU');
+  }
+  return res.json();
+}
+
 export async function fetchAlerts(params = {}, options = {}) {
   const search = new URLSearchParams();
   if (params.status) search.set('status', params.status);
@@ -207,6 +221,28 @@ export async function fetchPlanogramCompliance(zoneId, options = {}) {
     signal: options.signal,
   });
   if (!res.ok) throw new Error(`Planogram KPI error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchPlanogramLayout(zoneId, options = {}) {
+  const res = await apiFetch(`/kpi/planogram/layout?zone_id=${encodeURIComponent(zoneId)}`, {
+    signal: options.signal,
+  });
+  if (!res.ok) throw new Error(`Fetch planogram layout error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function updatePlanogramLayout(layoutData, options = {}) {
+  const res = await apiFetch('/kpi/planogram/layout', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(layoutData),
+    signal: options.signal || AbortSignal.timeout(10000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'Failed to update planogram layout');
+  }
   return res.json();
 }
 
